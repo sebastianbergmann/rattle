@@ -1,0 +1,62 @@
+{
+    "name": "sebastian/rattle",
+    "description": "Coverage-guided fuzzer for PHP code that is built on choice sequences",
+    "type": "library",
+    "keywords": [
+        "fuzzing",
+        "fuzzer",
+        "testing"
+    ],
+    "homepage": "https://github.com/sebastianbergmann/rattle",
+    "license": "BSD-3-Clause",
+    "authors": [
+        {
+            "name": "Sebastian Bergmann",
+            "email": "sebastian@phpunit.de",
+            "role": "lead"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sebastianbergmann/rattle/issues",
+        "security": "https://github.com/sebastianbergmann/rattle/security/policy"
+    },
+    "prefer-stable": true,
+    "require": {
+        "php": ">=8.5",
+        "ext-json": "*",
+        "ext-pcntl": "*",
+        "nikic/php-parser": "^5.9.0",
+        "sebastian/choice-sequence": "^1.0@dev",
+        "sebastian/cli-parser": "^5.0.1",
+        "sebastian/version": "^7.0.1"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^13.4.5"
+    },
+    "config": {
+        "platform": {
+            "php": "8.5.12"
+        },
+        "optimize-autoloader": true,
+        "sort-packages": true
+    },
+    "autoload": {
+        "classmap": [
+            "src/"
+        ]
+    },
+    "autoload-dev": {
+        "classmap": [
+            "tests/unit/",
+            "tests/integration/"
+        ]
+    },
+    "bin": [
+        "rattle"
+    ],
+    "extra": {
+        "branch-alias": {
+            "dev-main": "1.0-dev"
+        }
+    }
+}
