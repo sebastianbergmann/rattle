@@ -60,6 +60,18 @@ final readonly class Application
             return (new HelpCommand)->run($arguments);
         }
 
+        $command = match ($arguments->command()) {
+            'fuzz'     => new FuzzCommand,
+            'run'      => new RunCommand,
+            'minimize' => new MinimizeCommand,
+            'regress'  => new RegressCommand,
+            default    => null,
+        };
+
+        if ($command !== null) {
+            return $command->run($arguments);
+        }
+
         (new HelpCommand)->run($arguments);
 
         return 2;

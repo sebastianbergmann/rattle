@@ -1,0 +1,109 @@
+<?php declare(strict_types=1);
+/*
+ * This file is part of sebastian/rattle.
+ *
+ * (c) Sebastian Bergmann <sebastian@phpunit.de>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+namespace SebastianBergmann\Rattle;
+
+use const PHP_EOL;
+use function file_get_contents;
+use function is_file;
+use function printf;
+use function sprintf;
+use function str_replace;
+use SebastianBergmann\ChoiceSequence\Decoder;
+use SebastianBergmann\ChoiceSequence\InvalidChoiceSequenceException;
+
+/**
+ * Runs one input once and shows what happened.
+ *
+ * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
+ *
+ * @internal This class is not covered by the backward compatibility promise for sebastian/rattle
+ */
+final readonly class RunCommand implements Command
+{
+    /**
+     * @throws ConfigurationException
+     *
+     * @return list<non-negative-int>
+     */
+    public static function choicesIn(string $input, bool $raw, TargetDescription $target): array
+    {
+        if (!is_file($input)) {
+            throw new ConfigurationException(sprintf('The input file "%s" does not exist', $input));
+        }
+
+        $content = (string) file_get_contents($input);
+
+        if ($raw) {
+            if (!$target->isBytesTarget()) {
+                throw new ConfigurationException('A raw input can only be run for a bytes target');
+            }
+
+            return BytesEncoding::choicesFor($content, $target->maximumLength());
+        }
+
+        try {
+            return (new Decoder)->decode($content)->choices();
+        } catch (InvalidChoiceSequenceException $e) {
+            throw new ConfigurationException(sprintf('The input file "%s" is not a valid choice sequence: %s', $input, $e->getMessage()));
+        }
+    }
+
+    public static function printResult(Result $result): void
+    {
+        printf('Outcome: %s' . PHP_EOL, $result->outcome()->value);
+
+        $failure = $result->failure();
+
+        if ($failure !== null) {
+            printf(PHP_EOL . 'Failure: %s' . PHP_EOL, $failure->describe());
+
+            if ($failure->message() !== '') {
+                printf(PHP_EOL . 'Message: %s' . PHP_EOL, $failure->message());
+            }
+
+            if ($failure->trace() !== '') {
+                printf(PHP_EOL . 'Stack trace:' . PHP_EOL . '  %s' . PHP_EOL, str_replace("\n", "\n  ", $failure->trace()));
+            }
+        }
+
+        $drawnValues = $result->drawnValues() ?? [];
+
+        if ($drawnValues !== []) {
+            print PHP_EOL . 'Drawn values:' . PHP_EOL;
+
+            foreach ($drawnValues as $index => $value) {
+                printf('  #%d %s' . PHP_EOL, $index + 1, $value);
+            }
+        }
+    }
+
+    public function run(Arguments $arguments): int
+    {
+        $setup    = new Setup;
+        $executor = null;
+
+        try {
+            $executor = new ProcessExecutor($setup->workerConfiguration($arguments), 1, $setup->stderr($arguments));
+            $target   = $executor->start();
+            $choices  = self::choicesIn((string) $arguments->input(), $arguments->raw(), $target);
+            $result   = $executor->execute(Job::replay(0, $choices, true));
+        } catch (ConfigurationException|ProtocolException|WorkerException $e) {
+            print $e->getMessage() . PHP_EOL;
+
+            return 2;
+        } finally {
+            $executor?->shutdown();
+        }
+
+        self::printResult($result);
+
+        return $result->isFinding() ? 1 : 0;
+    }
+}

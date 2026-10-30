@@ -28,6 +28,56 @@ Usage:
   rattle --help
   rattle --version
 
+Commands:
+
+  fuzz                        Fuzz the target until a limit is reached or Ctrl+C is pressed
+  run                         Run one input once and show what happened
+  minimize                    Minimize one input and write it to <input>.minimized
+  regress                     Replay every input in the corpus and findings directories once
+
+Options for "rattle fuzz":
+
+  --jobs <n>                  Number of worker processes (default: number of CPU cores)
+  --seed <n>                  Seed of the run (default: random)
+  --max-time <duration>       Stop after this duration, for instance 90s, 30m, 12h, or 2d
+  --max-executions <n>        Stop after this number of executions
+  --max-shrink-attempts <n>   Maximum number of attempts to minimize a finding (default: 500)
+  --worker-executions <n>     Replace a worker after this number of executions (default: 10000)
+  --corpus <dir>              Import the choice sequences in this directory
+  --seeds <dir>               Import the raw files in this directory (bytes targets only)
+  --dictionary <file>         Insert the tokens of this dictionary file
+  --cache-directory <dir>     Directory for the corpus (default: .rattle.cache)
+  --findings-directory <dir>  Directory for the findings (default: fuzz/findings)
+  --stop-on-finding           Stop after the first new finding
+
+Options for "rattle run":
+
+  --raw                       The input is a raw file instead of a choice sequence (bytes targets only)
+
+Options for "rattle minimize":
+
+  --max-shrink-attempts <n>   Maximum number of attempts to minimize the input (default: 500)
+
+Options for "rattle regress":
+
+  --jobs <n>                  Number of worker processes (default: 1)
+  --cache-directory <dir>     Directory for the corpus (default: .rattle.cache)
+  --findings-directory <dir>  Directory for the findings (default: fuzz/findings)
+
+Options for all commands:
+
+  --timeout <seconds>         Time limit for one execution (default: 1)
+  --memory-limit <value>      Memory limit of the worker processes (default: from php.ini)
+  --max-choices <n>           Maximum number of choices of an input (default: 8192)
+  --bootstrap <file>          Bootstrap file (default: vendor/autoload.php)
+  --source <dir>              Instrument the code in this directory, can be repeated
+                              (default: <source> of phpunit.xml(.dist), otherwise src/)
+  --ignore-deprecations       Deprecations are not findings
+  --verbose                   Show what the worker processes write to standard error
+
+Exit codes: 0 when there is no new finding, 1 when there is a new finding
+(regress: when an input fails), and 2 when the usage or configuration is invalid.
+
 EOT;
 
         return 0;
