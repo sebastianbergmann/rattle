@@ -179,7 +179,15 @@ final class ProcessExecutor implements Executor
 
                 $this->forwardStderr($index, $worker->readStderr());
 
-                $frames = $worker->readFrames();
+                try {
+                    $frames = $worker->readFrames();
+                } catch (ProtocolException) {
+                    $worker->corruptedOutput = true;
+
+                    $worker->kill();
+
+                    $frames = null;
+                }
 
                 if ($frames === null) {
                     foreach ($this->handleEndOf($index) as $result) {
@@ -354,6 +362,17 @@ final class ProcessExecutor implements Executor
 
         if ($worker->exitResult !== null) {
             $results[] = $worker->exitResult->withFailure(Failure::processEnded($ended['signal'], $ended['status']));
+        } elseif ($worker->corruptedOutput && $worker->pending !== []) {
+            $job = array_shift($worker->pending);
+
+            $results[] = Result::processEnded(
+                $job,
+                Failure::description(
+                    'Invalid output of the worker process',
+                    'The code under test wrote to the standard output stream directly, for instance with fwrite(STDOUT, ...), which the worker uses to report results',
+                    '',
+                ),
+            );
         } elseif (!$worker->reportedLastResult && $worker->pending !== []) {
             $job = array_shift($worker->pending);
 

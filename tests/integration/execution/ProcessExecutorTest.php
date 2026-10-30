@@ -91,8 +91,8 @@ final class ProcessExecutorTest extends TestCase
         $this->assertSame(
             [
                 [0, 'passed', null],
-                [1, 'failed', sprintf('Warning at %s:%d', $source, 50)],
-                [2, 'failed', sprintf('Fatal error at %s:%d', $source, 55)],
+                [1, 'failed', sprintf('Warning at %s:%d', $source, 53)],
+                [2, 'failed', sprintf('Fatal error at %s:%d', $source, 58)],
                 [3, 'passed', null],
                 [4, 'failed', 'Process exited with status 3'],
                 [5, 'passed', null],
@@ -100,7 +100,7 @@ final class ProcessExecutorTest extends TestCase
                 [7, 'passed', null],
                 [8, 'failed', 'exceeding the time limit'],
                 [9, 'passed', null],
-                [10, 'failed', sprintf('%s at %s:%d', LogicException::class, $source, 73)],
+                [10, 'failed', sprintf('%s at %s:%d', LogicException::class, $source, 76)],
                 [11, 'rejected', null],
                 [12, 'expected', null],
                 [13, 'passed', null],
@@ -119,6 +119,20 @@ final class ProcessExecutorTest extends TestCase
         $this->assertSame([], $this->resultAt($results, 6)->sequence()->spans());
 
         $this->assertSame(3, $executor->numberOfRestarts());
+    }
+
+    public function testAttributesOutputThatCorruptsTheProtocolToTheInputThatProducedIt(): void
+    {
+        $executor = $this->executor();
+        $executor->start();
+
+        $executor->submit([Job::replay(1, [Behaviour::STDOUT, 1]), Job::replay(2, [Behaviour::PASS, 1])]);
+
+        $results = $this->collect($executor, 2);
+
+        $this->assertSame('Invalid output of the worker process', $this->resultAt($results, 0)->failure()?->describe());
+        $this->assertSame(Outcome::Passed, $this->resultAt($results, 1)->outcome());
+        $this->assertSame(1, $executor->numberOfRestarts());
     }
 
     public function testKillsAWorkerThatDoesNotReportAResultInTime(): void

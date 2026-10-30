@@ -11,6 +11,8 @@ namespace SebastianBergmann\Rattle\Fixture\Worker;
 
 use const E_USER_WARNING;
 use const SIGKILL;
+use const STDOUT;
+use function fwrite;
 use function getmypid;
 use function pcntl_alarm;
 use function posix_kill;
@@ -35,6 +37,7 @@ final class Behaviour
     public const int UNINTERRUPTIBLE    = 8;
     public const int EXPECTED_EXCEPTION = 9;
     public const int OUTPUT             = 10;
+    public const int STDOUT             = 11;
 
     public function run(int $behaviour, bool $flag): string
     {
@@ -90,6 +93,11 @@ final class Behaviour
                 print 'output that must not interfere with the protocol';
 
                 return 'output';
+
+            case self::STDOUT:
+                fwrite(STDOUT, 'output that interferes with the protocol');
+
+                return 'stdout';
         }
 
         return 'other';

@@ -70,6 +70,12 @@ final class WorkerProcess
     public bool $retiring = false;
 
     /**
+     * Whether the worker wrote something to its standard output stream that
+     * is not a frame, because the code under test wrote to it directly.
+     */
+    public bool $corruptedOutput = false;
+
+    /**
      * @var resource
      */
     private readonly mixed $process;
