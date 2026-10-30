@@ -1,0 +1,87 @@
+<?php declare(strict_types=1);
+/*
+ * This file is part of sebastian/rattle.
+ *
+ * (c) Sebastian Bergmann <sebastian@phpunit.de>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+namespace SebastianBergmann\Rattle;
+
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Small;
+use PHPUnit\Framework\TestCase;
+use SebastianBergmann\ChoiceSequence\UniformDistribution;
+
+#[CoversClass(Job::class)]
+#[CoversClass(ProtocolData::class)]
+#[CoversClass(ProtocolException::class)]
+#[Small]
+final class JobTest extends TestCase
+{
+    /**
+     * @return array<string, array{0: array<mixed>}>
+     */
+    public static function invalidData(): array
+    {
+        return [
+            'id missing'                    => [['drawnValues' => false, 'choices' => []]],
+            'negative id'                   => [['id' => -1, 'drawnValues' => false, 'choices' => []]],
+            'drawnValues missing'           => [['id' => 1, 'choices' => []]],
+            'choices missing'               => [['id' => 1, 'drawnValues' => false]],
+            'negative choice'               => [['id' => 1, 'drawnValues' => false, 'choices' => [-1]]],
+            'choices that are not a list'   => [['id' => 1, 'drawnValues' => false, 'choices' => ['a' => 1]]],
+            'choices that are not an array' => [['id' => 1, 'drawnValues' => false, 'choices' => 'abc']],
+        ];
+    }
+
+    public function testReplaysAChoiceSequence(): void
+    {
+        $job = Job::replay(3, [1, 2], true);
+
+        $this->assertSame(3, $job->id());
+        $this->assertTrue($job->isReplay());
+        $this->assertSame([1, 2], $job->choices());
+        $this->assertNull($job->seed());
+        $this->assertTrue($job->reportDrawnValues());
+        $this->assertSame([1, 2], $job->sequence()->choices());
+        $this->assertSame(2, $job->source(10)->draw(5, new UniformDistribution) + 1);
+    }
+
+    public function testGeneratesChoicesFromASeed(): void
+    {
+        $job = Job::generate(4, 1234);
+
+        $this->assertFalse($job->isReplay());
+        $this->assertNull($job->choices());
+        $this->assertSame(1234, $job->seed());
+        $this->assertFalse($job->reportDrawnValues());
+        $this->assertSame([], $job->sequence()->choices());
+        $this->assertSame(
+            $job->source(10)->draw(1000, new UniformDistribution),
+            Job::generate(5, 1234)->source(10)->draw(1000, new UniformDistribution),
+        );
+    }
+
+    public function testCanBeConvertedToAndFromAnArray(): void
+    {
+        $replay   = Job::replay(1, [0, 7], true);
+        $generate = Job::generate(2, -5);
+
+        $this->assertEquals($replay, Job::fromArray($replay->asArray()));
+        $this->assertEquals($generate, Job::fromArray($generate->asArray()));
+    }
+
+    /**
+     * @param array<mixed> $data
+     */
+    #[DataProvider('invalidData')]
+    public function testRejectsInvalidData(array $data): void
+    {
+        $this->expectException(ProtocolException::class);
+
+        Job::fromArray($data);
+    }
+}
