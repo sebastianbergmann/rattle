@@ -23,7 +23,9 @@
     "prefer-stable": true,
     "require": {
         "php": ">=8.5",
+        "ext-dom": "*",
         "ext-json": "*",
+        "ext-libxml": "*",
         "ext-pcntl": "*",
         "nikic/php-parser": "^5.9.0",
         "sebastian/choice-sequence": "^1.0@dev",

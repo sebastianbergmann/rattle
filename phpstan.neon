@@ -4,7 +4,8 @@ parameters:
         - src
         - tests
     excludePaths:
-        - tests/fixtures
+        analyse:
+            - tests/fixtures
 
     checkTooWideReturnTypesInProtectedAndPublicMethods: true
     reportAlwaysTrueInLastCondition: true

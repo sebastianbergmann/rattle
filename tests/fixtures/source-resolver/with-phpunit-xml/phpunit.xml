@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit>
+    <source>
+        <include>
+            <directory suffix=".php">lib</directory>
+            <file>bootstrap.php</file>
+            <directory>/absolute/path</directory>
+        </include>
+        <exclude>
+            <directory>lib/excluded</directory>
+        </exclude>
+    </source>
+</phpunit>
