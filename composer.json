@@ -51,7 +51,8 @@
     "autoload-dev": {
         "classmap": [
             "tests/unit/",
-            "tests/integration/"
+            "tests/integration/",
+            "tests/fixtures/worker/src/"
         ]
     },
     "bin": [
