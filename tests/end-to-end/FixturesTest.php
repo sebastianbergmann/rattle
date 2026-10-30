@@ -1,0 +1,422 @@
+<?php declare(strict_types=1);
+/*
+ * This file is part of sebastian/rattle.
+ *
+ * (c) Sebastian Bergmann <sebastian@phpunit.de>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+namespace SebastianBergmann\Rattle;
+
+use const GLOB_ONLYDIR;
+use const PHP_BINARY;
+use function array_merge;
+use function count;
+use function dirname;
+use function escapeshellarg;
+use function file_get_contents;
+use function file_put_contents;
+use function glob;
+use function implode;
+use function is_dir;
+use function is_file;
+use function mkdir;
+use function preg_match;
+use function proc_close;
+use function proc_open;
+use function realpath;
+use function rmdir;
+use function scandir;
+use function sprintf;
+use function str_replace;
+use function stream_get_contents;
+use function substr_count;
+use function sys_get_temp_dir;
+use function uniqid;
+use function unlink;
+use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Large;
+use PHPUnit\Framework\TestCase;
+use SebastianBergmann\ChoiceSequence\Decoder;
+
+/**
+ * Fuzzes the fixture targets with planted defects through the rattle binary,
+ * with one worker and a fixed seed, so that every run executes the same
+ * inputs. The execution budget of each fixture is about twice the number of
+ * executions after which its defect was found when the budget was fixed.
+ */
+#[CoversNothing]
+#[Large]
+final class FixturesTest extends TestCase
+{
+    private const string ROOT     = __DIR__ . '/../..';
+    private const string FIXTURES = __DIR__ . '/../fixtures/targets';
+    private string $directory;
+
+    /**
+     * @return array<string, array{0: string, 1: int, 2: positive-int, 3: string, 4: ?string, 5: list<string>}>
+     */
+    public static function fixtures(): array
+    {
+        return [
+            'a warning for a digit string that is too long for an int' => [
+                'csv',
+                2,
+                8000,
+                'Warning at %s/csv/src/IntegerColumn.php:46',
+                '10000000000000000000',
+                [],
+            ],
+            'an uncaught exception behind a magic header that is found with a dictionary' => [
+                'magic',
+                2,
+                1000,
+                'DivisionByZeroError at %s/magic/src/ImageDecoder.php:37',
+                "RATL\x00",
+                ['--dictionary', self::FIXTURES . '/magic/dictionary.txt'],
+            ],
+            'a timeout for an endless loop' => [
+                'loop',
+                2,
+                1000,
+                'exceeding the time limit',
+                '\\',
+                [],
+            ],
+            'a fatal error for exhausted memory' => [
+                'memory',
+                1,
+                500,
+                'Fatal error at %s/memory/src/RunLengthDecoder.php:35',
+                null,
+                ['--memory-limit', '64M'],
+            ],
+            'the error for the call stack limit for unbounded recursion' => [
+                'recursion',
+                1,
+                10000,
+                'Error at %s/recursion/src/TemplateExpander.php:56',
+                'a=$a',
+                [],
+            ],
+            'a target that calls exit()' => [
+                'exit',
+                2,
+                8000,
+                'Process exited with status 0',
+                '-h',
+                [],
+            ],
+        ];
+    }
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir() . '/rattle-end-to-end-' . uniqid();
+
+        mkdir($this->directory);
+    }
+
+    protected function tearDown(): void
+    {
+        $this->remove($this->directory);
+    }
+
+    /**
+     * @param positive-int $budget
+     * @param list<string> $options
+     */
+    #[DataProvider('fixtures')]
+    public function testFindsMinimizesAndReproducesThePlantedDefect(string $fixture, int $seed, int $budget, string $description, ?string $minimal, array $options): void
+    {
+        $description = sprintf($description, realpath(self::FIXTURES));
+
+        [$exit, $output] = $this->fuzz($fixture, array_merge(['--seed', (string) $seed, '--max-executions', (string) $budget, '--stop-on-finding'], $options));
+
+        $this->assertSame(1, $exit, $output);
+        $this->assertStringContainsString('Finding: ' . $description, $output);
+        $this->assertStringContainsString('1 new finding', $output);
+
+        $findings = glob($this->directory . '/findings/*/*', GLOB_ONLYDIR);
+
+        $this->assertIsArray($findings);
+        $this->assertCount(1, $findings);
+
+        $finding = $findings[0] ?? '';
+
+        foreach (['input', 'original', 'input.bin', 'finding.json', 'README.txt'] as $file) {
+            $this->assertFileExists($finding . '/' . $file);
+        }
+
+        // the inputs are stored in the format of choice sequences and are read
+        // with the decoder of sebastian/choice-sequence
+        $input    = (new Decoder)->decode((string) file_get_contents($finding . '/input'));
+        $original = (new Decoder)->decode((string) file_get_contents($finding . '/original'));
+
+        $this->assertLessThanOrEqual(count($original->choices()), count($input->choices()));
+
+        if ($minimal !== null) {
+            $this->assertSame($minimal, file_get_contents($finding . '/input.bin'));
+        }
+
+        // the minimal input reproduces the finding with the command that
+        // README.txt shows
+        [$exit, $output] = $this->reproduce($finding);
+
+        $this->assertSame(1, $exit, $output);
+        $this->assertStringContainsString('Failure: ' . $description, $output);
+
+        // ... and so does the raw input of a bytes target
+        [$exit, $output] = $this->rattle(array_merge(['run', '--raw', self::FIXTURES . '/' . $fixture . '/target.php', $finding . '/input.bin'], $this->executionOptions($fixture), $this->runOptions($options)));
+
+        $this->assertSame(1, $exit, $output);
+        $this->assertStringContainsString('Failure: ' . $description, $output);
+    }
+
+    public function testTwoRunsWithTheSameSeedAndOneJobExecuteTheSameInputs(): void
+    {
+        $this->fuzz('csv', ['--seed', '42', '--max-executions', '3000', '--log-inputs', $this->directory . '/first.log', '--cache-directory', $this->directory . '/first-cache', '--findings-directory', $this->directory . '/first-findings']);
+        $this->fuzz('csv', ['--seed', '42', '--max-executions', '3000', '--log-inputs', $this->directory . '/second.log', '--cache-directory', $this->directory . '/second-cache', '--findings-directory', $this->directory . '/second-findings']);
+        $this->fuzz('csv', ['--seed', '43', '--max-executions', '3000', '--log-inputs', $this->directory . '/other.log', '--cache-directory', $this->directory . '/other-cache', '--findings-directory', $this->directory . '/other-findings']);
+
+        $first = (string) file_get_contents($this->directory . '/first.log');
+
+        $this->assertSame(3000, substr_count($first, "\n"));
+        $this->assertSame($first, file_get_contents($this->directory . '/second.log'));
+        $this->assertNotSame($first, file_get_contents($this->directory . '/other.log'));
+    }
+
+    public function testAWorkerThatDiesIsReplacedAndFuzzingContinues(): void
+    {
+        [$exit, $output] = $this->fuzz('exit', ['--seed', '2', '--max-executions', '20000']);
+
+        $this->assertSame(1, $exit, $output);
+        $this->assertStringContainsString('executions: 20,000', $output);
+        $this->assertStringContainsString('findings: 1', $output);
+        $this->assertStringContainsString('1 new finding', $output);
+    }
+
+    public function testFindingsAreDeduplicatedAcrossRunsThroughTheFindingsDirectory(): void
+    {
+        [$exit] = $this->fuzz('exit', ['--seed', '2', '--max-executions', '8000', '--stop-on-finding']);
+
+        $this->assertSame(1, $exit);
+
+        [$exit, $output] = $this->fuzz('exit', ['--seed', '3', '--max-executions', '8000']);
+
+        $this->assertSame(0, $exit, $output);
+        $this->assertStringContainsString('(1 known)', $output);
+        $this->assertStringContainsString('0 new findings', $output);
+        $this->assertDoesNotMatchRegularExpression('/^Finding:/m', $output);
+
+        // the corpus of the first run was stored and is replayed first
+        $this->assertMatchesRegularExpression('/\([1-9][0-9]* stored inputs?\)/', $output);
+    }
+
+    public function testRegressFailsWhileAFindingStillFailsAndPassesOnceItIsFixed(): void
+    {
+        $project = $this->directory . '/project';
+
+        mkdir($project . '/exit/src', 0o777, true);
+
+        foreach (['bootstrap.php', 'exit/target.php', 'exit/src/CommandLine.php', 'exit/src/UsageException.php'] as $file) {
+            file_put_contents($project . '/' . $file, (string) file_get_contents(self::FIXTURES . '/' . $file));
+        }
+
+        $options = ['--bootstrap', $project . '/bootstrap.php', '--source', $project . '/exit/src', '--cache-directory', $this->directory . '/cache', '--findings-directory', $this->directory . '/findings'];
+
+        [$exit] = $this->rattle(array_merge(['fuzz', $project . '/exit/target.php', '--jobs', '1', '--seed', '2', '--max-executions', '8000', '--stop-on-finding'], $options));
+
+        $this->assertSame(1, $exit);
+
+        [$exit, $output] = $this->rattle(array_merge(['regress', $project . '/exit/target.php'], $options));
+
+        $this->assertSame(1, $exit, $output);
+        $this->assertStringContainsString('Process exited with status 0', $output);
+        $this->assertMatchesRegularExpression('/Replayed [0-9]+ inputs?, 1 failed/', $output);
+
+        // the defect is fixed: -h no longer exits
+        file_put_contents(
+            $project . '/exit/src/CommandLine.php',
+            str_replace('exit(0);', "return ['options' => ['h'], 'arguments' => \$arguments];", (string) file_get_contents($project . '/exit/src/CommandLine.php')),
+        );
+
+        [$exit, $output] = $this->rattle(array_merge(['regress', $project . '/exit/target.php'], $options));
+
+        $this->assertSame(0, $exit, $output);
+        $this->assertMatchesRegularExpression('/Replayed [0-9]+ inputs?, 0 failed/', $output);
+    }
+
+    public function testMinimizesAnInput(): void
+    {
+        $input = $this->directory . '/input';
+
+        file_put_contents($input, "choice-sequence v1\n" . implode("\n", BytesEncoding::choicesFor('abc def -x -h ghi', 64)) . "\n");
+
+        [$exit, $output] = $this->rattle(array_merge(['minimize', self::FIXTURES . '/exit/target.php', $input], $this->executionOptions('exit')));
+
+        $this->assertSame(0, $exit, $output);
+        $this->assertStringContainsString('Failure: Process exited with status 0', $output);
+        $this->assertSame(
+            BytesEncoding::choicesFor('-h', 64),
+            (new Decoder)->decode((string) file_get_contents($input . '.minimized'))->choices(),
+        );
+
+        file_put_contents($input, "choice-sequence v1\n0\n");
+
+        [$exit, $output] = $this->rattle(array_merge(['minimize', self::FIXTURES . '/exit/target.php', $input], $this->executionOptions('exit')));
+
+        $this->assertSame(1, $exit, $output);
+        $this->assertStringContainsString('The input does not make the target fail', $output);
+    }
+
+    public function testRunsAnInputAndShowsTheValuesItDraws(): void
+    {
+        $input = $this->directory . '/input';
+
+        file_put_contents($input, 'abc');
+
+        [$exit, $output] = $this->rattle(array_merge(['run', '--raw', self::FIXTURES . '/exit/target.php', $input], $this->executionOptions('exit')));
+
+        $this->assertSame(0, $exit, $output);
+        $this->assertStringContainsString('Outcome: passed', $output);
+        $this->assertStringContainsString("#1 'abc'", $output);
+    }
+
+    public function testReportsInvalidConfigurationWithExitCodeTwo(): void
+    {
+        [$exit, $output] = $this->rattle(['fuzz', $this->directory . '/does-not-exist.php']);
+
+        $this->assertSame(2, $exit);
+        $this->assertStringContainsString('does not exist', $output);
+
+        [$exit, $output] = $this->fuzz('exit', ['--seeds', $this->directory . '/does-not-exist']);
+
+        $this->assertSame(2, $exit);
+        $this->assertStringContainsString('The seeds directory', $output);
+
+        [$exit, $output] = $this->rattle(array_merge(['fuzz', self::FIXTURES . '/exit/target.php', '--dictionary', self::ROOT . '/tests/fixtures/engine/invalid-dictionary.txt'], $this->executionOptions('exit')));
+
+        $this->assertSame(2, $exit);
+        $this->assertStringContainsString('Line 2 of the dictionary is not valid', $output);
+    }
+
+    /**
+     * @param list<string> $options
+     *
+     * @return array{0: int, 1: string}
+     */
+    private function fuzz(string $fixture, array $options): array
+    {
+        return $this->rattle(
+            array_merge(
+                ['fuzz', self::FIXTURES . '/' . $fixture . '/target.php', '--jobs', '1'],
+                $this->executionOptions($fixture),
+                ['--cache-directory', $this->directory . '/cache', '--findings-directory', $this->directory . '/findings'],
+                $options,
+            ),
+        );
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function executionOptions(string $fixture): array
+    {
+        return ['--bootstrap', self::FIXTURES . '/bootstrap.php', '--source', self::FIXTURES . '/' . $fixture . '/src'];
+    }
+
+    /**
+     * The options of "rattle fuzz" that "rattle run" accepts as well.
+     *
+     * @param list<string> $options
+     *
+     * @return list<string>
+     */
+    private function runOptions(array $options): array
+    {
+        if (($options[0] ?? null) === '--memory-limit') {
+            return $options;
+        }
+
+        return [];
+    }
+
+    /**
+     * @param list<string> $arguments
+     *
+     * @return array{0: int, 1: string}
+     */
+    private function rattle(array $arguments): array
+    {
+        return $this->execute([PHP_BINARY, self::ROOT . '/rattle', ...$arguments]);
+    }
+
+    /**
+     * Executes the command that the README.txt of a finding shows with the
+     * shell, as it is copied from there.
+     *
+     * @return array{0: int, 1: string}
+     */
+    private function reproduce(string $finding): array
+    {
+        if (preg_match('/^    rattle (.+)$/m', (string) file_get_contents($finding . '/README.txt'), $matches) !== 1) {
+            $this->fail('README.txt does not show the command that reproduces the finding');
+        }
+
+        return $this->execute(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(self::ROOT . '/rattle') . ' ' . $matches[1]);
+    }
+
+    /**
+     * @param list<string>|string $command
+     *
+     * @return array{0: int, 1: string}
+     */
+    private function execute(array|string $command): array
+    {
+        $pipes   = [];
+        $process = proc_open(
+            $command,
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            dirname(__DIR__, 2),
+        );
+
+        $stdout = $pipes[1] ?? null;
+        $stderr = $pipes[2] ?? null;
+
+        $this->assertIsResource($process);
+        $this->assertIsResource($stdout);
+        $this->assertIsResource($stderr);
+
+        // the standard error stream is read after the standard output stream,
+        // which works as long as the workers do not write much to it
+        $output = (string) stream_get_contents($stdout);
+        $output .= (string) stream_get_contents($stderr);
+
+        return [proc_close($process), $output];
+    }
+
+    private function remove(string $path): void
+    {
+        if (is_file($path)) {
+            unlink($path);
+
+            return;
+        }
+
+        if (!is_dir($path)) {
+            return;
+        }
+
+        foreach ((array) scandir($path) as $entry) {
+            if ($entry !== '.' && $entry !== '..') {
+                $this->remove($path . '/' . $entry);
+            }
+        }
+
+        rmdir($path);
+    }
+}
