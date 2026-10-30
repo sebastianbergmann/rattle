@@ -148,19 +148,36 @@ final class Candidate
 
     /**
      * The labels of the spans that hold one byte of a binary string, [1, b],
-     * which are recognised by their maxima, 1 and 255: no other value of
-     * Input is drawn with these maxima.
+     * or end it, [0]. A span that holds a byte is recognised by its maxima, 1
+     * and 255: no other value of Input is drawn with these maxima. The span
+     * that ends an empty string is recognised as a span of one choice with
+     * the maximum 1 that covers the same choice as its parent, the span of
+     * the string: no other value of Input is drawn like this.
      *
      * @return array<non-empty-string, true>
      */
     public function labelsOfBytes(): array
     {
         $labels = [];
+        $spans  = $this->spans();
 
-        foreach ($this->spans() as $span) {
-            if ($span['end'] - $span['start'] === 2 &&
+        foreach ($spans as $span) {
+            $length = $span['end'] - $span['start'];
+
+            if ($length === 2 &&
                 $this->maximumAt($span['start']) === 1 &&
                 $this->maximumAt($span['start'] + 1) === 0xFF) {
+                $labels[$span['label']] = true;
+
+                continue;
+            }
+
+            if ($length === 1 &&
+                $span['parent'] !== null &&
+                $this->maximumAt($span['start']) === 1 &&
+                isset($spans[$span['parent']]) &&
+                $spans[$span['parent']]['start'] === $span['start'] &&
+                $spans[$span['parent']]['end'] === $span['end']) {
                 $labels[$span['label']] = true;
             }
         }
@@ -262,6 +279,21 @@ final class Candidate
         if ($label !== null) {
             $this->spans[] = ['start' => $position, 'end' => $position + $length, 'label' => $label, 'parent' => $parent];
         }
+    }
+
+    /**
+     * Adds a span, for instance for choices that were inserted.
+     *
+     * @param non-negative-int  $start
+     * @param non-negative-int  $end
+     * @param non-empty-string  $label
+     * @param ?non-negative-int $parent
+     */
+    public function addSpan(int $start, int $end, string $label, ?int $parent): void
+    {
+        assert($start <= $end && $end <= count($this->choices));
+
+        $this->spans[] = ['start' => $start, 'end' => $end, 'label' => $label, 'parent' => $parent];
     }
 
     /**

@@ -12,7 +12,6 @@ namespace SebastianBergmann\Rattle;
 use const PHP_INT_MAX;
 use function array_keys;
 use function count;
-use function in_array;
 use function str_contains;
 use function strlen;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -150,7 +149,8 @@ final class MutationTest extends TestCase
 
             $this->assertContains(
                 BytesEncoding::bytesFor($candidate->choices(), 100),
-                ['abcabc', 'aabc', 'abbc', 'abcc', 'abc'],
+                // a byte, or a run of bytes that starts with it, is repeated
+                ['aabc', 'ababc', 'abcabc', 'abbc', 'abcbc', 'abcc', 'abc'],
             );
         }
     }
@@ -271,29 +271,25 @@ final class MutationTest extends TestCase
 
     public function testInsertsATokenIntoAnEmptyString(): void
     {
-        $candidate = Candidate::from(Sequences::drawn([1, 0, 3], static function (Input $input): void
+        $draw = static function (Input $input): void
         {
             $input->bool();
             $input->bytes(10);
             $input->int(0, 5);
+        };
+
+        $candidate = Candidate::from(Sequences::drawn([1, 0, 3], $draw));
+
+        $this->assertTrue((new InsertToken(['XY']))->apply($candidate, $this->randomizer()));
+        $this->assertSame([1, 1, 0x58, 1, 0x59, 0, 3], $candidate->choices());
+
+        $candidate = Candidate::from(Sequences::drawn([1], static function (Input $input): void
+        {
+            $input->bool();
+            $input->int(0, 1);
         }));
 
         $this->assertFalse((new InsertToken(['XY']))->apply($candidate, $this->randomizer()));
-
-        $candidate = Candidate::from(Sequences::drawn([1, 1, 0x61, 0, 3], static function (Input $input): void
-        {
-            $input->bool();
-            $input->bytes(10);
-            $input->int(0, 5);
-        }));
-
-        $this->assertTrue((new InsertToken(['XY']))->apply($candidate, $this->randomizer()));
-
-        $choices = $candidate->choices();
-
-        $this->assertSame(1, $choices[0] ?? null);
-        $this->assertSame(3, $choices[count($choices) - 1] ?? null);
-        $this->assertTrue(in_array(0x58, $choices, true));
     }
 
     private function randomizer(): Randomizer
