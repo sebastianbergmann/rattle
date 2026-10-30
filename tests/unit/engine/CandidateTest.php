@@ -1,0 +1,180 @@
+<?php declare(strict_types=1);
+/*
+ * This file is part of sebastian/rattle.
+ *
+ * (c) Sebastian Bergmann <sebastian@phpunit.de>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+namespace SebastianBergmann\Rattle;
+
+use function array_values;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Small;
+use PHPUnit\Framework\Attributes\UsesClass;
+use PHPUnit\Framework\TestCase;
+use SebastianBergmann\ChoiceSequence\ChoiceSequence;
+use SebastianBergmann\ChoiceSequence\Span;
+
+#[CoversClass(Candidate::class)]
+#[UsesClass(BytesEncoding::class)]
+#[UsesClass(Input::class)]
+#[Small]
+final class CandidateTest extends TestCase
+{
+    public function testIsCreatedFromAChoiceSequence(): void
+    {
+        $candidate = Candidate::from(Sequences::ofBytes('ab'));
+
+        $this->assertSame([1, 0x61, 1, 0x62, 0], $candidate->choices());
+        $this->assertSame(5, $candidate->length());
+        $this->assertSame(0x62, $candidate->choiceAt(3));
+        $this->assertSame(0xFF, $candidate->maximumAt(3));
+        $this->assertNull($candidate->maximumAt(5));
+        $this->assertSame(
+            [
+                [0, 5],
+                [0, 2],
+                [2, 4],
+                [4, 5],
+            ],
+            $this->bounds($candidate),
+        );
+        $this->assertSame([BytesEncoding::labelOfByte(100) => true], $candidate->labelsOfBytes());
+    }
+
+    public function testSetsAChoice(): void
+    {
+        $candidate = Candidate::from(Sequences::ofBytes('ab'));
+
+        $candidate->set(1, 0x7A);
+
+        $this->assertSame([1, 0x7A, 1, 0x62, 0], $candidate->choices());
+    }
+
+    public function testDeletingChoicesMovesAndShrinksSpans(): void
+    {
+        $candidate = Candidate::from(Sequences::ofBytes('abc'));
+
+        $candidate->delete(2, 2);
+
+        $this->assertSame([1, 0x61, 1, 0x63, 0], $candidate->choices());
+        $this->assertSame([[0, 5], [0, 2], [2, 4], [4, 5]], $this->bounds($candidate));
+        $this->assertSame([1, 0xFF, 1, 0xFF, 1], [
+            $candidate->maximumAt(0),
+            $candidate->maximumAt(1),
+            $candidate->maximumAt(2),
+            $candidate->maximumAt(3),
+            $candidate->maximumAt(4),
+        ]);
+    }
+
+    public function testDeletingPartOfASpanShrinksIt(): void
+    {
+        $candidate = Candidate::from(new ChoiceSequence([1, 2, 3, 4], [new Span(1, 3, 'a', null)], [9, 9, 9, 9]));
+
+        $candidate->delete(2, 2);
+
+        $this->assertSame([1, 2], $candidate->choices());
+        $this->assertSame([[1, 2]], $this->bounds($candidate));
+    }
+
+    public function testInsertingChoicesMovesSpansThatStartAtThePositionAndExtendsSpansThatContainIt(): void
+    {
+        $candidate = Candidate::from(Sequences::ofBytes('ab'));
+
+        $candidate->insert(2, [1, 0x7A], [1, 0xFF], BytesEncoding::labelOfByte(100), 0);
+
+        $this->assertSame([1, 0x61, 1, 0x7A, 1, 0x62, 0], $candidate->choices());
+        $this->assertSame([[0, 7], [0, 2], [4, 6], [6, 7], [2, 4]], $this->bounds($candidate));
+        $this->assertSame(0xFF, $candidate->maximumAt(3));
+    }
+
+    public function testInsertedChoicesHaveNoKnownMaximum(): void
+    {
+        $candidate = Candidate::from(new ChoiceSequence([5], [], [9]));
+
+        $candidate->insert(1, [7, 8]);
+        $candidate->insert(0, []);
+
+        $this->assertSame([5, 7, 8], $candidate->choices());
+        $this->assertSame(9, $candidate->maximumAt(0));
+        $this->assertNull($candidate->maximumAt(1));
+    }
+
+    public function testEmptySpansAreIgnoredAndMoveWithWhatFollowsThem(): void
+    {
+        $candidate = Candidate::from(new ChoiceSequence([1, 2, 3], [new Span(1, 2, 'a', null)], []));
+
+        $candidate->delete(1, 1);
+
+        $this->assertSame([], $this->bounds($candidate));
+
+        $candidate->insert(0, [9]);
+        $candidate->insert(2, [8], null, 'b', null);
+
+        $this->assertSame([9, 1, 8, 3], $candidate->choices());
+        $this->assertSame([[2, 3]], $this->bounds($candidate));
+    }
+
+    public function testReplacingARangeAdjustsTheSpans(): void
+    {
+        $candidate = Candidate::from(Sequences::ofBytes('abc'));
+
+        // replaces the second byte with two bytes
+        $candidate->replace(2, 4, [1, 0x78, 1, 0x79], [1, 0xFF, 1, 0xFF]);
+
+        $this->assertSame([1, 0x61, 1, 0x78, 1, 0x79, 1, 0x63, 0], $candidate->choices());
+        $this->assertSame([[0, 9], [0, 2], [2, 6], [6, 8], [8, 9]], $this->bounds($candidate));
+    }
+
+    public function testReplacingARangeEmptiesTheSpansWithinItAndShrinksTheSpansThatCrossIt(): void
+    {
+        $candidate = Candidate::from(
+            new ChoiceSequence(
+                [1, 2, 3, 4, 5, 6],
+                [new Span(0, 3, 'a', null), new Span(2, 4, 'b', null), new Span(3, 6, 'c', null)],
+                [],
+            ),
+        );
+
+        $candidate->replace(2, 4, [9], [null]);
+
+        $this->assertSame([1, 2, 9, 5, 6], $candidate->choices());
+        $this->assertSame([[0, 2], [2, 3], [2, 5]], $this->bounds($candidate));
+    }
+
+    public function testCutsOffTheTail(): void
+    {
+        $candidate = Candidate::from(Sequences::ofBytes('abc'));
+
+        $candidate->truncate(3);
+        $candidate->truncate(10);
+
+        $this->assertSame([1, 0x61, 1], $candidate->choices());
+        $this->assertSame([[0, 3], [0, 2], [2, 3]], $this->bounds($candidate));
+    }
+
+    public function testSlicesChoicesWithTheirMaxima(): void
+    {
+        $this->assertSame(
+            ['choices' => [1, 0x62], 'maxima' => [1, 0xFF]],
+            Candidate::from(Sequences::ofBytes('ab'))->slice(2, 4),
+        );
+    }
+
+    /**
+     * @return list<array{0: non-negative-int, 1: non-negative-int}>
+     */
+    private function bounds(Candidate $candidate): array
+    {
+        $bounds = [];
+
+        foreach (array_values($candidate->spans()) as $span) {
+            $bounds[] = [$span['start'], $span['end']];
+        }
+
+        return $bounds;
+    }
+}
