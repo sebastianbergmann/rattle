@@ -1,0 +1,6 @@
+# a comment, and an empty line
+
+kw1="RATL"
+"\x00\xFF"
+"quote\"backslash\\"
+kw2="trailing" # comment
