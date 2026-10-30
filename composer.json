@@ -23,6 +23,7 @@
     "prefer-stable": true,
     "require": {
         "php": ">=8.5",
+        "ext-ctype": "*",
         "ext-dom": "*",
         "ext-json": "*",
         "ext-libxml": "*",

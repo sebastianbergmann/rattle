@@ -10,6 +10,7 @@
 namespace SebastianBergmann\Rattle;
 
 use const PHP_EOL;
+use function array_slice;
 use function dirname;
 use function printf;
 use SebastianBergmann\Version;
@@ -35,6 +36,10 @@ final readonly class Application
      */
     public function run(array $argv): int
     {
+        if (($argv[1] ?? null) === 'worker') {
+            return (new WorkerCommand)->run(array_slice($argv, 2));
+        }
+
         $this->printVersion();
 
         try {
