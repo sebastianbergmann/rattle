@@ -1,0 +1,160 @@
+<?php declare(strict_types=1);
+/*
+ * This file is part of sebastian/rattle.
+ *
+ * (c) Sebastian Bergmann <sebastian@phpunit.de>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+namespace SebastianBergmann\Rattle;
+
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Small;
+use PHPUnit\Framework\TestCase;
+
+#[CoversClass(ArgumentsBuilder::class)]
+#[CoversClass(Arguments::class)]
+#[CoversClass(ArgumentsBuilderException::class)]
+#[Small]
+final class ArgumentsBuilderTest extends TestCase
+{
+    /**
+     * @return array<string, array{0: string, 1: float}>
+     */
+    public static function durations(): array
+    {
+        return [
+            'seconds without a unit' => ['90', 90.0],
+            'seconds'                => ['90s', 90.0],
+            'minutes'                => ['30m', 1800.0],
+            'days'                   => ['2d', 172800.0],
+        ];
+    }
+
+    /**
+     * @return array<string, array{0: list<string>}>
+     */
+    public static function invalidArguments(): array
+    {
+        return [
+            'unknown command'                               => [['rattle', 'unknown']],
+            'fuzz without a target'                         => [['rattle', 'fuzz']],
+            'run without an input'                          => [['rattle', 'run', 'target.php']],
+            'too many arguments'                            => [['rattle', 'fuzz', 'target.php', 'other.php']],
+            'no jobs'                                       => [['rattle', 'fuzz', 'target.php', '--jobs', '0']],
+            'number of jobs that is not a number'           => [['rattle', 'fuzz', 'target.php', '--jobs', 'many']],
+            'seed that is not an integer'                   => [['rattle', 'fuzz', 'target.php', '--seed', '1.5']],
+            'maximum time of zero'                          => [['rattle', 'fuzz', 'target.php', '--max-time', '0']],
+            'unknown unit of time'                          => [['rattle', 'fuzz', 'target.php', '--max-time', '1w']],
+            'negative maximum number of shrinking attempts' => [['rattle', 'fuzz', 'target.php', '--max-shrink-attempts', '-1']],
+            'seed with run'                                 => [['rattle', 'run', 'target.php', 'input', '--seed', '1']],
+        ];
+    }
+
+    public function testHasDefaults(): void
+    {
+        $arguments = (new ArgumentsBuilder)->build(['rattle', 'fuzz', 'target.php']);
+
+        $this->assertSame('fuzz', $arguments->command());
+        $this->assertSame('target.php', $arguments->target());
+        $this->assertNull($arguments->input());
+        $this->assertNull($arguments->jobs());
+        $this->assertNull($arguments->seed());
+        $this->assertSame(1, $arguments->timeout());
+        $this->assertNull($arguments->memoryLimit());
+        $this->assertNull($arguments->maximumTime());
+        $this->assertNull($arguments->maximumNumberOfExecutions());
+        $this->assertSame(8192, $arguments->maximumNumberOfChoices());
+        $this->assertSame(500, $arguments->maximumNumberOfShrinkingAttempts());
+        $this->assertSame(10000, $arguments->numberOfExecutionsPerWorker());
+        $this->assertSame([], $arguments->corpusDirectories());
+        $this->assertNull($arguments->seedsDirectory());
+        $this->assertNull($arguments->dictionary());
+        $this->assertSame('.rattle.cache', $arguments->cacheDirectory());
+        $this->assertSame('fuzz/findings', $arguments->findingsDirectory());
+        $this->assertNull($arguments->bootstrap());
+        $this->assertSame([], $arguments->sources());
+        $this->assertFalse($arguments->ignoreDeprecations());
+        $this->assertFalse($arguments->stopOnFinding());
+        $this->assertFalse($arguments->verbose());
+        $this->assertFalse($arguments->raw());
+        $this->assertNull($arguments->inputLog());
+        $this->assertFalse($arguments->help());
+        $this->assertFalse($arguments->version());
+    }
+
+    public function testParsesTheOptionsOfTheFuzzCommand(): void
+    {
+        $arguments = (new ArgumentsBuilder)->build(
+            [
+                'rattle', 'fuzz', 'target.php',
+                '--jobs', '4', '--seed', '-12', '--timeout', '3', '--memory-limit', '256M',
+                '--max-time', '2h', '--max-executions', '1000', '--max-choices', '100',
+                '--max-shrink-attempts', '0', '--worker-executions', '50',
+                '--corpus', 'a', '--corpus', 'b', '--seeds', 'seeds', '--dictionary', 'dictionary.txt',
+                '--cache-directory', 'cache', '--findings-directory', 'findings',
+                '--bootstrap', 'bootstrap.php', '--source', 'src', '--source', 'lib',
+                '--ignore-deprecations', '--stop-on-finding', '--verbose', '--log-inputs', 'inputs.log',
+            ],
+        );
+
+        $this->assertSame(4, $arguments->jobs());
+        $this->assertSame(-12, $arguments->seed());
+        $this->assertSame(3, $arguments->timeout());
+        $this->assertSame('256M', $arguments->memoryLimit());
+        $this->assertSame(7200.0, $arguments->maximumTime());
+        $this->assertSame(1000, $arguments->maximumNumberOfExecutions());
+        $this->assertSame(100, $arguments->maximumNumberOfChoices());
+        $this->assertSame(0, $arguments->maximumNumberOfShrinkingAttempts());
+        $this->assertSame(50, $arguments->numberOfExecutionsPerWorker());
+        $this->assertSame(['a', 'b'], $arguments->corpusDirectories());
+        $this->assertSame('seeds', $arguments->seedsDirectory());
+        $this->assertSame('dictionary.txt', $arguments->dictionary());
+        $this->assertSame('cache', $arguments->cacheDirectory());
+        $this->assertSame('findings', $arguments->findingsDirectory());
+        $this->assertSame('bootstrap.php', $arguments->bootstrap());
+        $this->assertSame(['src', 'lib'], $arguments->sources());
+        $this->assertTrue($arguments->ignoreDeprecations());
+        $this->assertTrue($arguments->stopOnFinding());
+        $this->assertTrue($arguments->verbose());
+        $this->assertSame('inputs.log', $arguments->inputLog());
+    }
+
+    public function testParsesTheArgumentsOfTheRunCommand(): void
+    {
+        $arguments = (new ArgumentsBuilder)->build(['rattle', 'run', '--raw', 'target.php', 'input']);
+
+        $this->assertSame('run', $arguments->command());
+        $this->assertSame('target.php', $arguments->target());
+        $this->assertSame('input', $arguments->input());
+        $this->assertTrue($arguments->raw());
+    }
+
+    #[DataProvider('durations')]
+    public function testParsesDurations(string $duration, float $seconds): void
+    {
+        $this->assertSame($seconds, (new ArgumentsBuilder)->build(['rattle', 'fuzz', 'target.php', '--max-time', $duration])->maximumTime());
+    }
+
+    public function testParsesHelpAndVersion(): void
+    {
+        $this->assertTrue((new ArgumentsBuilder)->build(['rattle', '--help'])->help());
+        $this->assertTrue((new ArgumentsBuilder)->build(['rattle', '-h'])->help());
+        $this->assertTrue((new ArgumentsBuilder)->build(['rattle', '--version'])->version());
+        $this->assertTrue((new ArgumentsBuilder)->build(['rattle', '-v'])->version());
+        $this->assertNull((new ArgumentsBuilder)->build(['rattle'])->command());
+    }
+
+    /**
+     * @param list<string> $argv
+     */
+    #[DataProvider('invalidArguments')]
+    public function testRejectsInvalidArguments(array $argv): void
+    {
+        $this->expectException(ArgumentsBuilderException::class);
+
+        (new ArgumentsBuilder)->build($argv);
+    }
+}
