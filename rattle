@@ -1,0 +1,46 @@
+#!/usr/bin/env php
+<?php declare(strict_types=1);
+/*
+ * This file is part of sebastian/rattle.
+ *
+ * (c) Sebastian Bergmann <sebastian@phpunit.de>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+if (PHP_OS_FAMILY === 'Windows') {
+    fwrite(STDERR, 'rattle requires Linux or macOS, Windows is not supported' . PHP_EOL);
+
+    exit(2);
+}
+
+if (!extension_loaded('pcntl')) {
+    fwrite(STDERR, 'rattle requires the pcntl extension' . PHP_EOL);
+
+    exit(2);
+}
+
+$loaded = false;
+
+foreach ([__DIR__ . '/../../autoload.php', __DIR__ . '/vendor/autoload.php'] as $file) {
+    if (file_exists($file)) {
+        require $file;
+
+        $loaded = true;
+
+        break;
+    }
+}
+
+if (!$loaded) {
+    fwrite(
+        STDERR,
+        'You need to set up the project dependencies using the following commands:' . PHP_EOL .
+        'wget http://getcomposer.org/composer.phar' . PHP_EOL .
+        'php composer.phar install' . PHP_EOL,
+    );
+
+    exit(2);
+}
+
+exit((new SebastianBergmann\Rattle\Application)->run($_SERVER['argv']));
