@@ -56,9 +56,7 @@ final class FindingProcessor implements FindingHandler
         $this->seed       = $seed;
         $this->listener   = $listener;
 
-        foreach ($store->knownFailures() as $failure) {
-            $this->known[] = $failure->signature();
-        }
+        $this->known = $store->knownSignatures();
     }
 
     /**

@@ -20,6 +20,7 @@ use function glob;
 use function hash;
 use function is_array;
 use function is_dir;
+use function is_string;
 use function json_decode;
 use function json_encode;
 use function mkdir;
@@ -28,6 +29,8 @@ use function sprintf;
 use JsonException;
 use SebastianBergmann\ChoiceSequence\ChoiceSequence;
 use SebastianBergmann\ChoiceSequence\Encoder;
+use SebastianBergmann\ChoiceSequence\FailureSignature;
+use SebastianBergmann\ChoiceSequence\InvalidFailureSignatureException;
 
 /**
  * Stores findings in the findings directory of a target, one directory per
@@ -37,8 +40,10 @@ use SebastianBergmann\ChoiceSequence\Encoder;
  * - input:        the minimal input, in the format "choice-sequence v1"
  * - original:     the input as it was found
  * - input.bin:    the minimal input as raw bytes, for bytes targets only
- * - finding.json: how the input made the target fail, the values it draws,
- *                 the seed of the run, and the versions of rattle and PHP
+ * - finding.json: the kind and the text of the failure signature, from which
+ *                 it is recreated, how the input made the target fail, the
+ *                 values it draws, the seed of the run, and the versions of
+ *                 rattle and PHP
  * - README.txt:   the command that reproduces the finding
  *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
@@ -52,9 +57,9 @@ final readonly class FindingStore
     /**
      * @return non-empty-string
      */
-    public static function idOf(Failure $failure): string
+    public static function idOf(FailureSignature $signature): string
     {
-        return hash('sha256', $failure->kind() . "\n" . $failure->describe());
+        return hash('sha256', $signature->kind() . "\n" . $signature->text());
     }
 
     /**
@@ -80,7 +85,8 @@ final readonly class FindingStore
     public function store(Minimization $minimization, string $targetPath, ?int $maximumLength, int $seed): string
     {
         $failure   = $minimization->failure();
-        $directory = $this->directory . '/' . self::idOf($failure);
+        $signature = $failure->signature();
+        $directory = $this->directory . '/' . self::idOf($signature);
         $encoder   = new Encoder;
 
         if (!is_dir($directory) && !@mkdir($directory, 0o777, true) && !is_dir($directory)) {
@@ -100,9 +106,9 @@ final readonly class FindingStore
             $directory . '/finding.json',
             json_encode(
                 [
-                    'kind'        => $failure->kind(),
-                    'signature'   => $failure->describe(),
-                    'failure'     => $failure->asArray(),
+                    'kind'        => $signature->kind(),
+                    'signature'   => $signature->text(),
+                    'description' => $signature->description(),
                     'message'     => $failure->message(),
                     'trace'       => $failure->trace(),
                     'drawnValues' => $minimization->drawnValues(),
@@ -128,27 +134,28 @@ final readonly class FindingStore
     }
 
     /**
-     * The failures of the findings that are stored, which are known.
+     * The failure signatures of the findings that are stored, which are
+     * known. They are recreated from the kind and the text of each signature.
      *
-     * @return list<Failure>
+     * @return list<FailureSignature>
      */
-    public function knownFailures(): array
+    public function knownSignatures(): array
     {
-        $failures = [];
+        $signatures = [];
 
         foreach ($this->findingFiles() as $file) {
             try {
                 $data = json_decode((string) file_get_contents($file), true, 512, JSON_THROW_ON_ERROR);
 
-                if (is_array($data) && isset($data['failure']) && is_array($data['failure'])) {
-                    $failures[] = Failure::fromArray($data['failure']);
+                if (is_array($data) && is_string($data['kind'] ?? null) && is_string($data['signature'] ?? null)) {
+                    $signatures[] = FailureSignature::fromKindAndText($data['kind'], $data['signature']);
                 }
-            } catch (JsonException|ProtocolException) {
+            } catch (InvalidFailureSignatureException|JsonException) {
                 // a finding that cannot be read is not known
             }
         }
 
-        return $failures;
+        return $signatures;
     }
 
     /**

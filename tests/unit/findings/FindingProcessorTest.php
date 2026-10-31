@@ -9,6 +9,7 @@
  */
 namespace SebastianBergmann\Rattle;
 
+use function dirname;
 use function file_get_contents;
 use function file_put_contents;
 use function glob;
@@ -17,6 +18,7 @@ use function is_dir;
 use function is_file;
 use function json_decode;
 use function mkdir;
+use function preg_quote;
 use function rmdir;
 use function str_contains;
 use function sys_get_temp_dir;
@@ -100,7 +102,7 @@ final class FindingProcessorTest extends TestCase
 
         $this->assertTrue($processor->handle($result, Job::replay(1, [])));
 
-        $id        = FindingStore::idOf($this->notNull($result->failure()));
+        $id        = FindingStore::idOf($this->notNull($result->failure())->signature());
         $directory = $this->directory . '/' . $id;
 
         $this->assertSame([$directory], $stored);
@@ -114,14 +116,14 @@ final class FindingProcessorTest extends TestCase
 
         $this->assertIsArray($finding);
 
-        $failure = $finding['failure'] ?? null;
+        $signature = $finding['signature'] ?? null;
 
-        $this->assertIsArray($failure);
+        $this->assertIsString($signature);
+        $this->assertMatchesRegularExpression('/\A' . preg_quote(LogicException::class, '/') . ' at tests\/unit\/findings\/FindingProcessorTest\.php:\d+\z/', $signature);
         $this->assertSame(
-            ['throwable', LogicException::class, "an 'x'", ["'x'"], 1234, false, true, Application::version()],
+            ['throwable', "an 'x'", ["'x'"], 1234, false, true, Application::version()],
             [
                 $finding['kind'] ?? null,
-                $failure['class'] ?? null,
                 $finding['message'] ?? null,
                 $finding['drawnValues'] ?? null,
                 $finding['seed'] ?? null,
@@ -169,12 +171,14 @@ final class FindingProcessorTest extends TestCase
         mkdir($this->directory . '/unreadable');
         file_put_contents($this->directory . '/unreadable/finding.json', 'not json');
 
-        $known = $store->knownFailures();
+        $known = $store->knownSignatures();
 
         $this->assertCount(3, $known);
-        $this->assertTrue(Failure::timeout('', '')->signature()->isSameAs($this->signatureIn($known, 'timeout')));
-        $this->assertStringContainsString('did not fail in the same way again', (string) file_get_contents($this->directory . '/' . FindingStore::idOf(Failure::timeout('', '')) . '/README.txt'));
-        $this->assertFalse(is_file($this->directory . '/' . FindingStore::idOf(Failure::timeout('', '')) . '/input.bin'));
+        $this->assertTrue(FailureSignature::forTimeout()->isSameAs($this->signatureIn($known, 'timeout')));
+        $this->assertTrue(FailureSignature::forThrowable(RuntimeException::class, 'file.php:2')->isSameAs($this->signatureIn($known, 'throwable')));
+        $this->assertTrue(FailureSignature::forDescription('Fatal error at file.php:1')->isSameAs($this->signatureIn($known, 'description')));
+        $this->assertStringContainsString('did not fail in the same way again', (string) file_get_contents($this->directory . '/' . FindingStore::idOf(FailureSignature::forTimeout()) . '/README.txt'));
+        $this->assertFalse(is_file($this->directory . '/' . FindingStore::idOf(FailureSignature::forTimeout()) . '/input.bin'));
     }
 
     public function testCannotStoreAFindingWhereNoDirectoryCanBeCreated(): void
@@ -206,18 +210,19 @@ final class FindingProcessorTest extends TestCase
                 8192,
                 0,
                 false,
+                dirname(__DIR__, 3),
             ),
         );
     }
 
     /**
-     * @param list<Failure> $failures
+     * @param list<FailureSignature> $signatures
      */
-    private function signatureIn(array $failures, string $kind): FailureSignature
+    private function signatureIn(array $signatures, string $kind): FailureSignature
     {
-        foreach ($failures as $failure) {
-            if ($failure->kind() === $kind) {
-                return $failure->signature();
+        foreach ($signatures as $signature) {
+            if ($signature->kind() === $kind) {
+                return $signature;
             }
         }
 
