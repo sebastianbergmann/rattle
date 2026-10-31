@@ -19,7 +19,11 @@ You can add rattle as a development-time dependency to your project using [Compo
 composer require --dev sebastian/rattle
 ```
 
-rattle uses [`nikic/php-parser`](https://github.com/nikic/PHP-Parser) to instrument your code, so the version of `nikic/php-parser` that your project uses must be compatible with the one that rattle requires. A PHAR of rattle that does not have this constraint is planned.
+rattle uses [`nikic/php-parser`](https://github.com/nikic/PHP-Parser) to instrument your code. When you install rattle with Composer, the version of `nikic/php-parser` that your project uses must be compatible with the one that rattle requires.
+
+The PHAR of rattle does not have this constraint: the dependencies that it bundles are prefixed with [PHP-Scoper](https://github.com/humbug/php-scoper), so they cannot conflict with the dependencies of your project. Only rattle's own namespace, `SebastianBergmann\Rattle`, is not prefixed, so your fuzz targets work with the PHAR as they do with Composer. The PHAR is not published yet. You can build it from a clone of this repository with `ant phar-snapshot`, which writes it to `build/artifacts/rattle-snapshot.phar`, together with a Software Bill of Materials (SBOM) for its download in CycloneDX format, `build/artifacts/rattle-snapshot.phar.cdx.xml`.
+
+The PHAR prints the packages that it bundles with `--manifest`, a Software Bill of Materials (SBOM) in CycloneDX format with `--sbom`, and the `composer.lock` file that it was built with with `--composer-lock`.
 
 ## Fuzz targets
 
@@ -175,7 +179,7 @@ in CI. It replays the minimal input of every finding and every input of the corp
 
 ## Limitations
 
-* `nikic/php-parser` must be compatible with the version that your project uses, until rattle is distributed as a PHAR.
+* When rattle is installed with Composer, `nikic/php-parser` must be compatible with the version that your project uses. The PHAR does not have this constraint.
 * Not every construct is instrumented, see [How coverage is measured](#how-coverage-is-measured).
 * Coverage is collected by instrumented PHP code, which is slower than collecting it in the engine.
 * To instrument files while they are included, rattle replaces PHP's stream wrapper for `file://` in its worker processes. Other operations of the code under test on files are passed on to PHP's own wrapper, which makes them slower. As with every stream wrapper that is written in PHP, PHP buffers what is read through it: a file that is changed through one handle may still be read as it was through another handle until that handle seeks.
