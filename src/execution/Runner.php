@@ -29,6 +29,7 @@ use const SIGALRM;
 use function debug_backtrace;
 use function error_get_last;
 use function error_reporting;
+use function getcwd;
 use function in_array;
 use function max;
 use function pcntl_alarm;
@@ -76,6 +77,7 @@ final class Runner
      */
     private readonly int $timeout;
     private readonly bool $ignoreDeprecations;
+    private readonly Location $location;
 
     /**
      * @var array<int, true>
@@ -96,9 +98,11 @@ final class Runner
     /**
      * @param positive-int     $maximumNumberOfChoices raised automatically to what the target needs
      * @param non-negative-int $timeout                in seconds, 0 for no time limit
+     * @param ?string          $workingDirectory       the directory that paths in locations are relative to, by default the current working directory
      */
-    public function __construct(Target $target, int $maximumNumberOfChoices, int $timeout, bool $ignoreDeprecations)
+    public function __construct(Target $target, int $maximumNumberOfChoices, int $timeout, bool $ignoreDeprecations, ?string $workingDirectory = null)
     {
+        $this->location               = new Location($workingDirectory ?? (string) getcwd());
         $this->target                 = $target;
         $this->maximumNumberOfChoices = max($maximumNumberOfChoices, $target->requiredNumberOfChoices() ?? 1);
         $this->timeout                = $timeout;
@@ -219,7 +223,7 @@ final class Runner
                 // the message is reported, but it is not part of the signature
                 // because messages such as "tried to allocate N bytes" vary
                 $failure = Failure::description(
-                    sprintf('Fatal error at %s:%d', $error['file'], $error['line']),
+                    'Fatal error at ' . $this->location->ofIssue($error['file'], $error['line']),
                     $error['message'],
                     '',
                 );
@@ -263,7 +267,7 @@ final class Runner
     private function failureOf(?Throwable $throwable): Failure
     {
         if ($throwable instanceof TimeoutError) {
-            return Failure::timeout($throwable->getMessage(), Location::traceOf($throwable));
+            return Failure::timeout($throwable->getMessage(), $this->location->traceOf($throwable));
         }
 
         if ($throwable === null) {
@@ -274,9 +278,9 @@ final class Runner
 
         return Failure::throwable(
             $throwable::class,
-            Location::of($throwable),
+            $this->location->of($throwable),
             $throwable->getMessage(),
-            Location::traceOf($throwable),
+            $this->location->traceOf($throwable),
         );
     }
 
@@ -295,9 +299,9 @@ final class Runner
         }
 
         $this->failure = Failure::description(
-            sprintf('%s at %s:%d', self::nameOf($type), $file, $line),
+            self::nameOf($type) . ' at ' . $this->location->ofIssue($file, $line),
             $message,
-            Location::render(debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS)),
+            $this->location->render(debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS)),
         );
 
         return true;
@@ -342,7 +346,7 @@ final class Runner
         $message = sprintf('Execution exceeded the time limit of %d second%s', $this->timeout, $this->timeout === 1 ? '' : 's');
 
         if ($this->failure === null) {
-            $this->failure = Failure::timeout($message, Location::render(debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS)));
+            $this->failure = Failure::timeout($message, $this->location->render(debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS)));
         }
 
         pcntl_alarm(1);

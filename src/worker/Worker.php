@@ -15,6 +15,7 @@ use const STDERR;
 use function array_values;
 use function count;
 use function fwrite;
+use function getcwd;
 use function getmypid;
 use function ini_get;
 use function ini_set;
@@ -72,6 +73,10 @@ final class Worker
      */
     public function run(): int
     {
+        // locations are relative to the working directory in which the
+        // worker was started, whatever the code under test does with it
+        $workingDirectory = (string) getcwd();
+
         $this->prepareProcess();
 
         $hook = new IncludeHook(new Instrumentor, $this->configuration->sources(), [$this->configuration->target()]);
@@ -93,6 +98,7 @@ final class Worker
             $this->configuration->maximumNumberOfChoices(),
             $this->configuration->timeout(),
             $this->configuration->ignoreDeprecations(),
+            $workingDirectory,
         );
 
         $this->runner = $runner;

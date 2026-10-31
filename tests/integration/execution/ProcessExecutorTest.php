@@ -11,8 +11,10 @@ namespace SebastianBergmann\Rattle;
 
 use function array_map;
 use function count;
+use function getcwd;
 use function realpath;
 use function sprintf;
+use function str_replace;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Large;
@@ -86,7 +88,9 @@ final class ProcessExecutorTest extends TestCase
         $executor->submit($jobs);
 
         $results = $this->collect($executor, count($jobs));
-        $source  = (string) realpath(self::FIXTURES . '/src/Behaviour.php');
+        // the workers run in the working directory of the test, and the
+        // paths in locations are relative to it
+        $source = str_replace(realpath((string) getcwd()) . '/', '', (string) realpath(self::FIXTURES . '/src/Behaviour.php'));
 
         $this->assertSame(
             [

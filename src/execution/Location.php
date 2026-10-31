@@ -12,8 +12,12 @@ namespace SebastianBergmann\Rattle;
 use function array_unshift;
 use function dirname;
 use function implode;
+use function realpath;
+use function rtrim;
 use function sprintf;
 use function str_starts_with;
+use function strlen;
+use function substr;
 use Throwable;
 
 /**
@@ -23,7 +27,12 @@ use Throwable;
  * The location of a throwable is its own file and line, unless these lie in
  * rattle's own code. Then it is the first frame of its stack trace that does
  * not. This is how PHPUnit determines the location of a throwable with its
- * own code left out, so that the failure signatures of both tools match.
+ * own code left out.
+ *
+ * The path of a file below the working directory is relative to it, so that
+ * failure signatures, and the identifiers of findings that are derived from
+ * them, do not depend on where a project is checked out. The working
+ * directory is determined once, before the code under test could change it.
  *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
@@ -31,33 +40,60 @@ use Throwable;
  */
 final readonly class Location
 {
+    private string $prefix;
+
+    public static function isRattle(string $file): bool
+    {
+        return str_starts_with($file, dirname(__DIR__) . '/') ||
+               $file === dirname(__DIR__, 2) . '/rattle';
+    }
+
+    public function __construct(string $workingDirectory)
+    {
+        $realpath = realpath($workingDirectory);
+
+        if ($realpath === false) {
+            $realpath = $workingDirectory;
+        }
+
+        $this->prefix = rtrim($realpath, '/') . '/';
+    }
+
     /**
      * @return non-empty-string
      */
-    public static function of(Throwable $throwable): string
+    public function of(Throwable $throwable): string
     {
-        foreach (self::framesOf($throwable) as $frame) {
+        foreach ($this->framesOf($throwable) as $frame) {
             if (!self::isRattle($frame['file'])) {
-                return $frame['file'] . ':' . $frame['line'];
+                return $this->file($frame['file']) . ':' . $frame['line'];
             }
         }
 
-        return $throwable->getFile() . ':' . $throwable->getLine();
+        return $this->file($throwable->getFile()) . ':' . $throwable->getLine();
     }
 
-    public static function traceOf(Throwable $throwable): string
+    /**
+     * @return non-empty-string
+     */
+    public function ofIssue(string $file, int $line): string
+    {
+        return $this->file($file) . ':' . $line;
+    }
+
+    public function traceOf(Throwable $throwable): string
     {
         $frames = $throwable->getTrace();
 
         array_unshift($frames, ['file' => $throwable->getFile(), 'line' => $throwable->getLine()]);
 
-        return self::render($frames);
+        return $this->render($frames);
     }
 
     /**
      * @param list<array{file?: string, line?: int, class?: class-string, type?: string, function?: string, ...}> $frames
      */
-    public static function render(array $frames): string
+    public function render(array $frames): string
     {
         $lines = [];
 
@@ -72,22 +108,29 @@ final readonly class Location
                 $function = sprintf(' %s%s%s()', $frame['class'] ?? '', $frame['type'] ?? '', $frame['function']);
             }
 
-            $lines[] = sprintf('%s:%d%s', $frame['file'], $frame['line'] ?? 0, $function);
+            $lines[] = sprintf('%s:%d%s', $this->file($frame['file']), $frame['line'] ?? 0, $function);
         }
 
         return implode("\n", $lines);
     }
 
-    public static function isRattle(string $file): bool
+    /**
+     * The path of the file, relative to the working directory when the file
+     * is below it.
+     */
+    public function file(string $path): string
     {
-        return str_starts_with($file, dirname(__DIR__) . '/') ||
-               $file === dirname(__DIR__, 2) . '/rattle';
+        if (str_starts_with($path, $this->prefix)) {
+            return substr($path, strlen($this->prefix));
+        }
+
+        return $path;
     }
 
     /**
      * @return list<array{file: string, line: int}>
      */
-    private static function framesOf(Throwable $throwable): array
+    private function framesOf(Throwable $throwable): array
     {
         $frames = [['file' => $throwable->getFile(), 'line' => $throwable->getLine()]];
 

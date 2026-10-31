@@ -25,7 +25,6 @@ use function mkdir;
 use function preg_match;
 use function proc_close;
 use function proc_open;
-use function realpath;
 use function rmdir;
 use function scandir;
 use function sprintf;
@@ -131,7 +130,9 @@ final class FixturesTest extends TestCase
     #[DataProvider('fixtures')]
     public function testFindsMinimizesAndReproducesThePlantedDefect(string $fixture, int $seed, int $budget, string $description, ?string $minimal, array $options): void
     {
-        $description = sprintf($description, realpath(self::FIXTURES));
+        // rattle runs in the root directory of the project, and the paths in
+        // locations are relative to it
+        $description = sprintf($description, 'tests/fixtures/targets');
 
         [$exit, $output] = $this->fuzz($fixture, array_merge(['--seed', (string) $seed, '--max-executions', (string) $budget, '--stop-on-finding'], $options));
 

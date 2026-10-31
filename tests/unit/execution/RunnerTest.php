@@ -13,6 +13,7 @@ use const E_USER_DEPRECATED;
 use const E_USER_NOTICE;
 use const E_USER_WARNING;
 use function array_values;
+use function dirname;
 use function hrtime;
 use function sprintf;
 use function trigger_error;
@@ -47,6 +48,8 @@ use Throwable;
 #[Medium]
 final class RunnerTest extends TestCase
 {
+    private const string FILE = 'tests/unit/execution/RunnerTest.php';
+
     protected function tearDown(): void
     {
         Edges::reset();
@@ -154,9 +157,9 @@ final class RunnerTest extends TestCase
         $this->assertSame([], $result->features());
         $this->assertSame(Failure::THROWABLE, $result->failure()->kind());
         $this->assertSame('undocumented', $result->failure()->message());
-        $this->assertStringStartsWith(__FILE__ . ':' . $line, $result->failure()->trace());
+        $this->assertStringStartsWith(self::FILE . ':' . $line, $result->failure()->trace());
         $this->assertTrue(
-            FailureSignature::forThrowable(LogicException::class, __FILE__ . ':' . $line)->isSameAs($result->failure()->signature()),
+            FailureSignature::forThrowable(LogicException::class, self::FILE . ':' . $line)->isSameAs($result->failure()->signature()),
         );
     }
 
@@ -169,7 +172,7 @@ final class RunnerTest extends TestCase
         })->run(Job::replay(1, []));
 
         $this->assertSame(
-            sprintf('%s at %s:%d', InvalidArgumentException::class, __FILE__, $line),
+            sprintf('%s at %s:%d', InvalidArgumentException::class, self::FILE, $line),
             $result->failure()?->describe(),
         );
     }
@@ -235,7 +238,7 @@ final class RunnerTest extends TestCase
 
         $this->assertSame(Outcome::Failed, $result->outcome());
         $this->assertSame(Failure::DESCRIPTION, $result->failure()?->kind());
-        $this->assertSame(sprintf('Warning at %s:%d', __FILE__, $line), $result->failure()->describe());
+        $this->assertSame(sprintf('Warning at %s:%d', self::FILE, $line), $result->failure()->describe());
         $this->assertSame('something is wrong', $result->failure()->message());
     }
 
@@ -342,6 +345,6 @@ final class RunnerTest extends TestCase
      */
     private function runner(Closure $test, string ...$expected): Runner
     {
-        return new Runner(Target::structured('target', $test)->expect(...array_values($expected)), 100, 0, false);
+        return new Runner(Target::structured('target', $test)->expect(...array_values($expected)), 100, 0, false, dirname(__DIR__, 3));
     }
 }

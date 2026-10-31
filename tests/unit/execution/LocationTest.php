@@ -25,13 +25,15 @@ use SebastianBergmann\ChoiceSequence\ChoiceSource;
 #[Small]
 final class LocationTest extends TestCase
 {
+    private const string FILE = 'tests/unit/execution/LocationTest.php';
+
     public function testTheLocationOfAThrowableIsItsOwnFileAndLine(): void
     {
         $line      = __LINE__ + 1;
         $throwable = new RuntimeException;
 
-        $this->assertSame(__FILE__ . ':' . $line, Location::of($throwable));
-        $this->assertStringStartsWith(__FILE__ . ':' . $line . "\n", Location::traceOf($throwable));
+        $this->assertSame(self::FILE . ':' . $line, $this->location()->of($throwable));
+        $this->assertStringStartsWith(self::FILE . ':' . $line . "\n", $this->location()->traceOf($throwable));
     }
 
     public function testTheLocationOfAThrowableThatIsRaisedInRattleIsTheFirstFrameOutsideOfIt(): void
@@ -41,12 +43,20 @@ final class LocationTest extends TestCase
         try {
             new Input(ChoiceSource::replay(new ChoiceSequence([])), false)->pick([]);
         } catch (InvalidArgumentException $e) {
-            $this->assertSame(__FILE__ . ':' . $line, Location::of($e));
+            $this->assertSame(self::FILE . ':' . $line, $this->location()->of($e));
 
-            $trace = explode("\n", Location::traceOf($e));
+            $trace = explode("\n", $this->location()->traceOf($e));
 
-            $this->assertStringStartsWith(__FILE__ . ':' . $line . ' ' . Input::class . '->pick()', $trace[0] ?? '');
+            $this->assertStringStartsWith(self::FILE . ':' . $line . ' ' . Input::class . '->pick()', $trace[0] ?? '');
         }
+    }
+
+    public function testThePathOfAFileBelowTheWorkingDirectoryIsRelativeToIt(): void
+    {
+        $this->assertSame(self::FILE . ':12', $this->location()->ofIssue(__FILE__, 12));
+        $this->assertSame(__FILE__, (new Location('/does/not/exist'))->file(__FILE__));
+        $this->assertSame('/elsewhere/file.php', $this->location()->file('/elsewhere/file.php'));
+        $this->assertSame(self::FILE, (new Location(dirname(__DIR__, 3) . '/'))->file(__FILE__));
     }
 
     public function testKnowsRattlesOwnCode(): void
@@ -54,5 +64,10 @@ final class LocationTest extends TestCase
         $this->assertTrue(Location::isRattle(dirname(__DIR__, 3) . '/src/target/Input.php'));
         $this->assertTrue(Location::isRattle(dirname(__DIR__, 3) . '/rattle'));
         $this->assertFalse(Location::isRattle(__FILE__));
+    }
+
+    private function location(): Location
+    {
+        return new Location(dirname(__DIR__, 3));
     }
 }
