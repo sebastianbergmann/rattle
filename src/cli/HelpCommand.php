@@ -9,6 +9,8 @@
  */
 namespace SebastianBergmann\Rattle;
 
+use function defined;
+
 /**
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
@@ -75,6 +77,24 @@ Options for all commands:
   --ignore-deprecations       Deprecations are not findings
   --verbose                   Show what the worker processes write to standard error
 
+
+EOT;
+
+        if (defined('__RATTLE_PHAR__')) {
+            // @codeCoverageIgnoreStart
+            print <<<'EOT'
+Options of the PHAR:
+
+  --manifest                  Print Software Bill of Materials (SBOM) in plain-text format
+  --sbom                      Print Software Bill of Materials (SBOM) in CycloneDX XML format
+  --composer-lock             Print the composer.lock file that the PHAR was built with
+
+
+EOT;
+            // @codeCoverageIgnoreEnd
+        }
+
+        print <<<'EOT'
 Exit codes: 0 when there is no new finding, 1 when there is a new finding
 (regress: when an input fails), and 2 when the usage or configuration is invalid.
 
