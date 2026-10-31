@@ -4,3 +4,6 @@
 /.phpunit.cache
 /.rattle.cache
 /vendor
+
+# test data of jetbrains/phpstorm-stubs (100 MB) that PHP-Scoper does not use
+/tools/.php-scoper/vendor/jetbrains/phpstorm-stubs/tests
