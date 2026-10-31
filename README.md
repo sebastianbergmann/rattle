@@ -178,3 +178,4 @@ in CI. It replays the minimal input of every finding and every input of the corp
 * `nikic/php-parser` must be compatible with the version that your project uses, until rattle is distributed as a PHAR.
 * Not every construct is instrumented, see [How coverage is measured](#how-coverage-is-measured).
 * Coverage is collected by instrumented PHP code, which is slower than collecting it in the engine.
+* To instrument files while they are included, rattle replaces PHP's stream wrapper for `file://` in its worker processes. Other operations of the code under test on files are passed on to PHP's own wrapper, which makes them slower. As with every stream wrapper that is written in PHP, PHP buffers what is read through it: a file that is changed through one handle may still be read as it was through another handle until that handle seeks.
