@@ -120,6 +120,30 @@ The paths in locations, and in stack traces, are relative to the working directo
 
 The code under test runs in worker processes, which are replaced when they die. Because the supervisor knows which input a worker is executing, a worker that dies is attributed to that input.
 
+## How coverage is measured
+
+rattle instruments the code in your source directories while it is included: it adds code that counts how often each edge between two basic blocks is taken while an input is executed. The code is added within lines, so every line of your code keeps its number, and the files and lines in stack traces and findings are the same as without instrumentation.
+
+How often an edge was taken is put into one of the buckets 1, 2, 3, 4–7, 8–15, 16–31, 32–127, and 128+. An input that takes an edge that no input took before, or takes it a number of times that falls into a bucket that was not seen for this edge before, is added to the corpus.
+
+A basic block starts:
+
+* at the start of the body of a function, a method, a closure, a property hook, a `catch`, and a `finally`
+* at the start of each body of an `if`, `elseif`, `else`, `for`, `foreach`, `while`, and `do`, in braces, in alternative syntax, or as a single statement, and at the start of each `case` and `default` of a `switch`
+* after an `if`, a loop, a `switch`, and a `try` statement, and after a label that `goto` jumps to
+* at the right operand of `&&`, `||`, `and`, `or`, and `??`, at the alternative of `?:` and of `? :`, and at the right side of `??=`, which may not be evaluated
+* at the body of an arrow function and of a `match` arm
+* where a generator is resumed after `yield` and `yield from`
+* at the member name after `?->`, which is not evaluated when the object is `null`
+
+These constructs are not instrumented:
+
+* code at the top level of a file: there is no block at the start of a file, and the start of a `try` block and the branch of a ternary that is taken when the condition is true do not start blocks of their own
+* expressions that must be constant: default values of parameters and properties, constants, values of enumeration cases, attribute arguments, initializers of `static` variables, and values in `declare`, including closures within them
+* the body of an arrow function that returns by reference, which cannot be wrapped without returning a value instead of a reference
+* `xor`, which always evaluates both operands, a `match` without a matching arm, and expressions that are aborted by an exception: these do not lead to edges of their own
+* code that is not loaded from a file below your source directories, such as code in `vendor/`, code that is passed to `eval()`, and files that are loaded before rattle registers its include hook, such as the files that Composer's autoloader includes eagerly (`autoload.files`)
+
 ## Directory layout
 
 ```
@@ -152,5 +176,5 @@ in CI. It replays the minimal input of every finding and every input of the corp
 ## Limitations
 
 * `nikic/php-parser` must be compatible with the version that your project uses, until rattle is distributed as a PHAR.
-* Files that are loaded before rattle registers its include hook, such as the files that Composer's autoloader includes eagerly (`autoload.files`), are not instrumented.
+* Not every construct is instrumented, see [How coverage is measured](#how-coverage-is-measured).
 * Coverage is collected by instrumented PHP code, which is slower than collecting it in the engine.
