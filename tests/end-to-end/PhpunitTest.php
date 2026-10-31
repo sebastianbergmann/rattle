@@ -81,6 +81,8 @@ final class PhpunitTest extends TestCase
         $this->assertSame(1, $exit, $output);
         $this->assertStringContainsString('Failure: LogicException at ' . self::FIXTURE . '/src/Classifier.php:38', $output);
         $this->assertStringContainsString('Message: cannot classify', $output);
+        $this->assertStringContainsString("Values:\n  \$values = [7, 3, 9];\n", $output);
+        $this->assertStringContainsString('"drawnValues": [' . "\n" . '        "$values = [7, 3, 9];"', (string) file_get_contents($finding . '/finding.json'));
     }
 
     public function testFuzzesOnlyThePropertiesThatMatchTheFilter(): void

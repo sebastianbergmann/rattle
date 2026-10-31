@@ -85,9 +85,9 @@ final class PropertyExampleRunner implements InputRunner
             $choices = $job->choices();
 
             if ($choices !== null) {
-                $example = $this->api->replay($this->id, $choices, $this->timeLimit);
+                $example = $this->api->replay($this->id, $choices, $this->timeLimit, $job->reportDrawnValues());
             } else {
-                $example = $this->api->generate($this->id, (int) $job->seed(), $this->timeLimit);
+                $example = $this->api->generate($this->id, (int) $job->seed(), $this->timeLimit, $job->reportDrawnValues());
             }
         } catch (ProtocolException $e) {
             throw new WorkerException(sprintf('PHPUnit returned an invalid result: %s', $e->getMessage()), 0, $e);
@@ -99,7 +99,7 @@ final class PropertyExampleRunner implements InputRunner
         $outcome = $example->outcome();
 
         if ($outcome->isFinding()) {
-            return new Result($job->id(), $outcome, $example->failure(), $example->sequence(), [], null);
+            return new Result($job->id(), $outcome, $example->failure(), $example->sequence(), [], $example->values());
         }
 
         $features = [];
@@ -108,7 +108,7 @@ final class PropertyExampleRunner implements InputRunner
             $features = $this->newFeatures->of($edges);
         }
 
-        return new Result($job->id(), $outcome, null, $example->sequence(), $features, null);
+        return new Result($job->id(), $outcome, null, $example->sequence(), $features, $example->values());
     }
 
     /**

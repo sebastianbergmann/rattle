@@ -10,10 +10,12 @@
 namespace SebastianBergmann\Rattle;
 
 use function array_is_list;
+use function array_values;
 use function count;
 use function in_array;
 use function is_array;
 use function is_int;
+use function sprintf;
 use SebastianBergmann\ChoiceSequence\ChoiceSequence;
 use SebastianBergmann\ChoiceSequence\FailureSignature;
 use SebastianBergmann\ChoiceSequence\InvalidFailureSignatureException;
@@ -25,6 +27,11 @@ use SebastianBergmann\ChoiceSequence\SpanKind;
  * falsified the property, and the choices that it consumed, with their spans
  * and maxima. It is created from the data that PHPUnit returns, which is
  * checked like data from another process.
+ *
+ * When PHPUnit exported the arguments of the example, the values that it
+ * drew, and the steps of its state machine, they are formatted as PHPUnit
+ * prints a counterexample, in lines that a worker reports as the drawn values
+ * of an input.
  *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
@@ -40,6 +47,11 @@ final readonly class PropertyExample
     private string $outcome;
     private ?Failure $failure;
     private ChoiceSequence $sequence;
+
+    /**
+     * @var ?list<string>
+     */
+    private ?array $values;
 
     /**
      * @throws ProtocolException
@@ -69,17 +81,20 @@ final readonly class PropertyExample
                 self::spansFrom($data['spans'] ?? null, count($choices)),
                 self::maximaFrom($data['maxima'] ?? null, count($choices)),
             ),
+            self::valuesFrom($data),
         );
     }
 
     /**
      * @param 'errored'|'failed'|'incomplete'|'passed'|'rejected'|'skipped'|'timeout' $outcome
+     * @param ?list<string>                                                           $values
      */
-    private function __construct(string $outcome, ?Failure $failure, ChoiceSequence $sequence)
+    private function __construct(string $outcome, ?Failure $failure, ChoiceSequence $sequence, ?array $values)
     {
         $this->outcome  = $outcome;
         $this->failure  = $failure;
         $this->sequence = $sequence;
+        $this->values   = $values;
     }
 
     /**
@@ -104,6 +119,73 @@ final readonly class PropertyExample
     public function sequence(): ChoiceSequence
     {
         return $this->sequence;
+    }
+
+    /**
+     * The arguments, drawn values, and steps of the example as PHPUnit
+     * prints them for a counterexample, one line for each, with an empty line
+     * between them, or null when they were not exported. A line can contain
+     * line breaks, because an exported value can.
+     *
+     * @return ?list<string>
+     */
+    public function values(): ?array
+    {
+        return $this->values;
+    }
+
+    /**
+     * @param array<mixed> $data
+     *
+     * @throws ProtocolException
+     *
+     * @return ?list<string>
+     */
+    private static function valuesFrom(array $data): ?array
+    {
+        $arguments   = $data['arguments'] ?? null;
+        $drawnValues = $data['drawnValues'] ?? null;
+        $steps       = $data['steps'] ?? null;
+
+        if ($arguments === null && $drawnValues === null && $steps === null) {
+            return null;
+        }
+
+        $lines = [];
+
+        foreach (ProtocolData::array($arguments) as $parameter => $value) {
+            $lines[] = sprintf('$%s = %s;', ProtocolData::nonEmptyString($parameter), ProtocolData::string($value));
+        }
+
+        $drawnValues = ProtocolData::array($drawnValues);
+
+        if ($lines !== [] && $drawnValues !== []) {
+            $lines[] = '';
+        }
+
+        foreach (array_values($drawnValues) as $index => $drawnValue) {
+            $drawnValue = ProtocolData::array($drawnValue);
+            $label      = $drawnValue['label'] ?? null;
+            $value      = ProtocolData::string($drawnValue['value'] ?? null);
+
+            if ($label === null) {
+                $lines[] = sprintf('Draw %d: %s', $index + 1, $value);
+            } else {
+                $lines[] = sprintf('Draw %d (%s): %s', $index + 1, ProtocolData::nonEmptyString($label), $value);
+            }
+        }
+
+        $steps = ProtocolData::listOfStrings($steps);
+
+        if ($lines !== [] && $steps !== []) {
+            $lines[] = '';
+        }
+
+        foreach ($steps as $step) {
+            $lines[] = $step;
+        }
+
+        return $lines;
     }
 
     /**

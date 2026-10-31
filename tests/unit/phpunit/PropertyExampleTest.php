@@ -38,6 +38,8 @@ final class PropertyExampleTest extends TestCase
             'unknown kind of span'                  => [['spans' => [['start' => 0, 'end' => 1, 'label' => 'a', 'parent' => null, 'kind' => 'unknown']]] + self::passed()],
             'maximum for every other choice'        => [['maxima' => [1]] + self::passed()],
             'negative choice'                       => [['choices' => [-1, 2, 0]] + self::passed()],
+            'drawn values without steps'            => [['arguments' => ['a' => '1'], 'drawnValues' => [], 'steps' => null] + self::passed()],
+            'drawn value with an empty label'       => [['arguments' => [], 'drawnValues' => [['label' => '', 'value' => '1']], 'steps' => []] + self::passed()],
         ];
     }
 
@@ -101,6 +103,37 @@ final class PropertyExampleTest extends TestCase
 
         $this->assertNotNull($failure);
         $this->assertSame('Failed: message', $failure->describe());
+    }
+
+    public function testHasTheValuesOfTheExampleAsPhpunitPrintsThemForACounterexample(): void
+    {
+        $example = PropertyExample::fromArray(
+            [
+                'arguments'   => ['first' => '1', 'second' => "[\n    'a',\n]"],
+                'drawnValues' => [['label' => 'digit', 'value' => '3'], ['label' => null, 'value' => 'true']],
+                'steps'       => ['push(1)', 'pop()'],
+            ] + self::passed(),
+        );
+
+        $this->assertSame(
+            [
+                '$first = 1;',
+                "\$second = [\n    'a',\n];",
+                '',
+                'Draw 1 (digit): 3',
+                'Draw 2: true',
+                '',
+                'push(1)',
+                'pop()',
+            ],
+            $example->values(),
+        );
+    }
+
+    public function testHasNoValuesWhenTheyWereNotExported(): void
+    {
+        $this->assertNull(PropertyExample::fromArray(self::passed())->values());
+        $this->assertNull(PropertyExample::fromArray(['arguments' => null, 'drawnValues' => null, 'steps' => null] + self::passed())->values());
     }
 
     public function testHasNoMaximaWhenOneOfThemIsNotKnown(): void

@@ -93,26 +93,28 @@ final readonly class PhpunitApi
     /**
      * @param non-empty-string       $id
      * @param list<non-negative-int> $choices
-     * @param positive-int           $timeLimit in seconds
+     * @param positive-int           $timeLimit    in seconds
+     * @param bool                   $exportValues whether PHPUnit exports the arguments, the drawn values, and the steps of the example
      *
      * @throws ProtocolException
      * @throws WorkerException
      */
-    public function replay(string $id, array $choices, int $timeLimit): PropertyExample
+    public function replay(string $id, array $choices, int $timeLimit, bool $exportValues): PropertyExample
     {
-        return PropertyExample::fromArray($this->call(fn (): mixed => $this->runner->replay($id, $choices, $timeLimit)));
+        return PropertyExample::fromArray($this->call(fn (): mixed => $this->runner->replay($id, $choices, $timeLimit, $exportValues)));
     }
 
     /**
      * @param non-empty-string $id
-     * @param positive-int     $timeLimit in seconds
+     * @param positive-int     $timeLimit    in seconds
+     * @param bool             $exportValues whether PHPUnit exports the arguments, the drawn values, and the steps of the example
      *
      * @throws ProtocolException
      * @throws WorkerException
      */
-    public function generate(string $id, int $seed, int $timeLimit): PropertyExample
+    public function generate(string $id, int $seed, int $timeLimit, bool $exportValues): PropertyExample
     {
-        return PropertyExample::fromArray($this->call(fn (): mixed => $this->runner->generate($id, $seed, $timeLimit)));
+        return PropertyExample::fromArray($this->call(fn (): mixed => $this->runner->generate($id, $seed, $timeLimit, $exportValues)));
     }
 
     /**

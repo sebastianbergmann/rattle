@@ -98,9 +98,9 @@ This needs a version of PHPUnit that provides its API for running the examples o
 
 Every property is a target of its own. The properties are fuzzed one after another, each until one of the limits of `--max-time` and `--max-executions` is reached, and Ctrl+C stops the fuzzing of all of them. The directories of the corpus and of the findings of a property are named after its test class and its test method, followed by a hash of its test ID, for instance `fuzz/findings/parsertest-testroundtrip-1a2b3c4d/`. A finding is identified as PHPUnit identifies the way in which an example falsifies a property, so a finding of rattle and a counterexample of PHPUnit that fail in the same way have the same failure signature.
 
-`rattle run --phpunit <test-id> <input>` runs an input of the property with the given test ID again, which the `README.txt` of a finding shows.
+`rattle run --phpunit <test-id> <input>` runs an input of the property with the given test ID again, which the `README.txt` of a finding shows. It shows the arguments of the example, the values that it drew with `draw()`, and the steps of its state machine as PHPUnit prints them for a counterexample, and the `finding.json` of a finding has them as well.
 
-Unlike for a fuzz target, a warning, notice, or deprecation that a property triggers is handled by PHPUnit and is not a finding, an example that is skipped or marked as incomplete counts as rejected, and the values that a property drew are not shown.
+Unlike for a fuzz target, a warning, notice, or deprecation that a property triggers is handled by PHPUnit and is not a finding, and an example that is skipped or marked as incomplete counts as rejected.
 
 ## Commands
 

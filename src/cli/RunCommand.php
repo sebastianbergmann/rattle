@@ -55,7 +55,10 @@ final readonly class RunCommand implements Command
         }
     }
 
-    public static function printResult(Result $result): void
+    /**
+     * @param bool $property whether the result is the result of an example of a PHPUnit property, whose values are the arguments, the drawn values, and the steps of the example as PHPUnit prints them
+     */
+    public static function printResult(Result $result, bool $property = false): void
     {
         printf('Outcome: %s' . PHP_EOL, $result->outcome()->value);
 
@@ -74,6 +77,16 @@ final readonly class RunCommand implements Command
         }
 
         $drawnValues = $result->drawnValues() ?? [];
+
+        if ($property && $drawnValues !== []) {
+            print PHP_EOL . 'Values:' . PHP_EOL;
+
+            foreach ($drawnValues as $line) {
+                print ($line === '' ? '' : '  ' . str_replace("\n", "\n  ", $line)) . PHP_EOL;
+            }
+
+            return;
+        }
 
         if ($drawnValues !== []) {
             print PHP_EOL . 'Drawn values:' . PHP_EOL;
@@ -102,7 +115,7 @@ final readonly class RunCommand implements Command
             $executor?->shutdown();
         }
 
-        self::printResult($result);
+        self::printResult($result, $arguments->phpunit());
 
         return $result->isFinding() ? 1 : 0;
     }
