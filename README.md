@@ -86,6 +86,22 @@ The values are drawn from choices in the same way as PHPUnit's generators draw t
 
 The target file is loaded after the bootstrap file, by default `vendor/autoload.php`, so it can use the classes of your project.
 
+## Properties of a PHPUnit test suite
+
+rattle also fuzzes the properties (`#[Property]`) of a PHPUnit test suite:
+
+```
+rattle fuzz --phpunit [--configuration phpunit.xml] [--filter <pattern>]
+```
+
+This needs a version of PHPUnit that provides its API for running the examples of properties, `PHPUnit\Runner\PropertyBased\PropertyRunner`. The worker processes load it with the bootstrap file, `vendor/autoload.php` by default, and PHPUnit loads its configuration file and the bootstrap script of the configuration as for a test run. PHPUnit generates the arguments of a property from the choices of an input with the generators of the property, runs the property with its full lifecycle, from `setUpBeforeClass()` to `tearDown()`, and enforces the time limit of `--timeout`. rattle instruments the code in the source directories and keeps the inputs that reach code that no input reached before, as for a fuzz target.
+
+Every property is a target of its own. The properties are fuzzed one after another, each until one of the limits of `--max-time` and `--max-executions` is reached, and Ctrl+C stops the fuzzing of all of them. The directories of the corpus and of the findings of a property are named after its test class and its test method, followed by a hash of its test ID, for instance `fuzz/findings/parsertest-testroundtrip-1a2b3c4d/`. A finding is identified as PHPUnit identifies the way in which an example falsifies a property, so a finding of rattle and a counterexample of PHPUnit that fail in the same way have the same failure signature.
+
+`rattle run --phpunit <test-id> <input>` runs an input of the property with the given test ID again, which the `README.txt` of a finding shows.
+
+Unlike for a fuzz target, a warning, notice, or deprecation that a property triggers is handled by PHPUnit and is not a finding, an example that is skipped or marked as incomplete counts as rejected, and the values that a property drew are not shown.
+
 ## Commands
 
 ```
@@ -185,5 +201,6 @@ in CI. It replays the minimal input of every finding and every input of the corp
 
 * When rattle is installed with Composer, `nikic/php-parser` must be compatible with the version that your project uses. The PHAR does not have this constraint.
 * Not every construct is instrumented, see [How coverage is measured](#how-coverage-is-measured).
+* `rattle minimize` and `rattle regress` do not support `--phpunit` yet.
 * Coverage is collected by instrumented PHP code, which is slower than collecting it in the engine.
 * To instrument files while they are included, rattle replaces PHP's stream wrapper for `file://` in its worker processes. Other operations of the code under test on files are passed on to PHP's own wrapper, which makes them slower. As with every stream wrapper that is written in PHP, PHP buffers what is read through it: a file that is changed through one handle may still be read as it was through another handle until that handle seeks.
