@@ -122,6 +122,8 @@ Two findings are the same when their failure signatures, as defined by `sebastia
 
 The paths in locations, and in stack traces, are relative to the working directory in which rattle is started, when the file is below it. This way, findings do not depend on where a project is checked out: a finding that was found on your machine is known in CI as well. Run rattle in the root directory of your project.
 
+When unbounded recursion reaches the limit of PHP's call stack, PHP raises the error in whichever call of the recursion exceeds the limit. Which call that is depends on the version of PHP and on how deep the call stack already was. So that the same recursion is always the same finding, rattle identifies this error by the frame of the recursion that comes first, by file and then by line, among the frames that are repeated in its stack trace.
+
 The code under test runs in worker processes, which are replaced when they die. Because the supervisor knows which input a worker is executing, a worker that dies is attributed to that input.
 
 ## How coverage is measured

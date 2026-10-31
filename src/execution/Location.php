@@ -18,8 +18,10 @@ use function realpath;
 use function rtrim;
 use function sprintf;
 use function str_starts_with;
+use function strcmp;
 use function strlen;
 use function substr;
+use Error;
 use Throwable;
 
 /**
@@ -32,6 +34,14 @@ use Throwable;
  * own code left out. When rattle runs from a PHAR, the code of the
  * dependencies that are bundled in the PHAR is rattle's own code, too.
  *
+ * When unbounded recursion reaches the limit of PHP's call stack, the error is
+ * raised by whichever call of the recursion exceeds the limit. Which call that
+ * is depends on how deep the call stack was when the recursion started, and
+ * on how much of it the calls use, which differs between versions of PHP. So
+ * that the same recursion has the same location, the location of this error
+ * is the frame of the recursion that comes first, by file and then by line,
+ * among the frames that occur more than once in its stack trace.
+ *
  * The path of a file below the working directory is relative to it, so that
  * failure signatures, and the identifiers of findings that are derived from
  * them, do not depend on where a project is checked out. The working
@@ -43,6 +53,11 @@ use Throwable;
  */
 final readonly class Location
 {
+    /**
+     * The message of the error that PHP raises when the call stack limit is
+     * reached starts with this.
+     */
+    private const string CALL_STACK_LIMIT = 'Maximum call stack size of ';
     private string $prefix;
 
     public static function isRattle(string $file): bool
@@ -74,13 +89,25 @@ final readonly class Location
      */
     public function of(Throwable $throwable): string
     {
+        $frames = [];
+
         foreach ($this->framesOf($throwable) as $frame) {
             if (!self::isRattle($frame['file'])) {
-                return $this->file($frame['file']) . ':' . $frame['line'];
+                $frames[] = ['file' => $this->file($frame['file']), 'line' => $frame['line']];
             }
         }
 
-        return $this->file($throwable->getFile()) . ':' . $throwable->getLine();
+        if ($frames === []) {
+            return $this->file($throwable->getFile()) . ':' . $throwable->getLine();
+        }
+
+        $frame = $frames[0];
+
+        if ($throwable::class === Error::class && str_starts_with($throwable->getMessage(), self::CALL_STACK_LIMIT)) {
+            $frame = self::firstRepeatedFrame($frames) ?? $frame;
+        }
+
+        return $frame['file'] . ':' . $frame['line'];
     }
 
     /**
@@ -151,5 +178,45 @@ final readonly class Location
         }
 
         return $frames;
+    }
+
+    /**
+     * Returns the frame that comes first, by file and then by line, among the
+     * frames that occur more than once, or null when no frame does.
+     *
+     * @param list<array{file: string, line: int}> $frames
+     *
+     * @return ?array{file: string, line: int}
+     */
+    private static function firstRepeatedFrame(array $frames): ?array
+    {
+        $occurrences = [];
+
+        foreach ($frames as $frame) {
+            $key               = $frame['file'] . ':' . $frame['line'];
+            $occurrences[$key] = ($occurrences[$key] ?? 0) + 1;
+        }
+
+        $first = null;
+
+        foreach ($frames as $frame) {
+            if (($occurrences[$frame['file'] . ':' . $frame['line']] ?? 0) < 2) {
+                continue;
+            }
+
+            if ($first === null) {
+                $first = $frame;
+
+                continue;
+            }
+
+            $order = strcmp($frame['file'], $first['file']);
+
+            if ($order < 0 || ($order === 0 && $frame['line'] < $first['line'])) {
+                $first = $frame;
+            }
+        }
+
+        return $first;
     }
 }

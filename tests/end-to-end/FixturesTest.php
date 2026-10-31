@@ -96,7 +96,7 @@ final class FixturesTest extends TestCase
                 'recursion',
                 1,
                 10000,
-                'Error at %s/recursion/src/TemplateExpander.php:56',
+                'Error at %s/recursion/src/TemplateExpander.php:54',
                 'a=$a',
                 [],
             ],
