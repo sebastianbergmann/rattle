@@ -124,6 +124,8 @@ The paths in locations, and in stack traces, are relative to the working directo
 
 When unbounded recursion reaches the limit of PHP's call stack, PHP raises the error in whichever call of the recursion exceeds the limit. Which call that is depends on the version of PHP and on how deep the call stack already was. So that the same recursion is always the same finding, rattle identifies this error by the frame of the recursion that comes first, by file and then by line, among the frames that are repeated in its stack trace.
 
+In stack traces, frames that are repeated at least three times in a row are shown once, followed by how often they are repeated.
+
 The code under test runs in worker processes, which are replaced when they die. Because the supervisor knows which input a worker is executing, a worker that dies is attributed to that input.
 
 ## How coverage is measured

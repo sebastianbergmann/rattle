@@ -9,11 +9,15 @@
  */
 namespace SebastianBergmann\Rattle;
 
+use function array_slice;
 use function array_unshift;
+use function count;
 use function defined;
 use function dirname;
 use function implode;
 use function is_string;
+use function number_format;
+use function range;
 use function realpath;
 use function rtrim;
 use function sprintf;
@@ -42,6 +46,10 @@ use Throwable;
  * is the frame of the recursion that comes first, by file and then by line,
  * among the frames that occur more than once in its stack trace.
  *
+ * Consecutive repetitions of the same frames, such as the thousands of frames
+ * of a recursion that reached the limit of the call stack, are rendered once,
+ * followed by how often they are repeated.
+ *
  * The path of a file below the working directory is relative to it, so that
  * failure signatures, and the identifiers of findings that are derived from
  * them, do not depend on where a project is checked out. The working
@@ -58,6 +66,17 @@ final readonly class Location
      * reached starts with this.
      */
     private const string CALL_STACK_LIMIT = 'Maximum call stack size of ';
+
+    /**
+     * How often frames have to be repeated in a stack trace to be rendered once.
+     */
+    private const int MINIMUM_REPETITIONS = 3;
+
+    /**
+     * The maximum number of frames that are rendered once when they are
+     * repeated.
+     */
+    private const int MAXIMUM_CYCLE_LENGTH = 64;
     private string $prefix;
 
     public static function isRattle(string $file): bool
@@ -148,7 +167,7 @@ final readonly class Location
             $lines[] = sprintf('%s:%d%s', $this->file($frame['file']), $frame['line'] ?? 0, $function);
         }
 
-        return implode("\n", $lines);
+        return implode("\n", self::collapse($lines));
     }
 
     /**
@@ -218,5 +237,104 @@ final readonly class Location
         }
 
         return $first;
+    }
+
+    /**
+     * Renders consecutive repetitions of the same lines once, followed by a
+     * line that tells how often they are repeated.
+     *
+     * @param list<string> $lines
+     *
+     * @return list<string>
+     */
+    private static function collapse(array $lines): array
+    {
+        $collapsed = [];
+        $position  = 0;
+
+        while ($position < count($lines)) {
+            [$length, $repetitions] = self::repetitionsAt($lines, $position);
+
+            if ($repetitions < self::MINIMUM_REPETITIONS) {
+                $collapsed[] = $lines[$position] ?? '';
+
+                $position++;
+
+                continue;
+            }
+
+            foreach (array_slice($lines, $position, $length) as $line) {
+                $collapsed[] = $line;
+            }
+
+            $collapsed[] = sprintf(
+                '(the %s above %s repeated %s more times)',
+                $length === 1 ? 'frame' : $length . ' frames',
+                $length === 1 ? 'is' : 'are',
+                number_format($repetitions - 1),
+            );
+
+            $position += $length * $repetitions;
+        }
+
+        return $collapsed;
+    }
+
+    /**
+     * Returns the number of lines that are repeated, starting at the position,
+     * and how often they are, for the repetition that covers the most lines.
+     *
+     * @param list<string> $lines
+     *
+     * @return array{0: positive-int, 1: positive-int}
+     */
+    private static function repetitionsAt(array $lines, int $position): array
+    {
+        $best     = [1, 1];
+        $coverage = 0;
+
+        foreach (range(1, self::MAXIMUM_CYCLE_LENGTH) as $length) {
+            if ($position + 2 * $length > count($lines)) {
+                break;
+            }
+
+            $repetitions = 1;
+
+            while (self::isRepeated($lines, $position, $length, $repetitions)) {
+                $repetitions++;
+            }
+
+            if ($repetitions >= self::MINIMUM_REPETITIONS && $length * $repetitions > $coverage) {
+                $best     = [$length, $repetitions];
+                $coverage = $length * $repetitions;
+            }
+        }
+
+        return $best;
+    }
+
+    /**
+     * Whether the lines that start at the position are repeated once more
+     * after the given number of repetitions.
+     *
+     * @param list<string> $lines
+     * @param positive-int $length
+     * @param positive-int $repetitions
+     */
+    private static function isRepeated(array $lines, int $position, int $length, int $repetitions): bool
+    {
+        $offset = $position + $length * $repetitions;
+
+        if ($offset + $length > count($lines)) {
+            return false;
+        }
+
+        for ($i = 0; $i < $length; $i++) {
+            if (($lines[$position + $i] ?? null) !== ($lines[$offset + $i] ?? null)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

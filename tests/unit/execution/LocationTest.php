@@ -70,6 +70,29 @@ final class LocationTest extends TestCase
         $this->assertSame(self::EXPANDER . ':56', $this->location()->of($this->recursion('Something else', 56)));
     }
 
+    public function testFramesThatAreRepeatedAreRenderedOnce(): void
+    {
+        $this->assertSame(
+            [
+                self::EXPANDER . ':54',
+                self::EXPANDER . ':54 preg_replace_callback()',
+                self::EXPANDER . ':56 expand()',
+                '(the 2 frames above are repeated 9 more times)',
+                self::EXPANDER . ':46 expand()',
+                'tests/fixtures/targets/recursion/target.php:18 expandAll()',
+            ],
+            explode("\n", $this->location()->traceOf($this->recursion(self::CALL_STACK_LIMIT, 54))),
+        );
+    }
+
+    public function testAFrameIsRenderedOnceWhenItIsRepeatedAtLeastThreeTimes(): void
+    {
+        $frame = ['file' => dirname(__DIR__, 3) . '/' . self::FILE, 'line' => 1, 'function' => 'f'];
+
+        $this->assertSame(self::FILE . ":1 f()\n" . self::FILE . ':1 f()', $this->location()->render([$frame, $frame]));
+        $this->assertSame(self::FILE . ":1 f()\n(the frame above is repeated 2 more times)", $this->location()->render([$frame, $frame, $frame]));
+    }
+
     public function testThePathOfAFileBelowTheWorkingDirectoryIsRelativeToIt(): void
     {
         $this->assertSame(self::FILE . ':12', $this->location()->ofIssue(__FILE__, 12));
