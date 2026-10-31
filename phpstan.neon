@@ -7,6 +7,10 @@ parameters:
         analyse:
             - tests/fixtures
 
+    # the version of the PHAR is written into the constant when the PHAR is built
+    dynamicConstantNames:
+        - SebastianBergmann\Rattle\Application::PHAR_VERSION
+
     checkTooWideReturnTypesInProtectedAndPublicMethods: true
     reportAlwaysTrueInLastCondition: true
     reportPossiblyNonexistentConstantArrayOffset: true

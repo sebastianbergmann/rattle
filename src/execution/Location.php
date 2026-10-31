@@ -10,8 +10,10 @@
 namespace SebastianBergmann\Rattle;
 
 use function array_unshift;
+use function defined;
 use function dirname;
 use function implode;
+use function is_string;
 use function realpath;
 use function rtrim;
 use function sprintf;
@@ -27,7 +29,8 @@ use Throwable;
  * The location of a throwable is its own file and line, unless these lie in
  * rattle's own code. Then it is the first frame of its stack trace that does
  * not. This is how PHPUnit determines the location of a throwable with its
- * own code left out.
+ * own code left out. When rattle runs from a PHAR, the code of the
+ * dependencies that are bundled in the PHAR is rattle's own code, too.
  *
  * The path of a file below the working directory is relative to it, so that
  * failure signatures, and the identifiers of findings that are derived from
@@ -44,6 +47,13 @@ final readonly class Location
 
     public static function isRattle(string $file): bool
     {
+        if (defined('__RATTLE_PHAR__') && is_string(__RATTLE_PHAR__)) {
+            // @codeCoverageIgnoreStart
+            return $file === __RATTLE_PHAR__ ||
+                   str_starts_with($file, 'phar://' . __RATTLE_PHAR__ . '/');
+            // @codeCoverageIgnoreEnd
+        }
+
         return str_starts_with($file, dirname(__DIR__) . '/') ||
                $file === dirname(__DIR__, 2) . '/rattle';
     }

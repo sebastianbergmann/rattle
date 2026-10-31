@@ -13,9 +13,11 @@ use const INF;
 use const PHP_BINARY;
 use function array_shift;
 use function assert;
+use function defined;
 use function dirname;
 use function getenv;
 use function is_int;
+use function is_string;
 use function max;
 use function microtime;
 use function min;
@@ -447,8 +449,16 @@ final class ProcessExecutor implements Executor
         // recursion, which would hide the limit of PHP's call stack
         $environment['XDEBUG_MODE'] = 'off';
 
+        $executable = dirname(__DIR__, 2) . '/rattle';
+
+        if (defined('__RATTLE_PHAR__') && is_string(__RATTLE_PHAR__)) {
+            // @codeCoverageIgnoreStart
+            $executable = __RATTLE_PHAR__;
+            // @codeCoverageIgnoreEnd
+        }
+
         $worker = WorkerProcess::start(
-            [PHP_BINARY, dirname(__DIR__, 2) . '/rattle', 'worker', ...$this->configuration->asArguments()],
+            [PHP_BINARY, $executable, 'worker', ...$this->configuration->asArguments()],
             $environment,
         );
         $deadline = microtime(true) + self::STARTUP_TIMEOUT;

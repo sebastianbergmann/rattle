@@ -24,8 +24,19 @@ final readonly class Application
 {
     private const string VERSION = '1.0.0';
 
+    /**
+     * The version of the PHAR, which is set when the PHAR is built.
+     */
+    private const string PHAR_VERSION = '';
+
     public static function version(): string
     {
+        if (self::PHAR_VERSION !== '') {
+            // @codeCoverageIgnoreStart
+            return self::PHAR_VERSION;
+            // @codeCoverageIgnoreEnd
+        }
+
         return new Version(self::VERSION, dirname(__DIR__, 2))->asString();
     }
 
