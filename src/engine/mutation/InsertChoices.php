@@ -17,7 +17,9 @@ use SebastianBergmann\ChoiceSequence\SpanKind;
  * start or the end of a candidate without spans. Most of them are small,
  * like the choices that decide whether a collection has another element.
  * At the start or the end of a span that holds one byte of a binary string,
- * a few bytes are inserted as spans of the same kind, [1, b].
+ * a few bytes are inserted as spans of the same kind, [1, b]. At the start or
+ * the end of an element of another collection (see SpanKind::Element), a copy
+ * of one of its elements is inserted.
  *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
@@ -46,7 +48,7 @@ final readonly class InsertChoices implements Mutation
             $byte = BytesEncoding::byte();
 
             // bytes after the span that ends the string would not be drawn
-            if ($span['end'] - $span['start'] === 1) {
+            if ($candidate->endsCollection($span)) {
                 $position = $span['start'];
             }
 
@@ -55,6 +57,26 @@ final readonly class InsertChoices implements Mutation
             }
 
             return true;
+        }
+
+        // at the boundary between elements of another collection, a copy of
+        // one of its elements is inserted, which makes the collection grow
+        // by an element that its generator can generate
+        if ($span['kind'] === SpanKind::Element) {
+            $elements = $candidate->elementsBesides($span);
+
+            if ($elements !== []) {
+                if ($candidate->endsCollection($span)) {
+                    $position = $span['start'];
+                }
+
+                $element = RandomElement::of($randomizer, $elements);
+                $slice   = $candidate->slice($element['start'], $element['end']);
+
+                $candidate->insert($position, $slice['choices'], $slice['maxima'], $element['label'], $element['parent'], SpanKind::Element);
+
+                return true;
+            }
         }
 
         $candidate->insert($position, $this->randomChoices($randomizer));

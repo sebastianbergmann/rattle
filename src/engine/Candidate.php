@@ -14,6 +14,7 @@ use function array_slice;
 use function array_splice;
 use function assert;
 use function count;
+use function usort;
 use SebastianBergmann\ChoiceSequence\ChoiceSequence;
 use SebastianBergmann\ChoiceSequence\SpanKind;
 
@@ -162,6 +163,69 @@ final class Candidate
         }
 
         return ($this->spans[$span['parent']]['kind'] ?? null) === SpanKind::Bytes;
+    }
+
+    /**
+     * Whether the span holds an element of a collection, a span of the kind
+     * SpanKind::Element that does not end the collection. The generators of
+     * PHPUnit mark the elements of lists, arrays, strings, and binary strings
+     * this way, and Input marks the bytes of binary strings.
+     *
+     * @param array{start: non-negative-int, end: non-negative-int, label: non-empty-string, parent: ?non-negative-int, kind: ?SpanKind} $span
+     */
+    public function isElement(array $span): bool
+    {
+        return $span['kind'] === SpanKind::Element && !$this->endsCollection($span);
+    }
+
+    /**
+     * Whether the span ends a collection: the last span of the kind
+     * SpanKind::Element of its parent that consists of the choice 0 that
+     * decided that there is no other element.
+     *
+     * @param array{start: non-negative-int, end: non-negative-int, label: non-empty-string, parent: ?non-negative-int, kind: ?SpanKind} $span
+     */
+    public function endsCollection(array $span): bool
+    {
+        if ($span['kind'] !== SpanKind::Element ||
+            $span['end'] - $span['start'] !== 1 ||
+            $this->choiceAt($span['start']) !== 0 ||
+            $this->maximumAt($span['start']) !== 1) {
+            return false;
+        }
+
+        foreach ($this->spans() as $other) {
+            if ($other['kind'] === SpanKind::Element &&
+                $other['parent'] === $span['parent'] &&
+                $other['start'] >= $span['end']) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * The elements of the collection that the span is part of, in the order
+     * in which they occur.
+     *
+     * @param array{start: non-negative-int, end: non-negative-int, label: non-empty-string, parent: ?non-negative-int, kind: ?SpanKind} $span
+     *
+     * @return list<array{start: non-negative-int, end: non-negative-int, label: non-empty-string, parent: ?non-negative-int, kind: ?SpanKind}>
+     */
+    public function elementsBesides(array $span): array
+    {
+        $elements = [];
+
+        foreach ($this->spans() as $other) {
+            if ($other['parent'] === $span['parent'] && $this->isElement($other)) {
+                $elements[] = $other;
+            }
+        }
+
+        usort($elements, static fn (array $a, array $b): int => $a['start'] <=> $b['start']);
+
+        return $elements;
     }
 
     /**

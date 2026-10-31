@@ -19,9 +19,11 @@ use Random\Randomizer;
  * Inserts a copy of the choices of a span right after it, for instance to
  * repeat an element of a collection or a byte of a string.
  *
- * Half of the time, the span is copied together with the siblings that
- * directly follow it, spans with the same label and the same parent, so that
- * a run of elements is repeated. This makes a collection grow by more than
+ * Half of the time, the span is an element of a collection, when the choice
+ * sequence has elements (see SpanKind::Element). Half of the time, the span is
+ * copied together with the siblings that directly follow it, spans with the
+ * same label and the same parent, so that a run of elements is repeated. The
+ * span that ends a collection is never copied. This makes a collection grow by more than
  * one element at a time, which matters when only a much longer collection
  * produces a new feature.
  *
@@ -33,14 +35,34 @@ final readonly class DuplicateSpan implements Mutation
 {
     public function apply(Candidate $candidate, Randomizer $randomizer): bool
     {
-        $spans = $candidate->spans();
+        // the span that ends a collection is not duplicated: what follows a
+        // copy of it would not be part of the collection
+        $spans    = [];
+        $elements = [];
+
+        foreach ($candidate->spans() as $span) {
+            if ($candidate->endsCollection($span)) {
+                continue;
+            }
+
+            $spans[] = $span;
+
+            if ($candidate->isElement($span)) {
+                $elements[] = $span;
+            }
+        }
 
         if ($spans === []) {
             return false;
         }
 
-        $span = RandomElement::of($randomizer, $spans);
-        $run  = [$span];
+        if ($elements !== [] && $randomizer->getInt(0, 1) === 0) {
+            $span = RandomElement::of($randomizer, $elements);
+        } else {
+            $span = RandomElement::of($randomizer, $spans);
+        }
+
+        $run = [$span];
 
         if ($randomizer->getInt(0, 1) === 1) {
             $siblings = [];

@@ -51,6 +51,34 @@ final class CandidateTest extends TestCase
         );
     }
 
+    public function testKnowsTheElementsOfCollectionsAndTheSpansThatEndThem(): void
+    {
+        $candidate = Candidate::from(Sequences::ofList([3, 5]));
+        $spans     = array_values($candidate->spans());
+
+        // the list, the first element and its integer, the second element and
+        // its integer, and the span that ends the list
+        $this->assertSame(
+            [false, true, false, true, false, false],
+            array_map(static fn (array $span): bool => $candidate->isElement($span), $spans),
+        );
+        $this->assertSame(
+            [false, false, false, false, false, true],
+            array_map(static fn (array $span): bool => $candidate->endsCollection($span), $spans),
+        );
+        $end = $spans[5] ?? null;
+
+        $this->assertNotNull($end);
+        $this->assertSame(
+            [[0, 2], [2, 4]],
+            array_map(static fn (array $span): array => [$span['start'], $span['end']], $candidate->elementsBesides($end)),
+        );
+        $this->assertSame(
+            [false, false, false, false, false, false],
+            array_map(static fn (array $span): bool => $candidate->isByteOfString($span), $spans),
+        );
+    }
+
     public function testSetsAChoice(): void
     {
         $candidate = Candidate::from(Sequences::ofBytes('ab'));

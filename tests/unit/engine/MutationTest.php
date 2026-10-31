@@ -11,7 +11,10 @@ namespace SebastianBergmann\Rattle;
 
 use const PHP_INT_MAX;
 use function array_keys;
+use function array_map;
+use function array_values;
 use function count;
+use function implode;
 use function str_contains;
 use function strlen;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -168,10 +171,69 @@ final class MutationTest extends TestCase
             $seen[BytesEncoding::bytesFor($candidate->choices(), 100)] = true;
         }
 
-        // the bytes are swapped, or the byte and the span that ends the string
-        $this->assertArrayHasKey('ba', $seen);
-        $this->assertArrayHasKey('', $seen);
+        // the span that ends the string is not swapped with a byte
+        $this->assertSame(['ba'], array_keys($seen));
         $this->assertFalse((new SwapSpans)->apply(Candidate::from(new ChoiceSequence([1, 2], [new Span(0, 2, 'a', null), new Span(1, 2, 'a', 0)], [])), $randomizer));
+    }
+
+    public function testSwapsTheElementsOfACollectionButNotTheSpanThatEndsIt(): void
+    {
+        $randomizer = $this->randomizer();
+
+        for ($i = 0; $i < self::ROUNDS; $i++) {
+            $candidate = Candidate::from(Sequences::ofList([3, 5]));
+
+            $this->assertTrue((new SwapSpans)->apply($candidate, $randomizer));
+            $this->assertSame([5, 3], Sequences::listFor($candidate->choices()));
+        }
+    }
+
+    public function testDuplicatesTheElementsOfACollectionButNotTheSpanThatEndsIt(): void
+    {
+        $randomizer = $this->randomizer();
+        $seen       = [];
+
+        for ($i = 0; $i < self::ROUNDS; $i++) {
+            $candidate = Candidate::from(Sequences::ofList([3, 5]));
+
+            (new DuplicateSpan)->apply($candidate, $randomizer);
+
+            $seen[implode(',', Sequences::listFor($candidate->choices()))] = true;
+        }
+
+        // an element or a run of elements is repeated
+        $this->assertContains('3,3,5', array_keys($seen));
+        $this->assertContains('3,5,5', array_keys($seen));
+        $this->assertContains('3,5,3,5', array_keys($seen));
+
+        // in an empty list, only the list can be duplicated, not the span that
+        // ends it
+        $candidate = Candidate::from(Sequences::ofList([]));
+
+        $this->assertTrue((new DuplicateSpan)->apply($candidate, $randomizer));
+        $this->assertSame([0, 0], $candidate->choices());
+        $this->assertSame(
+            ['list', 'element', 'list'],
+            array_map(static fn (array $span): string => $span['label'], array_values($candidate->spans())),
+        );
+    }
+
+    public function testInsertsACopyOfAnElementAtTheBoundaryBetweenElementsOfACollection(): void
+    {
+        $randomizer = $this->randomizer();
+        $seen       = [];
+
+        for ($i = 0; $i < self::ROUNDS; $i++) {
+            $candidate = Candidate::from(Sequences::ofList([3, 5]));
+
+            (new InsertChoices)->apply($candidate, $randomizer);
+
+            $seen[implode(',', Sequences::listFor($candidate->choices()))] = true;
+        }
+
+        foreach (['3,3,5', '3,5,5', '5,3,5', '3,5,3'] as $list) {
+            $this->assertContains($list, array_keys($seen));
+        }
     }
 
     public function testReplacesASpanWithASpanWithTheSameLabelFromAnotherCorpusEntry(): void

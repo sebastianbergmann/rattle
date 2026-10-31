@@ -14,7 +14,8 @@ use Random\Randomizer;
 
 /**
  * Swaps the choices of two spans that do not overlap and have the same label
- * and the same parent, for instance two elements of a collection.
+ * and the same parent, for instance two elements of a collection. The span
+ * that ends a collection is not swapped.
  *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
@@ -27,7 +28,10 @@ final readonly class SwapSpans implements Mutation
         $groups = [];
 
         foreach ($candidate->spans() as $span) {
-            $groups[$span['label'] . '/' . ($span['parent'] ?? '-')][] = $span;
+            // the span that ends a collection stays at its end
+            if (!$candidate->endsCollection($span)) {
+                $groups[$span['label'] . '/' . ($span['parent'] ?? '-')][] = $span;
+            }
         }
 
         $pairs = [];
