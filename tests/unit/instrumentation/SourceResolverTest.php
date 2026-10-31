@@ -41,6 +41,21 @@ final class SourceResolverTest extends TestCase
         $this->assertSame([$directory . '/app'], (new SourceResolver)->resolve([], $directory));
     }
 
+    public function testUsesTheDistributedPhpUnitConfigurationWithItsNewName(): void
+    {
+        $directory = self::FIXTURES . '/with-phpunit-dist-xml';
+
+        $this->assertSame([$directory . '/lib'], (new SourceResolver)->resolve([], $directory));
+    }
+
+    public function testUsesTheConfigurationFileThatIsGivenRelativeToItsDirectory(): void
+    {
+        $this->assertSame(
+            [self::FIXTURES . '/with-phpunit-xml-dist/app'],
+            (new SourceResolver)->resolve([], self::FIXTURES . '/without-sources', self::FIXTURES . '/with-phpunit-xml-dist/phpunit.xml.dist'),
+        );
+    }
+
     public function testFallsBackToTheSrcDirectory(): void
     {
         $directory = self::FIXTURES . '/with-src';

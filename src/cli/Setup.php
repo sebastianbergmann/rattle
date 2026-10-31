@@ -62,7 +62,7 @@ final readonly class Setup
 
         $sources = [];
 
-        foreach ((new SourceResolver)->resolve($arguments->sources(), $workingDirectory) as $source) {
+        foreach ((new SourceResolver)->resolve($arguments->sources(), $workingDirectory, $phpunit?->configurationFile()) as $source) {
             $realpath = realpath($source);
 
             if ($realpath === false) {

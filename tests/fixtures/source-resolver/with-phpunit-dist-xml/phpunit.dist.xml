@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit>
+    <source>
+        <include>
+            <directory>lib</directory>
+        </include>
+    </source>
+</phpunit>

@@ -10,6 +10,7 @@
 namespace SebastianBergmann\Rattle\Instrumentation;
 
 use const DIRECTORY_SEPARATOR;
+use function dirname;
 use function is_dir;
 use function is_file;
 use function libxml_clear_errors;
@@ -23,8 +24,11 @@ use DOMXPath;
 /**
  * Determines the directories and files whose code is instrumented: those
  * given with --source, otherwise the <directory> and <file> entries in
- * <source><include> of phpunit.xml or phpunit.xml.dist in the working
- * directory, otherwise src/.
+ * <source><include> of the PHPUnit configuration file, otherwise src/. The
+ * configuration file is the one given with --configuration, or the one that
+ * PHPUnit looks for in the working directory: phpunit.xml, phpunit.dist.xml,
+ * or phpunit.xml.dist. Relative paths are relative to the directory of the
+ * configuration file, as for PHPUnit.
  *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
@@ -33,27 +37,36 @@ use DOMXPath;
 final readonly class SourceResolver
 {
     /**
-     * @param list<string> $sources the directories and files given with --source
+     * @param list<string>      $sources           the directories and files given with --source
+     * @param ?non-empty-string $configurationFile the PHPUnit configuration file given with --configuration, null to look for one in the working directory
      *
      * @return list<string>
      */
-    public function resolve(array $sources, string $workingDirectory): array
+    public function resolve(array $sources, string $workingDirectory, ?string $configurationFile = null): array
     {
         if ($sources !== []) {
             return $sources;
         }
 
-        foreach (['phpunit.xml', 'phpunit.xml.dist'] as $configuration) {
-            $path = $workingDirectory . DIRECTORY_SEPARATOR . $configuration;
+        if ($configurationFile !== null) {
+            $sources = $this->fromConfiguration($configurationFile, dirname($configurationFile));
 
-            if (is_file($path)) {
-                $sources = $this->fromConfiguration($path, $workingDirectory);
+            if ($sources !== []) {
+                return $sources;
+            }
+        } else {
+            foreach (['phpunit.xml', 'phpunit.dist.xml', 'phpunit.xml.dist'] as $configuration) {
+                $path = $workingDirectory . DIRECTORY_SEPARATOR . $configuration;
 
-                if ($sources !== []) {
-                    return $sources;
+                if (is_file($path)) {
+                    $sources = $this->fromConfiguration($path, $workingDirectory);
+
+                    if ($sources !== []) {
+                        return $sources;
+                    }
+
+                    break;
                 }
-
-                break;
             }
         }
 

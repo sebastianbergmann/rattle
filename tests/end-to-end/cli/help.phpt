@@ -70,7 +70,7 @@ Options for all commands:
   --max-choices <n>           Maximum number of choices of an input (default: 8192)
   --bootstrap <file>          Bootstrap file (default: vendor/autoload.php)
   --source <dir>              Instrument the code in this directory, can be repeated
-                              (default: <source> of phpunit.xml(.dist), otherwise src/)
+                              (default: <source> of the PHPUnit configuration, otherwise src/)
   --ignore-deprecations       Deprecations are not findings
   --verbose                   Show what the worker processes write to standard error
 

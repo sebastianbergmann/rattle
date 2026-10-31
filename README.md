@@ -119,7 +119,7 @@ rattle regress  [options] <target.php>
 
 `rattle regress` replays every input in the corpus and findings directories of the target once. Its exit code is 1 when any of them fails.
 
-Only the code in your source directories is instrumented: the directories given with `--source`, otherwise the `<directory>` and `<file>` entries in `<source><include>` of `phpunit.xml` or `phpunit.xml.dist`, otherwise `src/`. Code in `vendor/` is never instrumented.
+Only the code in your source directories is instrumented: the directories given with `--source`, otherwise the `<directory>` and `<file>` entries in `<source><include>` of the PHPUnit configuration file, otherwise `src/`. The configuration file is the one given with `--configuration`, otherwise `phpunit.xml`, `phpunit.dist.xml`, or `phpunit.xml.dist` in the working directory, as for PHPUnit. Code in `vendor/` is never instrumented.
 
 Run `rattle --help` for all options. The exit code is 0 when there is no new finding, 1 when there is at least one new finding, and 2 when the usage or the configuration is invalid.
 
