@@ -49,6 +49,8 @@ final class ArgumentsBuilderTest extends TestCase
             'seeds with --phpunit'                          => [['rattle', 'fuzz', '--phpunit', '--seeds', 'seeds']],
             'empty configuration file'                      => [['rattle', 'fuzz', '--phpunit', '--configuration', '']],
             'run with --phpunit without an input'           => [['rattle', 'run', '--phpunit', 'input']],
+            'regress with --phpunit and a target'           => [['rattle', 'regress', '--phpunit', 'target.php']],
+            'minimize with a filter'                        => [['rattle', 'minimize', '--phpunit', '--filter', 'Parser', 'Vendor\\ParserTest::testRoundTrip', 'input']],
             'number of jobs that is not a number'           => [['rattle', 'fuzz', 'target.php', '--jobs', 'many']],
             'seed that is not an integer'                   => [['rattle', 'fuzz', 'target.php', '--seed', '1.5']],
             'maximum time of zero'                          => [['rattle', 'fuzz', 'target.php', '--max-time', '0']],
@@ -154,6 +156,26 @@ final class ArgumentsBuilderTest extends TestCase
 
         $this->assertTrue($arguments->phpunit());
         $this->assertSame('Vendor\ParserTest::testRoundTrip', $arguments->target());
+        $this->assertSame('input', $arguments->input());
+    }
+
+    public function testParsesTheOptionsForReplayingTheInputsOfThePropertiesOfAPhpunitTestSuite(): void
+    {
+        $arguments = (new ArgumentsBuilder)->build(['rattle', 'regress', '--phpunit', '--configuration', 'phpunit.xml', '--filter', 'Parser']);
+
+        $this->assertSame('regress', $arguments->command());
+        $this->assertNull($arguments->target());
+        $this->assertTrue($arguments->phpunit());
+        $this->assertSame('phpunit.xml', $arguments->phpunitConfiguration());
+        $this->assertSame('Parser', $arguments->phpunitFilter());
+    }
+
+    public function testParsesTheArgumentsOfTheMinimizeCommandForAProperty(): void
+    {
+        $arguments = (new ArgumentsBuilder)->build(['rattle', 'minimize', '--phpunit', '--configuration', 'phpunit.xml', 'Vendor\\ParserTest::testRoundTrip', 'input']);
+
+        $this->assertTrue($arguments->phpunit());
+        $this->assertSame('Vendor\\ParserTest::testRoundTrip', $arguments->target());
         $this->assertSame('input', $arguments->input());
     }
 

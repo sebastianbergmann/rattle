@@ -14,6 +14,7 @@ use const PHP_BINARY;
 use function dirname;
 use function escapeshellarg;
 use function file_get_contents;
+use function file_put_contents;
 use function glob;
 use function is_dir;
 use function is_file;
@@ -25,6 +26,7 @@ use function proc_open;
 use function realpath;
 use function rmdir;
 use function scandir;
+use function str_replace;
 use function stream_get_contents;
 use function sys_get_temp_dir;
 use function uniqid;
@@ -127,6 +129,56 @@ final class PhpunitTest extends TestCase
 
         $this->assertSame(2, $exit, $output);
         $this->assertStringContainsString('The options --corpus and --log-inputs can only be used with --phpunit when the filter selects one property', $output);
+    }
+
+    public function testRegressFailsWhileAFindingOfAPropertyStillFailsAndPassesOnceItIsFixed(): void
+    {
+        $project = $this->directory . '/project';
+
+        mkdir($project . '/src', 0o777, true);
+        mkdir($project . '/tests');
+
+        foreach (['phpunit.xml', 'bootstrap.php', 'src/Classifier.php', 'tests/ClassifierTest.php'] as $file) {
+            file_put_contents($project . '/' . $file, (string) file_get_contents(dirname(__DIR__, 2) . '/' . self::FIXTURE . '/' . $file));
+        }
+
+        $options = ['--phpunit', '--configuration', $project . '/phpunit.xml', '--cache-directory', $this->directory . '/cache', '--findings-directory', $this->directory . '/findings'];
+
+        [$exit, $output] = $this->rattle(['fuzz', ...$options, '--jobs', '1', '--seed', '2', '--max-executions', '1000', '--stop-on-finding']);
+
+        $this->assertSame(1, $exit, $output);
+
+        [$exit, $output] = $this->rattle(['regress', ...$options]);
+
+        $this->assertSame(1, $exit, $output);
+        $this->assertStringContainsString('LogicException at ' . realpath($project) . '/src/Classifier.php:38', $output);
+        $this->assertMatchesRegularExpression('/Replayed [0-9]+ inputs? of 2 properties, 1 failed\./', $output);
+
+        // the defect is fixed: the list 7, 3, 9 is classified
+        file_put_contents(
+            $project . '/src/Classifier.php',
+            str_replace("throw new LogicException('cannot classify');", "return 'd';", (string) file_get_contents($project . '/src/Classifier.php')),
+        );
+
+        [$exit, $output] = $this->rattle(['regress', ...$options]);
+
+        $this->assertSame(0, $exit, $output);
+        $this->assertMatchesRegularExpression('/Replayed [0-9]+ inputs? of 2 properties, 0 failed\./', $output);
+    }
+
+    public function testMinimizesAnInputOfAProperty(): void
+    {
+        $input = $this->directory . '/input';
+
+        // the list 7, 3, 9, 4, 5
+        file_put_contents($input, "choice-sequence v1\n1\n7\n1\n3\n1\n9\n1\n4\n1\n5\n0\n");
+
+        [$exit, $output] = $this->rattle(['minimize', '--phpunit', '--configuration', self::FIXTURE . '/phpunit.xml', self::PROPERTY, $input]);
+
+        $this->assertSame(0, $exit, $output);
+        $this->assertStringContainsString('Failure: LogicException at ' . self::FIXTURE . '/src/Classifier.php:38', $output);
+        $this->assertStringContainsString('Minimized from 11 to 7 choices.', $output);
+        $this->assertStringEqualsFile($input . '.minimized', "choice-sequence v1\n1\n7\n1\n3\n1\n9\n0\n");
     }
 
     public function testReportsATestSuiteWithoutProperties(): void

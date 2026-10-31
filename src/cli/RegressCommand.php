@@ -16,6 +16,7 @@ use function file_get_contents;
 use function glob;
 use function printf;
 use function sort;
+use function sprintf;
 use SebastianBergmann\ChoiceSequence\Decoder;
 use SebastianBergmann\ChoiceSequence\InvalidChoiceSequenceException;
 
@@ -34,25 +35,92 @@ final readonly class RegressCommand implements Command
 
     public function run(Arguments $arguments): int
     {
-        $setup    = new Setup;
-        $executor = null;
+        $setup = new Setup;
 
         try {
-            $executor = new ProcessExecutor($setup->workerConfiguration($arguments), $arguments->jobs() ?? 1, $setup->stderr($arguments));
-            $target   = $executor->start();
-        } catch (ConfigurationException|WorkerException $e) {
-            $executor?->shutdown();
-
+            $configuration = $setup->workerConfiguration($arguments);
+        } catch (ConfigurationException $e) {
             print $e->getMessage() . PHP_EOL;
 
             return 2;
         }
 
-        $paths = $this->filesIn($arguments->cacheDirectory() . '/' . $target->name() . '/corpus/*');
+        $phpunit = $configuration->phpunit();
 
-        foreach ((new FindingStore($arguments->findingsDirectory() . '/' . $target->name()))->inputs() as $path) {
-            $paths[] = $path;
+        if ($phpunit === null) {
+            $outcome = $this->regress($arguments, $configuration, null);
+
+            if ($outcome === null) {
+                return 2;
+            }
+
+            return $this->summarize($outcome, null);
         }
+
+        try {
+            $properties = (new PropertyLister)->list($configuration);
+        } catch (WorkerException $e) {
+            print $e->getMessage() . PHP_EOL;
+
+            return 2;
+        }
+
+        if ($properties === []) {
+            print 'The PHPUnit test suite has no properties' . ($phpunit->filter() === null ? '' : ' that match the filter') . PHP_EOL;
+
+            return 2;
+        }
+
+        $total = ['replayed' => 0, 'failed' => 0, 'invalid' => 0];
+
+        foreach ($properties as $property) {
+            $outcome = $this->regress($arguments, $configuration->withTarget($property), PropertyDirectory::nameOf($property));
+
+            if ($outcome === null) {
+                return 2;
+            }
+
+            $total['replayed'] += $outcome['replayed'];
+            $total['failed']   += $outcome['failed'];
+            $total['invalid']  += $outcome['invalid'];
+        }
+
+        return $this->summarize($total, count($properties));
+    }
+
+    /**
+     * Replays the inputs in the corpus and findings directories of a target.
+     * The directories of a fuzz target are named after the name that its
+     * worker reports, and the ones of a property after its test ID; workers
+     * are not started for a property without inputs.
+     *
+     * @param ?non-empty-string $directory the name of the directories of the target, null when its worker reports it
+     *
+     * @return ?array{replayed: non-negative-int, failed: non-negative-int, invalid: non-negative-int} null when the inputs could not be replayed
+     */
+    private function regress(Arguments $arguments, WorkerConfiguration $configuration, ?string $directory): ?array
+    {
+        if ($directory !== null) {
+            $paths = $this->inputsIn($arguments, $directory);
+
+            if ($paths === []) {
+                return ['replayed' => 0, 'failed' => 0, 'invalid' => 0];
+            }
+        }
+
+        $executor = new ProcessExecutor($configuration, $arguments->jobs() ?? 1, (new Setup)->stderr($arguments));
+
+        try {
+            $target = $executor->start();
+        } catch (WorkerException $e) {
+            $executor->shutdown();
+
+            print $e->getMessage() . PHP_EOL;
+
+            return null;
+        }
+
+        $paths ??= $this->inputsIn($arguments, $target->name());
 
         $jobs     = [];
         $files    = [];
@@ -100,20 +168,49 @@ final readonly class RegressCommand implements Command
         } catch (ProtocolException|WorkerException $e) {
             print $e->getMessage() . PHP_EOL;
 
-            return 2;
+            return null;
         } finally {
             $executor->shutdown();
         }
 
+        return ['replayed' => count($jobs), 'failed' => $failures, 'invalid' => $invalid];
+    }
+
+    /**
+     * @param array{replayed: non-negative-int, failed: non-negative-int, invalid: non-negative-int} $outcome
+     * @param ?positive-int                                                                          $numberOfProperties null for a fuzz target
+     *
+     * @return 0|1
+     */
+    private function summarize(array $outcome, ?int $numberOfProperties): int
+    {
         printf(
-            '%sReplayed %d input%s, %d failed.' . PHP_EOL,
-            $failures > 0 || $invalid > 0 ? PHP_EOL : '',
-            count($jobs),
-            count($jobs) === 1 ? '' : 's',
-            $failures,
+            '%sReplayed %d input%s%s, %d failed.' . PHP_EOL,
+            $outcome['failed'] > 0 || $outcome['invalid'] > 0 ? PHP_EOL : '',
+            $outcome['replayed'],
+            $outcome['replayed'] === 1 ? '' : 's',
+            $numberOfProperties === null ? '' : sprintf(' of %d propert%s', $numberOfProperties, $numberOfProperties === 1 ? 'y' : 'ies'),
+            $outcome['failed'],
         );
 
-        return $failures > 0 || $invalid > 0 ? 1 : 0;
+        return $outcome['failed'] > 0 || $outcome['invalid'] > 0 ? 1 : 0;
+    }
+
+    /**
+     * The inputs in the corpus directory and in the findings directory of a
+     * target.
+     *
+     * @return list<string>
+     */
+    private function inputsIn(Arguments $arguments, string $directory): array
+    {
+        $paths = $this->filesIn($arguments->cacheDirectory() . '/' . $directory . '/corpus/*');
+
+        foreach ((new FindingStore($arguments->findingsDirectory() . '/' . $directory))->inputs() as $path) {
+            $paths[] = $path;
+        }
+
+        return $paths;
     }
 
     /**

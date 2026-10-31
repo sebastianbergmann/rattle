@@ -98,7 +98,7 @@ This needs a version of PHPUnit that provides its API for running the examples o
 
 Every property is a target of its own. The properties are fuzzed one after another, and Ctrl+C stops the fuzzing of all of them. They share the time of `--max-time`: every property gets an equal share of the time that is left, so a property that stops early, with `--stop-on-finding`, for instance, leaves its time to the properties after it. `--max-executions` applies to every property. `--corpus` and `--log-inputs` belong to one target, so they can only be used when `--filter` selects one property. The directories of the corpus and of the findings of a property are named after its test class and its test method, followed by a hash of its test ID, for instance `fuzz/findings/parsertest-testroundtrip-1a2b3c4d/`. A finding is identified as PHPUnit identifies the way in which an example falsifies a property, so a finding of rattle and a counterexample of PHPUnit that fail in the same way have the same failure signature.
 
-`rattle run --phpunit <test-id> <input>` runs an input of the property with the given test ID again, which the `README.txt` of a finding shows. It shows the arguments of the example, the values that it drew with `draw()`, and the steps of its state machine as PHPUnit prints them for a counterexample, and the `finding.json` of a finding has them as well.
+`rattle run --phpunit <test-id> <input>` runs an input of the property with the given test ID again, which the `README.txt` of a finding shows, and `rattle minimize --phpunit <test-id> <input>` minimizes one. `rattle regress --phpunit` replays the inputs in the corpus and findings directories of every property, so the findings of the properties become regression tests as those of a fuzz target do. It shows the arguments of the example, the values that it drew with `draw()`, and the steps of its state machine as PHPUnit prints them for a counterexample, and the `finding.json` of a finding has them as well.
 
 Unlike for a fuzz target, a warning, notice, or deprecation that a property triggers is handled by PHPUnit and is not a finding, and an example that is skipped or marked as incomplete counts as rejected.
 
@@ -110,6 +110,8 @@ rattle run      [options] <target.php> <input>
 rattle minimize [options] <target.php> <input>
 rattle regress  [options] <target.php>
 ```
+
+With `--phpunit`, these commands work on the properties of a PHPUnit test suite instead of a fuzz target, see [Properties of a PHPUnit test suite](#properties-of-a-phpunit-test-suite).
 
 `rattle fuzz` fuzzes the target until a limit is reached (`--max-time`, `--max-executions`, `--stop-on-finding`) or until you press Ctrl+C. The seed of the run is always printed: with `--jobs 1` and `--seed <n>`, a run executes the same inputs in the same order every time. By default, rattle starts as many worker processes as your machine has cores.
 
@@ -201,6 +203,5 @@ in CI. It replays the minimal input of every finding and every input of the corp
 
 * When rattle is installed with Composer, `nikic/php-parser` must be compatible with the version that your project uses. The PHAR does not have this constraint.
 * Not every construct is instrumented, see [How coverage is measured](#how-coverage-is-measured).
-* `rattle minimize` and `rattle regress` do not support `--phpunit` yet.
 * Coverage is collected by instrumented PHP code, which is slower than collecting it in the engine.
 * To instrument files while they are included, rattle replaces PHP's stream wrapper for `file://` in its worker processes. Other operations of the code under test on files are passed on to PHP's own wrapper, which makes them slower. As with every stream wrapper that is written in PHP, PHP buffers what is read through it: a file that is changed through one handle may still be read as it was through another handle until that handle seeks.

@@ -71,6 +71,8 @@ final readonly class ArgumentsBuilder
         'minimize' => [
             'longOptions' => [
                 'max-shrink-attempts=',
+                'phpunit',
+                'configuration=',
             ],
             'arguments' => ['target', 'input'],
         ],
@@ -79,6 +81,9 @@ final readonly class ArgumentsBuilder
                 'jobs=',
                 'cache-directory=',
                 'findings-directory=',
+                'phpunit',
+                'configuration=',
+                'filter=',
             ],
             'arguments' => ['target'],
         ],
@@ -114,7 +119,7 @@ final readonly class ArgumentsBuilder
 
             // the properties of a PHPUnit test suite are fuzzed instead of a
             // fuzz target
-            $expected = $phpunit && $command === 'fuzz' ? [] : self::COMMANDS[$command]['arguments'];
+            $expected = $phpunit && ($command === 'fuzz' || $command === 'regress') ? [] : self::COMMANDS[$command]['arguments'];
 
             foreach ($expected as $position => $name) {
                 if (!isset($positional[$position])) {

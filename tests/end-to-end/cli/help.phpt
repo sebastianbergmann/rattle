@@ -16,7 +16,9 @@ Usage:
   rattle run      [options] <target.php> <input>
   rattle run      [options] --phpunit <test-id> <input>
   rattle minimize [options] <target.php> <input>
+  rattle minimize [options] --phpunit <test-id> <input>
   rattle regress  [options] <target.php>
+  rattle regress  [options] --phpunit
 
   rattle --help
   rattle --version
@@ -57,12 +59,17 @@ Options for "rattle run":
 Options for "rattle minimize":
 
   --max-shrink-attempts <n>   Maximum number of attempts to minimize the input (default: 500)
+  --phpunit                   Minimize an input of the property with the test ID <test-id>
+  --configuration <file>      PHPUnit configuration file (default: as PHPUnit looks for one)
 
 Options for "rattle regress":
 
   --jobs <n>                  Number of worker processes (default: 1)
   --cache-directory <dir>     Directory for the corpus (default: .rattle.cache)
   --findings-directory <dir>  Directory for the findings (default: fuzz/findings)
+  --phpunit                   Replay the inputs of every property of the PHPUnit test suite
+  --configuration <file>      PHPUnit configuration file (default: as PHPUnit looks for one)
+  --filter <pattern>          Only replay the inputs of the properties that match the pattern
 
 Options for all commands:
 
