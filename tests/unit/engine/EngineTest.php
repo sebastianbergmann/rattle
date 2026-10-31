@@ -24,6 +24,7 @@ use SebastianBergmann\Rattle\Instrumentation\Features;
 #[CoversClass(Engine::class)]
 #[CoversClass(EngineConfiguration::class)]
 #[CoversClass(Statistics::class)]
+#[UsesClass(NewFeatures::class)]
 #[UsesClass(ArithmeticChoice::class)]
 #[UsesClass(BoundaryChoice::class)]
 #[UsesClass(BytesEncoding::class)]

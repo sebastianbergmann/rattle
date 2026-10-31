@@ -41,7 +41,6 @@ use function sprintf;
 use SebastianBergmann\ChoiceSequence\ChoiceSource;
 use SebastianBergmann\ChoiceSequence\TooManyChoicesException;
 use SebastianBergmann\Rattle\Instrumentation\Edges;
-use SebastianBergmann\Rattle\Instrumentation\Features;
 use Throwable;
 
 /**
@@ -62,7 +61,7 @@ use Throwable;
  *
  * @internal This class is not covered by the backward compatibility promise for sebastian/rattle
  */
-final class Runner
+final class Runner implements InputRunner
 {
     private const array FATAL_ERRORS = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR];
     private readonly Target $target;
@@ -78,12 +77,8 @@ final class Runner
     private readonly int $timeout;
     private readonly bool $ignoreDeprecations;
     private readonly Location $location;
-
-    /**
-     * @var array<int, true>
-     */
-    private array $seenFeatures = [];
-    private ?Job $job           = null;
+    private readonly NewFeatures $newFeatures;
+    private ?Job $job = null;
     private ChoiceSource $source;
     private Input $input;
     private ?Failure $failure            = null;
@@ -103,6 +98,7 @@ final class Runner
     public function __construct(Target $target, int $maximumNumberOfChoices, int $timeout, bool $ignoreDeprecations, ?string $workingDirectory = null)
     {
         $this->location               = new Location($workingDirectory ?? (string) getcwd());
+        $this->newFeatures            = new NewFeatures;
         $this->target                 = $target;
         $this->maximumNumberOfChoices = max($maximumNumberOfChoices, $target->requiredNumberOfChoices() ?? 1);
         $this->timeout                = $timeout;
@@ -191,12 +187,7 @@ final class Runner
         $features = [];
 
         if ($outcome !== Outcome::Rejected) {
-            foreach (Features::fromEdges($edges) as $feature) {
-                if (!isset($this->seenFeatures[$feature])) {
-                    $this->seenFeatures[$feature] = true;
-                    $features[]                   = $feature;
-                }
-            }
+            $features = $this->newFeatures->of($edges);
         }
 
         return new Result($job->id(), $outcome, null, $source->sequence(), $features, $drawnValues);

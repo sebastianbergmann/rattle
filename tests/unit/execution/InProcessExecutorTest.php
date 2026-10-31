@@ -20,6 +20,7 @@ use SebastianBergmann\Rattle\Instrumentation\Features;
 
 #[CoversClass(InProcessExecutor::class)]
 #[CoversClass(TargetDescription::class)]
+#[UsesClass(NewFeatures::class)]
 #[UsesClass(Runner::class)]
 #[UsesClass(Failure::class)]
 #[UsesClass(Job::class)]
