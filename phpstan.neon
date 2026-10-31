@@ -10,6 +10,11 @@ parameters:
             # declares classes of nikic/php-parser that are not compatible with rattle's
             - tests/fixtures/phar
 
+    # PHPUnit's API for running the examples of properties is newer than the
+    # version of PHPUnit that rattle is developed with
+    scanFiles:
+        - build/phpstan/PropertyRunner.stub
+
     # the version of the PHAR is written into the constant when the PHAR is built
     dynamicConstantNames:
         - SebastianBergmann\Rattle\Application::PHAR_VERSION

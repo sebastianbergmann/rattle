@@ -17,6 +17,7 @@ use function count;
 use function fwrite;
 use function getcwd;
 use function getmypid;
+use function in_array;
 use function ini_get;
 use function ini_set;
 use function is_file;
@@ -60,7 +61,7 @@ final class Worker
     private const int DEFAULT_MEMORY_THRESHOLD = 512 * 1024 * 1024;
     private readonly WorkerConfiguration $configuration;
     private readonly FrameStream $stream;
-    private ?Runner $runner = null;
+    private ?InputRunner $runner = null;
 
     public function __construct(WorkerConfiguration $configuration, FrameStream $stream)
     {
@@ -79,27 +80,48 @@ final class Worker
 
         $this->prepareProcess();
 
-        $hook = new IncludeHook(new Instrumentor, $this->configuration->sources(), [$this->configuration->target()]);
+        $phpunit = $this->configuration->phpunit();
+        $hook    = new IncludeHook(new Instrumentor, $this->configuration->sources(), $phpunit === null ? [$this->configuration->target()] : []);
 
         try {
             $hook->register();
 
             $this->loadBootstrap();
 
-            $target = (new TargetLoader)->load($this->configuration->target());
+            if ($phpunit !== null) {
+                $api        = PhpunitApi::boot($phpunit->configurationFile(), $phpunit->filter());
+                $properties = $api->properties();
+                $name       = $this->configuration->target();
+
+                if ($name === '') {
+                    $this->stream->write(['type' => 'properties', 'protocol' => Frame::PROTOCOL_VERSION, 'properties' => $properties]);
+
+                    return 0;
+                }
+
+                if (!in_array($name, $properties, true)) {
+                    throw new WorkerException(sprintf('The PHPUnit test suite has no property "%s"', $name));
+                }
+
+                $maximumLength = null;
+                $runner        = new PropertyExampleRunner($api, $name, $this->configuration->timeout(), $this->configuration->maximumNumberOfChoices(), $workingDirectory);
+            } else {
+                $target        = (new TargetLoader)->load($this->configuration->target());
+                $name          = $target->name();
+                $maximumLength = $target->maximumLength();
+                $runner        = new Runner(
+                    $target,
+                    $this->configuration->maximumNumberOfChoices(),
+                    $this->configuration->timeout(),
+                    $this->configuration->ignoreDeprecations(),
+                    $workingDirectory,
+                );
+            }
         } catch (Throwable $t) {
             $this->stream->write(['type' => 'error', 'message' => $t->getMessage()]);
 
             return 2;
         }
-
-        $runner = new Runner(
-            $target,
-            $this->configuration->maximumNumberOfChoices(),
-            $this->configuration->timeout(),
-            $this->configuration->ignoreDeprecations(),
-            $workingDirectory,
-        );
 
         $this->runner = $runner;
 
@@ -108,8 +130,8 @@ final class Worker
                 'type'                   => 'ready',
                 'protocol'               => Frame::PROTOCOL_VERSION,
                 'pid'                    => getmypid(),
-                'name'                   => $target->name(),
-                'maximumLength'          => $target->maximumLength(),
+                'name'                   => $name,
+                'maximumLength'          => $maximumLength,
                 'maximumNumberOfChoices' => $runner->maximumNumberOfChoices(),
             ],
         );
@@ -154,7 +176,7 @@ final class Worker
 
                     $this->stream->write(['type' => 'result', 'result' => $result, 'retire' => $retire]);
                 }
-            } catch (ProtocolException $e) {
+            } catch (ProtocolException|WorkerException $e) {
                 $this->stream->write(['type' => 'error', 'message' => $e->getMessage()]);
 
                 return 2;

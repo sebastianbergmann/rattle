@@ -17,6 +17,7 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(WorkerConfiguration::class)]
 #[UsesClass(ArgumentsBuilderException::class)]
+#[UsesClass(PhpunitTestSuite::class)]
 #[Small]
 final class WorkerConfigurationTest extends TestCase
 {
@@ -31,6 +32,7 @@ final class WorkerConfigurationTest extends TestCase
             'unknown option'                                 => [['--target', 'target.php', '--unknown', 'value']],
             'timeout of zero'                                => [['--target', 'target.php', '--timeout', '0']],
             'maximum number of choices that is not a number' => [['--target', 'target.php', '--max-choices', 'many']],
+            'empty filter'                                   => [['--phpunit', '--phpunit-filter', '']],
         ];
     }
 
@@ -48,6 +50,31 @@ final class WorkerConfigurationTest extends TestCase
         $this->assertSame('256M', $parsed->memoryLimit());
         $this->assertTrue($parsed->ignoreDeprecations());
         $this->assertSame(50, $parsed->numberOfExecutions());
+    }
+
+    public function testCanBePassedAsArgumentsForAPropertyOfAPhpunitTestSuite(): void
+    {
+        $configuration = new WorkerConfiguration('Vendor\ParserTest::testRoundTrip', null, [], 1, 100, null, false, 50, new PhpunitTestSuite('phpunit.xml', 'Parser'));
+        $parsed        = WorkerConfiguration::fromArguments($configuration->asArguments());
+
+        $phpunit = $parsed->phpunit();
+
+        $this->assertEquals($configuration, $parsed);
+        $this->assertSame('Vendor\ParserTest::testRoundTrip', $parsed->target());
+        $this->assertNotNull($phpunit);
+        $this->assertSame('phpunit.xml', $phpunit->configurationFile());
+        $this->assertSame('Parser', $phpunit->filter());
+    }
+
+    public function testListsThePropertiesOfAPhpunitTestSuiteWithoutATarget(): void
+    {
+        $configuration = new WorkerConfiguration('Vendor\ParserTest::testRoundTrip', null, [], 1, 100, null, false, 50, new PhpunitTestSuite(null, null));
+        $parsed        = WorkerConfiguration::fromArguments($configuration->withTarget('')->asArguments());
+
+        $this->assertSame('', $parsed->target());
+        $this->assertNotNull($parsed->phpunit());
+        $this->assertNull($parsed->phpunit()->configurationFile());
+        $this->assertNull($parsed->phpunit()->filter());
     }
 
     public function testHasDefaults(): void
