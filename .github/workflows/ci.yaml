@@ -167,6 +167,130 @@ jobs:
       - name: Run tests with PHPUnit
         run: vendor/bin/phpunit
 
+  build-phar:
+    name: Build PHAR
+
+    needs:
+      - tests
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Use local branch
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REF: ${{ github.head_ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            BRANCH="$HEAD_REF"
+          else
+            BRANCH="$REF_NAME"
+          fi
+          git branch -D "$BRANCH" 2>/dev/null || true
+          git branch "$BRANCH" HEAD
+          git checkout "$BRANCH"
+
+      - name: Install PHP with extensions
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: pcntl
+          ini-values: phar.readonly=0, zend.assertions=1
+          coverage: none
+          tools: none
+
+      - name: Install java
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: zulu
+          java-version: 11
+
+      - name: Build PHAR
+        run: ant phar-snapshot
+
+      - name: Upload PHAR
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rattle-snapshot-phar
+          overwrite: true
+          path: ./build/artifacts/rattle-snapshot.phar*
+          retention-days: 7
+
+  test-phar:
+    name: Test PHAR
+
+    needs:
+      - build-phar
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version:
+          - 8.5
+          - 8.6
+          - 8.7
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Use local branch
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REF: ${{ github.head_ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            BRANCH="$HEAD_REF"
+          else
+            BRANCH="$REF_NAME"
+          fi
+          git branch -D "$BRANCH" 2>/dev/null || true
+          git branch "$BRANCH" HEAD
+          git checkout "$BRANCH"
+
+      - name: Install PHP with extensions
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: ${{ matrix.php-version }}
+          extensions: pcntl
+          ini-values: memory_limit=-1, zend.assertions=1, error_reporting=-1, display_errors=On, display_startup_errors=On
+          coverage: none
+          tools: none
+
+      - name: Install dependencies with Composer
+        run: ./tools/composer install --no-ansi --no-interaction --no-progress
+
+      - name: Download PHAR
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: rattle-snapshot-phar
+          path: ./build/artifacts/
+
+      - name: Make PHAR executable
+        run: chmod +x ./build/artifacts/rattle-snapshot.phar
+
+      - name: Run PHAR-specific tests
+        run: vendor/bin/phpunit --configuration tests/phar/phpunit.xml
+
   code-coverage:
     name: Code Coverage
 

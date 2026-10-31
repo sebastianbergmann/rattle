@@ -6,6 +6,9 @@ parameters:
     excludePaths:
         analyse:
             - tests/fixtures
+        analyseAndScan:
+            # declares classes of nikic/php-parser that are not compatible with rattle's
+            - tests/fixtures/phar
 
     # the version of the PHAR is written into the constant when the PHAR is built
     dynamicConstantNames:

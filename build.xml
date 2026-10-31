@@ -226,4 +226,15 @@
     <target name="-phar-determine-version">
         <exec executable="${basedir}/build/scripts/version.php" outputproperty="version" failonerror="true" />
     </target>
+
+    <target name="build-phar-and-run-phar-specific-tests" depends="phar-snapshot" description="Build PHAR and run the PHAR-specific tests with it">
+        <antcall target="run-phar-specific-tests"/>
+    </target>
+
+    <target name="run-phar-specific-tests" description="Run the PHAR-specific tests (expects build/artifacts/rattle-snapshot.phar to exist)">
+        <exec executable="${basedir}/vendor/bin/phpunit" taskname="phpunit" failonerror="true">
+            <arg value="--configuration" />
+            <arg path="${basedir}/tests/phar/phpunit.xml" />
+        </exec>
+    </target>
 </project>
