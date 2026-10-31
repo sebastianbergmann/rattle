@@ -10,14 +10,9 @@
 namespace SebastianBergmann\Rattle;
 
 use const INF;
-use const PHP_BINARY;
 use function array_shift;
 use function assert;
-use function defined;
-use function dirname;
-use function getenv;
 use function is_int;
-use function is_string;
 use function max;
 use function microtime;
 use function min;
@@ -443,24 +438,7 @@ final class ProcessExecutor implements Executor
      */
     private function startWorker(int $index): WorkerProcess
     {
-        $environment = getenv();
-
-        // Xdebug slows the execution of inputs down and limits the depth of
-        // recursion, which would hide the limit of PHP's call stack
-        $environment['XDEBUG_MODE'] = 'off';
-
-        $executable = dirname(__DIR__, 2) . '/rattle';
-
-        if (defined('__RATTLE_PHAR__') && is_string(__RATTLE_PHAR__)) {
-            // @codeCoverageIgnoreStart
-            $executable = __RATTLE_PHAR__;
-            // @codeCoverageIgnoreEnd
-        }
-
-        $worker = WorkerProcess::start(
-            [PHP_BINARY, $executable, 'worker', ...$this->configuration->asArguments()],
-            $environment,
-        );
+        $worker   = WorkerProcess::forConfiguration($this->configuration);
         $deadline = microtime(true) + self::STARTUP_TIMEOUT;
 
         while (microtime(true) < $deadline) {

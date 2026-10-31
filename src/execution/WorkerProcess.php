@@ -10,12 +10,17 @@
 namespace SebastianBergmann\Rattle;
 
 use const INF;
+use const PHP_BINARY;
 use const SIGKILL;
+use function defined;
+use function dirname;
 use function fclose;
 use function feof;
 use function fread;
 use function fwrite;
+use function getenv;
 use function is_resource;
+use function is_string;
 use function microtime;
 use function proc_close;
 use function proc_get_status;
@@ -98,6 +103,34 @@ final class WorkerProcess
     private readonly int $pid;
     private string $stderrTail = '';
     private bool $ended        = false;
+
+    /**
+     * Starts a worker process with the given configuration, from the rattle
+     * executable or from the PHAR that the supervisor runs from.
+     *
+     * @throws WorkerException
+     */
+    public static function forConfiguration(WorkerConfiguration $configuration): self
+    {
+        $environment = getenv();
+
+        // Xdebug slows the execution of inputs down and limits the depth of
+        // recursion, which would hide the limit of PHP's call stack
+        $environment['XDEBUG_MODE'] = 'off';
+
+        $executable = dirname(__DIR__, 2) . '/rattle';
+
+        if (defined('__RATTLE_PHAR__') && is_string(__RATTLE_PHAR__)) {
+            // @codeCoverageIgnoreStart
+            $executable = __RATTLE_PHAR__;
+            // @codeCoverageIgnoreEnd
+        }
+
+        return self::start(
+            [PHP_BINARY, $executable, 'worker', ...$configuration->asArguments()],
+            $environment,
+        );
+    }
 
     /**
      * @param non-empty-list<string> $command
