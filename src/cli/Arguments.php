@@ -77,6 +77,17 @@ final readonly class Arguments
     private ?string $inputLog;
     private bool $help;
     private bool $version;
+    private bool $phpunit;
+
+    /**
+     * @var ?non-empty-string
+     */
+    private ?string $phpunitConfiguration;
+
+    /**
+     * @var ?non-empty-string
+     */
+    private ?string $phpunitFilter;
 
     /**
      * @param ?non-empty-string $command
@@ -88,8 +99,10 @@ final readonly class Arguments
      * @param positive-int      $numberOfExecutionsPerWorker
      * @param list<string>      $corpusDirectories
      * @param list<string>      $sources
+     * @param ?non-empty-string $phpunitConfiguration
+     * @param ?non-empty-string $phpunitFilter
      */
-    public function __construct(?string $command, ?string $target, ?string $input, ?int $jobs, ?int $seed, int $timeout, ?string $memoryLimit, ?float $maximumTime, ?int $maximumNumberOfExecutions, int $maximumNumberOfChoices, int $maximumNumberOfShrinkingAttempts, int $numberOfExecutionsPerWorker, array $corpusDirectories, ?string $seedsDirectory, ?string $dictionary, string $cacheDirectory, string $findingsDirectory, ?string $bootstrap, array $sources, bool $ignoreDeprecations, bool $stopOnFinding, bool $verbose, bool $raw, ?string $inputLog, bool $help, bool $version)
+    public function __construct(?string $command, ?string $target, ?string $input, ?int $jobs, ?int $seed, int $timeout, ?string $memoryLimit, ?float $maximumTime, ?int $maximumNumberOfExecutions, int $maximumNumberOfChoices, int $maximumNumberOfShrinkingAttempts, int $numberOfExecutionsPerWorker, array $corpusDirectories, ?string $seedsDirectory, ?string $dictionary, string $cacheDirectory, string $findingsDirectory, ?string $bootstrap, array $sources, bool $ignoreDeprecations, bool $stopOnFinding, bool $verbose, bool $raw, ?string $inputLog, bool $help, bool $version, bool $phpunit = false, ?string $phpunitConfiguration = null, ?string $phpunitFilter = null)
     {
         $this->command                          = $command;
         $this->target                           = $target;
@@ -117,6 +130,9 @@ final readonly class Arguments
         $this->inputLog                         = $inputLog;
         $this->help                             = $help;
         $this->version                          = $version;
+        $this->phpunit                          = $phpunit;
+        $this->phpunitConfiguration             = $phpunitConfiguration;
+        $this->phpunitFilter                    = $phpunitFilter;
     }
 
     /**
@@ -284,5 +300,30 @@ final readonly class Arguments
     public function version(): bool
     {
         return $this->version;
+    }
+
+    /**
+     * Whether the properties of a PHPUnit test suite are fuzzed rather than
+     * a fuzz target.
+     */
+    public function phpunit(): bool
+    {
+        return $this->phpunit;
+    }
+
+    /**
+     * @return ?non-empty-string
+     */
+    public function phpunitConfiguration(): ?string
+    {
+        return $this->phpunitConfiguration;
+    }
+
+    /**
+     * @return ?non-empty-string
+     */
+    public function phpunitFilter(): ?string
+    {
+        return $this->phpunitFilter;
     }
 }

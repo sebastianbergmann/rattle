@@ -12,7 +12,9 @@ rattle %s by Sebastian Bergmann.
 
 Usage:
   rattle fuzz     [options] <target.php>
+  rattle fuzz     [options] --phpunit
   rattle run      [options] <target.php> <input>
+  rattle run      [options] --phpunit <test-id> <input>
   rattle minimize [options] <target.php> <input>
   rattle regress  [options] <target.php>
 
@@ -40,10 +42,16 @@ Options for "rattle fuzz":
   --cache-directory <dir>     Directory for the corpus (default: .rattle.cache)
   --findings-directory <dir>  Directory for the findings (default: fuzz/findings)
   --stop-on-finding           Stop after the first new finding
+  --phpunit                   Fuzz the properties of the PHPUnit test suite, one after another,
+                              each with the limits above, instead of a target
+  --configuration <file>      PHPUnit configuration file (default: as PHPUnit looks for one)
+  --filter <pattern>          Only fuzz the properties that match the pattern of PHPUnit's --filter
 
 Options for "rattle run":
 
   --raw                       The input is a raw file instead of a choice sequence (bytes targets only)
+  --phpunit                   Run an input of the property with the test ID <test-id>
+  --configuration <file>      PHPUnit configuration file (default: as PHPUnit looks for one)
 
 Options for "rattle minimize":
 

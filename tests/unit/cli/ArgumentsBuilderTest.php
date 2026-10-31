@@ -44,6 +44,11 @@ final class ArgumentsBuilderTest extends TestCase
             'run without an input'                          => [['rattle', 'run', 'target.php']],
             'too many arguments'                            => [['rattle', 'fuzz', 'target.php', 'other.php']],
             'no jobs'                                       => [['rattle', 'fuzz', 'target.php', '--jobs', '0']],
+            'filter without --phpunit'                      => [['rattle', 'fuzz', 'target.php', '--filter', 'Parser']],
+            'target with --phpunit'                         => [['rattle', 'fuzz', '--phpunit', 'target.php']],
+            'seeds with --phpunit'                          => [['rattle', 'fuzz', '--phpunit', '--seeds', 'seeds']],
+            'empty configuration file'                      => [['rattle', 'fuzz', '--phpunit', '--configuration', '']],
+            'run with --phpunit without an input'           => [['rattle', 'run', '--phpunit', 'input']],
             'number of jobs that is not a number'           => [['rattle', 'fuzz', 'target.php', '--jobs', 'many']],
             'seed that is not an integer'                   => [['rattle', 'fuzz', 'target.php', '--seed', '1.5']],
             'maximum time of zero'                          => [['rattle', 'fuzz', 'target.php', '--max-time', '0']],
@@ -130,6 +135,26 @@ final class ArgumentsBuilderTest extends TestCase
         $this->assertSame('target.php', $arguments->target());
         $this->assertSame('input', $arguments->input());
         $this->assertTrue($arguments->raw());
+    }
+
+    public function testParsesTheOptionsForFuzzingThePropertiesOfAPhpunitTestSuite(): void
+    {
+        $arguments = (new ArgumentsBuilder)->build(['rattle', 'fuzz', '--phpunit', '--configuration', 'phpunit.xml', '--filter', 'Parser']);
+
+        $this->assertSame('fuzz', $arguments->command());
+        $this->assertNull($arguments->target());
+        $this->assertTrue($arguments->phpunit());
+        $this->assertSame('phpunit.xml', $arguments->phpunitConfiguration());
+        $this->assertSame('Parser', $arguments->phpunitFilter());
+    }
+
+    public function testParsesTheArgumentsOfTheRunCommandForAProperty(): void
+    {
+        $arguments = (new ArgumentsBuilder)->build(['rattle', 'run', '--phpunit', 'Vendor\ParserTest::testRoundTrip', 'input']);
+
+        $this->assertTrue($arguments->phpunit());
+        $this->assertSame('Vendor\ParserTest::testRoundTrip', $arguments->target());
+        $this->assertSame('input', $arguments->input());
     }
 
     #[DataProvider('durations')]

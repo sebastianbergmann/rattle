@@ -9,11 +9,13 @@
  */
 namespace SebastianBergmann\Rattle;
 
+use function array_column;
 use function array_merge;
 use function array_slice;
 use function assert;
 use function count;
 use function ctype_digit;
+use function in_array;
 use function preg_match;
 use function sprintf;
 use SebastianBergmann\ChoiceSequence\ChoiceSource;
@@ -52,12 +54,17 @@ final readonly class ArgumentsBuilder
                 'findings-directory=',
                 'stop-on-finding',
                 'log-inputs=',
+                'phpunit',
+                'configuration=',
+                'filter=',
             ],
             'arguments' => ['target'],
         ],
         'run' => [
             'longOptions' => [
                 'raw',
+                'phpunit',
+                'configuration=',
             ],
             'arguments' => ['target', 'input'],
         ],
@@ -98,23 +105,32 @@ final readonly class ArgumentsBuilder
             throw new ArgumentsBuilderException($e->getMessage(), 0, $e);
         }
 
-        $target = null;
-        $input  = null;
+        $target  = null;
+        $input   = null;
+        $phpunit = in_array('--phpunit', array_column($options[0], 0), true);
 
         if ($command !== null) {
             $positional = array_slice($options[1], 1);
 
-            foreach (self::COMMANDS[$command]['arguments'] as $position => $name) {
+            // the properties of a PHPUnit test suite are fuzzed instead of a
+            // fuzz target
+            $expected = $phpunit && $command === 'fuzz' ? [] : self::COMMANDS[$command]['arguments'];
+
+            foreach ($expected as $position => $name) {
                 if (!isset($positional[$position])) {
-                    throw new ArgumentsBuilderException(sprintf('The "%s" command needs a %s', $command, $name === 'target' ? 'target file' : 'input file'));
+                    throw new ArgumentsBuilderException(sprintf('The "%s" command needs a%s', $command, match (true) {
+                        $name !== 'target' => 'n input file',
+                        $phpunit           => ' test ID of a property',
+                        default            => ' target file',
+                    }));
                 }
             }
 
-            if (count($positional) > count(self::COMMANDS[$command]['arguments'])) {
+            if (count($positional) > count($expected)) {
                 throw new ArgumentsBuilderException(sprintf('Too many arguments for the "%s" command', $command));
             }
 
-            $target = $positional[0];
+            $target = $positional[0] ?? null;
             $input  = $positional[1] ?? null;
         } elseif (isset($options[1][0])) {
             throw new ArgumentsBuilderException(sprintf('Unknown command "%s"', $options[1][0]));
@@ -143,6 +159,8 @@ final readonly class ArgumentsBuilder
         $inputLog                         = null;
         $help                             = false;
         $version                          = false;
+        $phpunitConfiguration             = null;
+        $phpunitFilter                    = null;
 
         foreach ($options[0] as [$option, $value]) {
             $value = (string) $value;
@@ -253,6 +271,16 @@ final readonly class ArgumentsBuilder
 
                     break;
 
+                case '--configuration':
+                    $phpunitConfiguration = $this->nonEmptyString($option, $value);
+
+                    break;
+
+                case '--filter':
+                    $phpunitFilter = $this->nonEmptyString($option, $value);
+
+                    break;
+
                 case 'h':
                 case '--help':
                     $help = true;
@@ -265,6 +293,14 @@ final readonly class ArgumentsBuilder
 
                     break;
             }
+        }
+
+        if (!$phpunit && ($phpunitConfiguration !== null || $phpunitFilter !== null)) {
+            throw new ArgumentsBuilderException('The options --configuration and --filter can only be used with --phpunit');
+        }
+
+        if ($phpunit && $seedsDirectory !== null) {
+            throw new ArgumentsBuilderException('The option --seeds cannot be used with --phpunit, because properties are not bytes targets');
         }
 
         return new Arguments(
@@ -294,6 +330,9 @@ final readonly class ArgumentsBuilder
             $inputLog,
             $help,
             $version,
+            $phpunit,
+            $phpunitConfiguration,
+            $phpunitFilter,
         );
     }
 
@@ -325,6 +364,20 @@ final readonly class ArgumentsBuilder
         assert($integer >= 0);
 
         return $integer;
+    }
+
+    /**
+     * @throws ArgumentsBuilderException
+     *
+     * @return non-empty-string
+     */
+    private function nonEmptyString(string $option, string $value): string
+    {
+        if ($value === '') {
+            throw $this->invalid($option, $value, 'a non-empty string');
+        }
+
+        return $value;
     }
 
     /**

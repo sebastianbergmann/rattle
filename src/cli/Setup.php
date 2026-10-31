@@ -34,9 +34,18 @@ final readonly class Setup
      */
     public function workerConfiguration(Arguments $arguments): WorkerConfiguration
     {
-        $target = $arguments->target();
+        $target  = $arguments->target();
+        $phpunit = null;
 
-        if ($target === null || $target === '' || !is_file($target)) {
+        if ($arguments->phpunit()) {
+            $configurationFile = $arguments->phpunitConfiguration();
+
+            if ($configurationFile !== null && !is_file($configurationFile)) {
+                throw new ConfigurationException(sprintf('The PHPUnit configuration file "%s" does not exist', $configurationFile));
+            }
+
+            $phpunit = new PhpunitTestSuite($configurationFile, $arguments->phpunitFilter());
+        } elseif ($target === null || $target === '' || !is_file($target)) {
             throw new ConfigurationException(sprintf('The target file "%s" does not exist', (string) $target));
         }
 
@@ -64,7 +73,7 @@ final readonly class Setup
         }
 
         return new WorkerConfiguration(
-            $target,
+            (string) $target,
             $bootstrap,
             $sources,
             $arguments->timeout(),
@@ -72,6 +81,7 @@ final readonly class Setup
             $arguments->memoryLimit(),
             $arguments->ignoreDeprecations(),
             $arguments->numberOfExecutionsPerWorker(),
+            $phpunit,
         );
     }
 

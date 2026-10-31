@@ -1,0 +1,218 @@
+<?php declare(strict_types=1);
+/*
+ * This file is part of sebastian/rattle.
+ *
+ * (c) Sebastian Bergmann <sebastian@phpunit.de>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+namespace SebastianBergmann\Rattle;
+
+use const GLOB_ONLYDIR;
+use const PHP_BINARY;
+use function dirname;
+use function escapeshellarg;
+use function file_get_contents;
+use function glob;
+use function is_dir;
+use function is_file;
+use function mkdir;
+use function preg_match;
+use function proc_close;
+use function proc_open;
+use function rmdir;
+use function scandir;
+use function stream_get_contents;
+use function sys_get_temp_dir;
+use function uniqid;
+use function unlink;
+use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\Large;
+use PHPUnit\Framework\TestCase;
+
+/**
+ * Fuzzes the properties of a PHPUnit test suite through the rattle binary.
+ * The version of PHPUnit that rattle is developed with does not provide the
+ * API for running the examples of properties, so the fixture stands in for
+ * it.
+ */
+#[CoversNothing]
+#[Large]
+final class PhpunitTest extends TestCase
+{
+    private const string FIXTURE  = 'tests/fixtures/phpunit';
+    private const string PROPERTY = 'Fixture\ClassifierTest::testClassifiesEveryList';
+    private string $directory;
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir() . '/rattle-phpunit-' . uniqid();
+
+        mkdir($this->directory);
+    }
+
+    protected function tearDown(): void
+    {
+        $this->remove($this->directory);
+    }
+
+    public function testFuzzesThePropertiesOfATestSuiteOneAfterAnother(): void
+    {
+        [$exit, $output] = $this->fuzz([]);
+
+        $this->assertSame(1, $exit, $output);
+        $this->assertStringContainsString('Target:   ' . self::PROPERTY . ' (property)', $output);
+        $this->assertStringContainsString('Target:   Fixture\ClassifierTest::testCountsAreNotNegative (property)', $output);
+        $this->assertStringContainsString('Finding: LogicException at ' . self::FIXTURE . '/src/Classifier.php:38', $output);
+
+        $findings = glob($this->directory . '/findings/classifiertest-testclassifieseverylist-*/*', GLOB_ONLYDIR);
+
+        $this->assertIsArray($findings);
+        $this->assertCount(1, $findings);
+
+        $finding = $findings[0] ?? '';
+
+        // the minimal input is the list 7, 3, 9
+        $this->assertStringEqualsFile($finding . '/input', "choice-sequence v1\n1\n7\n1\n3\n1\n9\n0\n");
+        $this->assertStringContainsString("rattle run --bootstrap '" . self::FIXTURE . "/bootstrap.php' --phpunit '" . self::PROPERTY . "' ", (string) file_get_contents($finding . '/README.txt'));
+
+        [$exit, $output] = $this->reproduce($finding);
+
+        $this->assertSame(1, $exit, $output);
+        $this->assertStringContainsString('Failure: LogicException at ' . self::FIXTURE . '/src/Classifier.php:38', $output);
+        $this->assertStringContainsString('Message: cannot classify', $output);
+    }
+
+    public function testFuzzesOnlyThePropertiesThatMatchTheFilter(): void
+    {
+        [$exit, $output] = $this->fuzz(['--filter', 'Counts']);
+
+        $this->assertSame(0, $exit, $output);
+        $this->assertStringNotContainsString(self::PROPERTY, $output);
+        $this->assertStringContainsString('Target:   Fixture\ClassifierTest::testCountsAreNotNegative (property)', $output);
+    }
+
+    public function testReportsATestSuiteWithoutProperties(): void
+    {
+        [$exit, $output] = $this->fuzz(['--filter', 'DoesNotMatchAnyProperty']);
+
+        $this->assertSame(2, $exit, $output);
+        $this->assertStringContainsString('The PHPUnit test suite has no properties that match the filter', $output);
+    }
+
+    public function testNeedsAVersionOfPhpunitThatProvidesItsApiForRunningExamples(): void
+    {
+        [$exit, $output] = $this->rattle(['fuzz', '--phpunit', '--max-executions', '10']);
+
+        $this->assertSame(2, $exit, $output);
+        $this->assertStringContainsString('Class PHPUnit\Runner\PropertyBased\PropertyRunner does not exist', $output);
+    }
+
+    /**
+     * @param list<string> $options
+     *
+     * @return array{0: int, 1: string}
+     */
+    private function fuzz(array $options): array
+    {
+        return $this->rattle(
+            [
+                'fuzz',
+                '--phpunit',
+                '--bootstrap',
+                self::FIXTURE . '/bootstrap.php',
+                '--source',
+                self::FIXTURE . '/src',
+                '--jobs',
+                '1',
+                '--seed',
+                '2',
+                '--max-executions',
+                '1000',
+                '--stop-on-finding',
+                '--cache-directory',
+                $this->directory . '/cache',
+                '--findings-directory',
+                $this->directory . '/findings',
+                ...$options,
+            ],
+        );
+    }
+
+    /**
+     * @param list<string> $arguments
+     *
+     * @return array{0: int, 1: string}
+     */
+    private function rattle(array $arguments): array
+    {
+        return $this->execute([PHP_BINARY, dirname(__DIR__, 2) . '/rattle', ...$arguments]);
+    }
+
+    /**
+     * Executes the command that the README.txt of a finding shows with the
+     * shell, as it is copied from there.
+     *
+     * @return array{0: int, 1: string}
+     */
+    private function reproduce(string $finding): array
+    {
+        if (preg_match('/^    rattle (.+)$/m', (string) file_get_contents($finding . '/README.txt'), $matches) !== 1) {
+            $this->fail('README.txt does not show the command that reproduces the finding');
+        }
+
+        return $this->execute(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(dirname(__DIR__, 2) . '/rattle') . ' ' . $matches[1]);
+    }
+
+    /**
+     * @param list<string>|string $command
+     *
+     * @return array{0: int, 1: string}
+     */
+    private function execute(array|string $command): array
+    {
+        $pipes   = [];
+        $process = proc_open(
+            $command,
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            dirname(__DIR__, 2),
+        );
+
+        $stdout = $pipes[1] ?? null;
+        $stderr = $pipes[2] ?? null;
+
+        $this->assertIsResource($process);
+        $this->assertIsResource($stdout);
+        $this->assertIsResource($stderr);
+
+        // the standard error stream is read after the standard output stream,
+        // which works as long as the workers do not write much to it
+        $output = (string) stream_get_contents($stdout);
+        $output .= (string) stream_get_contents($stderr);
+
+        return [proc_close($process), $output];
+    }
+
+    private function remove(string $path): void
+    {
+        if (is_file($path)) {
+            unlink($path);
+
+            return;
+        }
+
+        if (!is_dir($path)) {
+            return;
+        }
+
+        foreach ((array) scandir($path) as $entry) {
+            if ($entry !== '.' && $entry !== '..') {
+                $this->remove($path . '/' . $entry);
+            }
+        }
+
+        rmdir($path);
+    }
+}
