@@ -42,8 +42,9 @@ Options for "rattle fuzz":
   --cache-directory <dir>     Directory for the corpus (default: .rattle.cache)
   --findings-directory <dir>  Directory for the findings (default: fuzz/findings)
   --stop-on-finding           Stop after the first new finding
-  --phpunit                   Fuzz the properties of the PHPUnit test suite, one after another,
-                              each with the limits above, instead of a target
+  --phpunit                   Fuzz the properties of the PHPUnit test suite one after another
+                              instead of a target: they share the time of --max-time, and
+                              --max-executions applies to every property
   --configuration <file>      PHPUnit configuration file (default: as PHPUnit looks for one)
   --filter <pattern>          Only fuzz the properties that match the pattern of PHPUnit's --filter
 

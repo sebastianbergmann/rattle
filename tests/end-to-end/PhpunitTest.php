@@ -19,8 +19,10 @@ use function is_dir;
 use function is_file;
 use function mkdir;
 use function preg_match;
+use function preg_quote;
 use function proc_close;
 use function proc_open;
+use function realpath;
 use function rmdir;
 use function scandir;
 use function stream_get_contents;
@@ -92,6 +94,39 @@ final class PhpunitTest extends TestCase
         $this->assertSame(0, $exit, $output);
         $this->assertStringNotContainsString(self::PROPERTY, $output);
         $this->assertStringContainsString('Target:   ' . self::OTHER . ' (property)', $output);
+    }
+
+    public function testThePropertiesShareTheTimeOfMaxTime(): void
+    {
+        [$exit, $output] = $this->rattle(['fuzz', '--phpunit', '--configuration', self::FIXTURE . '/phpunit.xml', '--source', self::FIXTURE . '/src', '--jobs', '1', '--seed', '2', '--max-time', '6s', '--stop-on-finding', '--cache-directory', $this->directory . '/cache', '--findings-directory', $this->directory . '/findings']);
+
+        $this->assertSame(1, $exit, $output);
+
+        // the first property gets half of the time and stops at its finding,
+        // so the second property gets the rest
+        $this->assertStringContainsString('Target:   ' . self::PROPERTY . " (property)\n", $output);
+        $this->assertMatchesRegularExpression('/' . preg_quote(self::PROPERTY, '/') . '.*?Time: {5}at most 3s of --max-time\n/s', $output);
+        $this->assertMatchesRegularExpression('/' . preg_quote(self::OTHER, '/') . '.*?Time: {5}at most [3-6]s of --max-time\n/s', $output);
+    }
+
+    public function testInstrumentsTheSourceOfTheConfigurationAndImportsACorpusForOneProperty(): void
+    {
+        mkdir($this->directory . '/corpus');
+
+        [$exit, $output] = $this->rattle(['fuzz', '--phpunit', '--configuration', self::FIXTURE . '/phpunit.xml', '--filter', 'Counts', '--corpus', $this->directory . '/corpus', '--jobs', '1', '--max-executions', '10', '--cache-directory', $this->directory . '/cache', '--findings-directory', $this->directory . '/findings']);
+
+        $this->assertSame(0, $exit, $output);
+        $this->assertStringContainsString('Sources:  ' . realpath(dirname(__DIR__, 2) . '/' . self::FIXTURE . '/src') . "\n", $output);
+    }
+
+    public function testImportsACorpusOnlyWhenTheFilterSelectsOneProperty(): void
+    {
+        mkdir($this->directory . '/corpus');
+
+        [$exit, $output] = $this->fuzz(['--corpus', $this->directory . '/corpus']);
+
+        $this->assertSame(2, $exit, $output);
+        $this->assertStringContainsString('The options --corpus and --log-inputs can only be used with --phpunit when the filter selects one property', $output);
     }
 
     public function testReportsATestSuiteWithoutProperties(): void

@@ -56,6 +56,21 @@ final class StatusLine
         );
     }
 
+    public static function duration(float $seconds): string
+    {
+        $seconds = (int) floor($seconds);
+
+        if ($seconds < 60) {
+            return $seconds . 's';
+        }
+
+        if ($seconds < 3600) {
+            return sprintf('%dm%02ds', intdiv($seconds, 60), $seconds % 60);
+        }
+
+        return sprintf('%dh%02dm%02ds', intdiv($seconds, 3600), intdiv($seconds % 3600, 60), $seconds % 60);
+    }
+
     /**
      * @param resource         $stream
      * @param Closure(): float $clock
@@ -124,20 +139,5 @@ final class StatusLine
         if ($this->terminal && $this->line !== '') {
             fwrite($this->stream, "\r" . str_repeat(' ', strlen($this->line)) . "\r");
         }
-    }
-
-    private static function duration(float $seconds): string
-    {
-        $seconds = (int) floor($seconds);
-
-        if ($seconds < 60) {
-            return $seconds . 's';
-        }
-
-        if ($seconds < 3600) {
-            return sprintf('%dm%02ds', intdiv($seconds, 60), $seconds % 60);
-        }
-
-        return sprintf('%dh%02dm%02ds', intdiv($seconds, 3600), intdiv($seconds % 3600, 60), $seconds % 60);
     }
 }

@@ -27,6 +27,7 @@ use function pcntl_async_signals;
 use function pcntl_signal;
 use function printf;
 use function random_int;
+use function round;
 use function sprintf;
 use function stream_isatty;
 use Closure;
@@ -76,7 +77,7 @@ final readonly class FuzzCommand implements Command
         $phpunit       = $configuration->phpunit();
 
         if ($phpunit === null) {
-            return $this->fuzz($arguments, $configuration, $this->executionOptions($arguments) . $arguments->target(), $stderr, $jobs, $seed, $dictionary, $isInterrupted);
+            return $this->fuzz($arguments, $configuration, $this->executionOptions($arguments) . $arguments->target(), $arguments->maximumTime(), $stderr, $jobs, $seed, $dictionary, $isInterrupted);
         }
 
         try {
@@ -93,20 +94,51 @@ final readonly class FuzzCommand implements Command
             return 2;
         }
 
-        // the properties are fuzzed one after another, each with the limits
-        // of a fuzz target
-        $result = 0;
+        // the inputs of a corpus directory and the log of the inputs belong
+        // to one target
+        if (count($properties) > 1 && ($arguments->corpusDirectories() !== [] || $arguments->inputLog() !== null)) {
+            print 'The options --corpus and --log-inputs can only be used with --phpunit when the filter selects one property' . PHP_EOL;
+
+            return 2;
+        }
+
+        // the properties are fuzzed one after another and share the time of
+        // --max-time: every property gets an equal share of the time that is
+        // left, so a property that ends early leaves its time to the ones
+        // after it, while --max-executions applies to every property
+        $deadline = null;
+        $result   = 0;
+
+        if ($arguments->maximumTime() !== null) {
+            $deadline = microtime(true) + $arguments->maximumTime();
+        }
 
         foreach ($properties as $index => $property) {
             if ($interrupted) {
                 break;
             }
 
+            $maximumTime = null;
+
+            if ($deadline !== null) {
+                $maximumTime = ($deadline - microtime(true)) / (count($properties) - $index);
+
+                if ($maximumTime <= 0) {
+                    printf(
+                        PHP_EOL . 'The time of --max-time is up, %d of %d properties were not fuzzed.' . PHP_EOL,
+                        count($properties) - $index,
+                        count($properties),
+                    );
+
+                    break;
+                }
+            }
+
             if ($index > 0) {
                 print PHP_EOL;
             }
 
-            $status = $this->fuzz($arguments, $configuration->withTarget($property), $this->executionOptions($arguments) . $this->reproduction($phpunit, $property), $stderr, $jobs, $seed, $dictionary, $isInterrupted);
+            $status = $this->fuzz($arguments, $configuration->withTarget($property), $this->executionOptions($arguments) . $this->reproduction($phpunit, $property), $maximumTime, $stderr, $jobs, $seed, $dictionary, $isInterrupted);
 
             if ($status === 2) {
                 return 2;
@@ -120,6 +152,7 @@ final readonly class FuzzCommand implements Command
 
     /**
      * @param string                      $reproduction  what is passed to "rattle run" to execute an input of the target again
+     * @param ?float                      $maximumTime   in seconds, null for no time limit
      * @param ?Closure(int, string): void $stderr
      * @param positive-int                $jobs
      * @param list<non-empty-string>      $dictionary
@@ -127,7 +160,7 @@ final readonly class FuzzCommand implements Command
      *
      * @return 0|1|2
      */
-    private function fuzz(Arguments $arguments, WorkerConfiguration $configuration, string $reproduction, ?Closure $stderr, int $jobs, int $seed, array $dictionary, Closure $isInterrupted): int
+    private function fuzz(Arguments $arguments, WorkerConfiguration $configuration, string $reproduction, ?float $maximumTime, ?Closure $stderr, int $jobs, int $seed, array $dictionary, Closure $isInterrupted): int
     {
         $executor = new ProcessExecutor($configuration, $jobs, $stderr);
 
@@ -214,7 +247,7 @@ final readonly class FuzzCommand implements Command
             },
         );
 
-        $this->printHeader($target, $configuration->phpunit() !== null, $seed, $jobs, $configuration, $corpusDirectory, $numberOfStored, $findingsDirectory, $findings->numberOfKnownFindings(), $arguments->maximumNumberOfChoices());
+        $this->printHeader($target, $configuration->phpunit() !== null, $maximumTime, $seed, $jobs, $configuration, $corpusDirectory, $numberOfStored, $findingsDirectory, $findings->numberOfKnownFindings(), $arguments->maximumNumberOfChoices());
 
         foreach ($loader->warnings() as $warning) {
             print 'Warning: ' . $warning . PHP_EOL;
@@ -231,7 +264,7 @@ final readonly class FuzzCommand implements Command
             $corpus = new Corpus($corpusDirectory),
             Mutator::create($corpus, $dictionary, $target->maximumNumberOfChoices()),
             $findings,
-            new EngineConfiguration($seed, $arguments->maximumNumberOfExecutions(), $arguments->maximumTime(), $arguments->stopOnFinding()),
+            new EngineConfiguration($seed, $arguments->maximumNumberOfExecutions(), $maximumTime, $arguments->stopOnFinding()),
             $status->update(...),
             is_resource($log) ? static function (Job $job) use ($log): void
             {
@@ -318,7 +351,10 @@ final readonly class FuzzCommand implements Command
         return $reproduction . ' ' . escapeshellarg($property);
     }
 
-    private function printHeader(TargetDescription $target, bool $property, int $seed, int $jobs, WorkerConfiguration $configuration, string $corpusDirectory, int $numberOfStoredInputs, string $findingsDirectory, int $numberOfKnownFindings, int $maximumNumberOfChoices): void
+    /**
+     * @param ?float $maximumTime the share of a property of the time of --max-time
+     */
+    private function printHeader(TargetDescription $target, bool $property, ?float $maximumTime, int $seed, int $jobs, WorkerConfiguration $configuration, string $corpusDirectory, int $numberOfStoredInputs, string $findingsDirectory, int $numberOfKnownFindings, int $maximumNumberOfChoices): void
     {
         printf(
             'Target:   %s (%s)' . PHP_EOL .
@@ -338,6 +374,10 @@ final readonly class FuzzCommand implements Command
             $findingsDirectory,
             $numberOfKnownFindings,
         );
+
+        if ($property && $maximumTime !== null) {
+            printf('Time:     at most %s of --max-time' . PHP_EOL, StatusLine::duration(round($maximumTime)));
+        }
 
         if ($target->maximumNumberOfChoices() > $maximumNumberOfChoices) {
             printf(
