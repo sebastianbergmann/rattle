@@ -108,13 +108,13 @@ final class TargetTest extends TestCase
 
     public function testThrowablesOfExpectedClassesAndTheirSubclassesAreExpected(): void
     {
-        $target = $this->target()->expect(LogicException::class)->expect(RuntimeException::class);
+        $target = $this->structuredTarget()->expect(LogicException::class)->expect(RuntimeException::class);
 
         $this->assertSame([LogicException::class, RuntimeException::class], $target->expected());
         $this->assertTrue($target->isExpected(new LogicException));
         $this->assertTrue($target->isExpected(new DomainException));
         $this->assertFalse($target->isExpected(new Error));
-        $this->assertSame([], $this->target()->expected());
+        $this->assertSame([], $this->structuredTarget()->expected());
     }
 
     public function testOnlyThrowablesCanBeExpected(): void
@@ -122,10 +122,10 @@ final class TargetTest extends TestCase
         $this->expectException(InvalidTargetException::class);
 
         /** @phpstan-ignore argument.type */
-        $this->target()->expect(stdClass::class);
+        $this->structuredTarget()->expect(stdClass::class);
     }
 
-    private function target(): Target
+    private function structuredTarget(): Target
     {
         return Target::structured('target', static function (Input $input): void
         {

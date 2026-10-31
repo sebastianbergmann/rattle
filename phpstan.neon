@@ -9,13 +9,6 @@ parameters:
         analyseAndScan:
             # declares classes of nikic/php-parser that are not compatible with rattle's
             - tests/fixtures/phar
-            # stands in for the API of PHPUnit that build/phpstan/PropertyRunner.stub declares
-            - tests/fixtures/phpunit
-
-    # PHPUnit's API for running the examples of properties is newer than the
-    # version of PHPUnit that rattle is developed with
-    scanFiles:
-        - build/phpstan/PropertyRunner.stub
 
     # the version of the PHAR is written into the constant when the PHAR is built
     dynamicConstantNames:

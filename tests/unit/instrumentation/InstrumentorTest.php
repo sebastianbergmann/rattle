@@ -200,7 +200,7 @@ final class InstrumentorTest extends TestCase
     public function testCannotInstrumentCodeThatCannotBeParsed(): void
     {
         $this->expectException(InstrumentationFailedException::class);
-        $this->expectExceptionMessage('Cannot instrument broken.php: Syntax error');
+        $this->expectExceptionMessageIsOrContains('Cannot instrument broken.php: Syntax error');
 
         (new Instrumentor)->instrument('<?php function (', 'broken.php');
     }

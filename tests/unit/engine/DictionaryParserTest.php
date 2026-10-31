@@ -56,7 +56,7 @@ final class DictionaryParserTest extends TestCase
     public function testRejectsInvalidLines(string $line): void
     {
         $this->expectException(InvalidDictionaryException::class);
-        $this->expectExceptionMessage('Line 1 of the dictionary is not valid');
+        $this->expectExceptionMessageIsOrContains('Line 1 of the dictionary is not valid');
 
         (new DictionaryParser)->parse($line);
     }
@@ -69,7 +69,7 @@ final class DictionaryParserTest extends TestCase
     public function testRejectsAnInvalidLine(): void
     {
         $this->expectException(InvalidDictionaryException::class);
-        $this->expectExceptionMessage('Line 2 of the dictionary is not valid');
+        $this->expectExceptionMessageIsOrContains('Line 2 of the dictionary is not valid');
 
         (new DictionaryParser)->parseFile(__DIR__ . '/../../fixtures/engine/invalid-dictionary.txt');
     }

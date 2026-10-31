@@ -32,17 +32,16 @@ use PHPUnit\Framework\Attributes\Large;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Fuzzes the properties of a PHPUnit test suite through the rattle binary.
- * The version of PHPUnit that rattle is developed with does not provide the
- * API for running the examples of properties, so the fixture stands in for
- * it.
+ * Fuzzes the properties of a PHPUnit test suite through the rattle binary,
+ * with the version of PHPUnit that rattle is developed with.
  */
 #[CoversNothing]
 #[Large]
 final class PhpunitTest extends TestCase
 {
     private const string FIXTURE  = 'tests/fixtures/phpunit';
-    private const string PROPERTY = 'Fixture\ClassifierTest::testClassifiesEveryList';
+    private const string PROPERTY = 'SebastianBergmann\Rattle\Fixture\Phpunit\ClassifierTest::testClassifiesEveryList';
+    private const string OTHER    = 'SebastianBergmann\Rattle\Fixture\Phpunit\ClassifierTest::testCountsAreNotNegative';
     private string $directory;
 
     protected function setUp(): void
@@ -63,7 +62,7 @@ final class PhpunitTest extends TestCase
 
         $this->assertSame(1, $exit, $output);
         $this->assertStringContainsString('Target:   ' . self::PROPERTY . ' (property)', $output);
-        $this->assertStringContainsString('Target:   Fixture\ClassifierTest::testCountsAreNotNegative (property)', $output);
+        $this->assertStringContainsString('Target:   ' . self::OTHER . ' (property)', $output);
         $this->assertStringContainsString('Finding: LogicException at ' . self::FIXTURE . '/src/Classifier.php:38', $output);
 
         $findings = glob($this->directory . '/findings/classifiertest-testclassifieseverylist-*/*', GLOB_ONLYDIR);
@@ -75,7 +74,7 @@ final class PhpunitTest extends TestCase
 
         // the minimal input is the list 7, 3, 9
         $this->assertStringEqualsFile($finding . '/input', "choice-sequence v1\n1\n7\n1\n3\n1\n9\n0\n");
-        $this->assertStringContainsString("rattle run --bootstrap '" . self::FIXTURE . "/bootstrap.php' --phpunit '" . self::PROPERTY . "' ", (string) file_get_contents($finding . '/README.txt'));
+        $this->assertStringContainsString("rattle run --phpunit --configuration '" . self::FIXTURE . "/phpunit.xml' '" . self::PROPERTY . "' ", (string) file_get_contents($finding . '/README.txt'));
 
         [$exit, $output] = $this->reproduce($finding);
 
@@ -90,7 +89,7 @@ final class PhpunitTest extends TestCase
 
         $this->assertSame(0, $exit, $output);
         $this->assertStringNotContainsString(self::PROPERTY, $output);
-        $this->assertStringContainsString('Target:   Fixture\ClassifierTest::testCountsAreNotNegative (property)', $output);
+        $this->assertStringContainsString('Target:   ' . self::OTHER . ' (property)', $output);
     }
 
     public function testReportsATestSuiteWithoutProperties(): void
@@ -99,14 +98,6 @@ final class PhpunitTest extends TestCase
 
         $this->assertSame(2, $exit, $output);
         $this->assertStringContainsString('The PHPUnit test suite has no properties that match the filter', $output);
-    }
-
-    public function testNeedsAVersionOfPhpunitThatProvidesItsApiForRunningExamples(): void
-    {
-        [$exit, $output] = $this->rattle(['fuzz', '--phpunit', '--max-executions', '10']);
-
-        $this->assertSame(2, $exit, $output);
-        $this->assertStringContainsString('Class PHPUnit\Runner\PropertyBased\PropertyRunner does not exist', $output);
     }
 
     /**
@@ -120,8 +111,8 @@ final class PhpunitTest extends TestCase
             [
                 'fuzz',
                 '--phpunit',
-                '--bootstrap',
-                self::FIXTURE . '/bootstrap.php',
+                '--configuration',
+                self::FIXTURE . '/phpunit.xml',
                 '--source',
                 self::FIXTURE . '/src',
                 '--jobs',

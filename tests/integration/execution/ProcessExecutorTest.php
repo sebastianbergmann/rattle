@@ -233,7 +233,7 @@ final class ProcessExecutorTest extends TestCase
     public function testCannotStartAWorkerForAFileThatDoesNotReturnATarget(): void
     {
         $this->expectException(WorkerException::class);
-        $this->expectExceptionMessage('must return an instance of SebastianBergmann\Rattle\Target, string returned');
+        $this->expectExceptionMessageIsOrContains('must return an instance of SebastianBergmann\Rattle\Target, string returned');
 
         (new ProcessExecutor(new WorkerConfiguration(self::FIXTURES . '/not-a-target.php', null, [], 1, 100, null, false, 100), 1))->start();
     }
@@ -241,7 +241,7 @@ final class ProcessExecutorTest extends TestCase
     public function testCannotStartAWorkerWithABootstrapFileThatDoesNotExist(): void
     {
         $this->expectException(WorkerException::class);
-        $this->expectExceptionMessage('The bootstrap file "/does/not/exist.php" does not exist');
+        $this->expectExceptionMessageIsOrContains('The bootstrap file "/does/not/exist.php" does not exist');
 
         (new ProcessExecutor(new WorkerConfiguration(self::FIXTURES . '/target.php', '/does/not/exist.php', [], 1, 100, null, false, 100), 1))->start();
     }
