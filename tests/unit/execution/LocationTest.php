@@ -65,9 +65,22 @@ final class LocationTest extends TestCase
         $this->assertSame(self::EXPANDER . ':56', $this->location()->of($this->error(self::CALL_STACK_LIMIT, 56, [])));
     }
 
-    public function testTheLocationOfOtherErrorsWithFramesThatAreRepeatedIsWhereTheyWereRaised(): void
+    public function testTheLocationOfOtherErrorsInARecursionIsTheFirstFrameOfTheirStackTrace(): void
     {
-        $this->assertSame(self::EXPANDER . ':56', $this->location()->of($this->recursion('Something else', 56)));
+        // the stack trace contains the file and line of the error already
+        $this->assertSame(self::EXPANDER . ':56', $this->location()->of($this->recursion('Something else', 54)));
+        $this->assertSame(self::EXPANDER . ':54', $this->location()->of($this->recursion('Something else', 56)));
+    }
+
+    public function testFramesWhoseFileIsNotAFileAreLeftOut(): void
+    {
+        $line = __LINE__ + 3;
+
+        try {
+            eval('throw new \\RuntimeException;');
+        } catch (RuntimeException $e) {
+            $this->assertSame(self::FILE . ':' . $line, $this->location()->of($e));
+        }
     }
 
     public function testFramesThatAreRepeatedAreRenderedOnce(): void
@@ -75,8 +88,8 @@ final class LocationTest extends TestCase
         $this->assertSame(
             [
                 self::EXPANDER . ':54',
-                self::EXPANDER . ':54 preg_replace_callback()',
                 self::EXPANDER . ':56 expand()',
+                self::EXPANDER . ':54 preg_replace_callback()',
                 '(the 2 frames above are repeated 9 more times)',
                 self::EXPANDER . ':46 expand()',
                 'tests/fixtures/targets/recursion/target.php:18 expandAll()',
@@ -114,17 +127,22 @@ final class LocationTest extends TestCase
     }
 
     /**
-     * Returns an error that is raised in a recursion such as the one of the
-     * recursion fixture, after ten cycles of two calls.
+     * Returns an error that is raised by the call in the given line of a
+     * recursion such as the one of the recursion fixture, in which the calls
+     * in lines 54 and 56 call each other ten times. As in the stack trace of a
+     * real recursion, the first frame is the call in the other line, which led
+     * to the given one.
      */
     private function recursion(string $message, int $line): Error
     {
         $expander = dirname(__DIR__, 3) . '/' . self::EXPANDER;
+        $other    = $line === 54 ? 56 : 54;
+        $function = static fn (int $line): string => $line === 54 ? 'preg_replace_callback' : 'expand';
         $trace    = [];
 
         for ($i = 0; $i < 10; $i++) {
-            $trace[] = ['file' => $expander, 'line' => 54, 'function' => 'preg_replace_callback'];
-            $trace[] = ['file' => $expander, 'line' => 56, 'function' => 'expand'];
+            $trace[] = ['file' => $expander, 'line' => $other, 'function' => $function($other)];
+            $trace[] = ['file' => $expander, 'line' => $line, 'function' => $function($line)];
         }
 
         $trace[] = ['file' => $expander, 'line' => 46, 'function' => 'expand'];

@@ -15,6 +15,8 @@ use function count;
 use function defined;
 use function dirname;
 use function implode;
+use function in_array;
+use function is_file;
 use function is_string;
 use function number_format;
 use function range;
@@ -32,9 +34,11 @@ use Throwable;
  * Determines where a throwable was raised and renders stack traces, leaving
  * out rattle's own code.
  *
- * The location of a throwable is its own file and line, unless these lie in
- * rattle's own code. Then it is the first frame of its stack trace that does
- * not. This is how PHPUnit determines the location of a throwable with its
+ * The location of a throwable is the first of its frames that does not lie
+ * in rattle's own code: its own file and line, unless its stack trace
+ * contains them already, followed by the frames of its stack trace. Frames
+ * whose file is not a file, such as the code that eval() evaluates, are left
+ * out. This is how PHPUnit determines the location of a throwable with its
  * own code left out. When rattle runs from a PHAR, the code of the
  * dependencies that are bundled in the PHAR is rattle's own code, too.
  *
@@ -108,13 +112,7 @@ final readonly class Location
      */
     public function of(Throwable $throwable): string
     {
-        $frames = [];
-
-        foreach ($this->framesOf($throwable) as $frame) {
-            if (!self::isRattle($frame['file'])) {
-                $frames[] = ['file' => $this->file($frame['file']), 'line' => $frame['line']];
-            }
-        }
+        $frames = $this->framesOf($throwable);
 
         if ($frames === []) {
             return $this->file($throwable->getFile()) . ':' . $throwable->getLine();
@@ -184,11 +182,16 @@ final readonly class Location
     }
 
     /**
+     * Returns the frames of the throwable that do not lie in rattle's own
+     * code and whose file is a file, with the paths of their files relative
+     * to the working directory: its own file and line, unless its stack trace
+     * contains them already, followed by the frames of its stack trace.
+     *
      * @return list<array{file: string, line: int}>
      */
     private function framesOf(Throwable $throwable): array
     {
-        $frames = [['file' => $throwable->getFile(), 'line' => $throwable->getLine()]];
+        $frames = [];
 
         foreach ($throwable->getTrace() as $frame) {
             if (isset($frame['file'], $frame['line'])) {
@@ -196,7 +199,29 @@ final readonly class Location
             }
         }
 
-        return $frames;
+        $own = ['file' => $throwable->getFile(), 'line' => $throwable->getLine()];
+
+        if (!in_array($own, $frames, true)) {
+            array_unshift($frames, $own);
+        }
+
+        $isFile = [];
+        $result = [];
+
+        foreach ($frames as $frame) {
+            if (self::isRattle($frame['file'])) {
+                continue;
+            }
+
+            // the frames of a recursion lie in a few files
+            $isFile[$frame['file']] ??= is_file($frame['file']);
+
+            if ($isFile[$frame['file']]) {
+                $result[] = ['file' => $this->file($frame['file']), 'line' => $frame['line']];
+            }
+        }
+
+        return $result;
     }
 
     /**
