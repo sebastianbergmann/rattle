@@ -18,6 +18,8 @@ use function sprintf;
 use SebastianBergmann\ChoiceSequence\BernoulliDistribution;
 use SebastianBergmann\ChoiceSequence\BoundaryDistribution;
 use SebastianBergmann\ChoiceSequence\ChoiceSource;
+use SebastianBergmann\ChoiceSequence\Label;
+use SebastianBergmann\ChoiceSequence\SpanKind;
 use SebastianBergmann\ChoiceSequence\TooManyChoicesException;
 use SebastianBergmann\ChoiceSequence\UniformDistribution;
 
@@ -77,7 +79,7 @@ final class Input
             function () use ($maxLength, $byteLabel, $anotherByte, $byte, &$bytes, &$length): void
             {
                 while ($length < $maxLength) {
-                    $this->source->startSpan($byteLabel);
+                    $this->source->startSpan($byteLabel, SpanKind::Element);
 
                     if ($this->source->draw(1, $anotherByte) === 0) {
                         $this->source->endSpan();
@@ -96,6 +98,7 @@ final class Input
                     $length++;
                 }
             },
+            SpanKind::Bytes,
         );
 
         $this->record($bytes);
@@ -131,7 +134,7 @@ final class Input
         $value = 0;
 
         $this->draw(
-            BytesEncoding::labelOf('integers', (string) $min, (string) $max),
+            Label::of('integers', (string) $min, (string) $max),
             function () use ($min, $max, &$value): void
             {
                 $magnitude = new BoundaryDistribution;
@@ -181,7 +184,7 @@ final class Input
         $value = false;
 
         $this->draw(
-            BytesEncoding::labelOf('booleans'),
+            Label::of('booleans'),
             function () use (&$value): void
             {
                 $value = $this->source->draw(1, new BernoulliDistribution(0.5)) === 1;
@@ -218,7 +221,7 @@ final class Input
         $value = $elements[0];
 
         $this->draw(
-            BytesEncoding::labelOf('elements', (string) count($elements)),
+            Label::of('elements', (string) count($elements)),
             function () use ($elements, &$value): void
             {
                 $value = $this->source->choose($elements, new UniformDistribution);
@@ -275,9 +278,9 @@ final class Input
      *
      * @throws InputRejectedException
      */
-    private function draw(string $label, callable $draw): void
+    private function draw(string $label, callable $draw, ?SpanKind $kind = null): void
     {
-        $this->source->startSpan($label);
+        $this->source->startSpan($label, $kind);
 
         try {
             $draw();

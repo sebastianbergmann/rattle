@@ -12,6 +12,7 @@ namespace SebastianBergmann\Rattle;
 use function ord;
 use function strlen;
 use Random\Randomizer;
+use SebastianBergmann\ChoiceSequence\SpanKind;
 
 /**
  * Inserts a token of the dictionary into a binary string, at the boundary
@@ -19,9 +20,8 @@ use Random\Randomizer;
  * before the span that ends the string, [0]. The token is inserted as the
  * choices of its bytes, [1, b0, 1, b1, …].
  *
- * The spans of the bytes of a string are recognised by their maxima, 1 and
- * 255, which no other value of Input draws, so that tokens can be inserted
- * into every string that a structured target draws.
+ * The spans of the bytes of a string are recognised by their kinds, so that
+ * tokens can be inserted into every string that a structured target draws.
  *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
@@ -48,13 +48,11 @@ final readonly class InsertToken implements Mutation
             return false;
         }
 
-        $labels = $candidate->labelsOfBytes();
-
         $positions = [];
 
         foreach ($candidate->spans() as $span) {
-            if (isset($labels[$span['label']])) {
-                $positions[] = ['position' => $span['start'], 'parent' => $span['parent'], 'label' => $span['label']];
+            if ($candidate->isByteOfString($span)) {
+                $positions[] = $span;
             }
         }
 
@@ -69,11 +67,12 @@ final readonly class InsertToken implements Mutation
         // were drawn
         for ($i = 0; $i < strlen($token); $i++) {
             $candidate->insert(
-                $position['position'] + 2 * $i,
+                $position['start'] + 2 * $i,
                 [1, ord($token[$i])],
                 [1, 0xFF],
                 $position['label'],
                 $position['parent'],
+                SpanKind::Element,
             );
         }
 

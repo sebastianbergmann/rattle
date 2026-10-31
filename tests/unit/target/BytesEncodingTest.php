@@ -33,11 +33,10 @@ final class BytesEncodingTest extends TestCase
         ];
     }
 
-    public function testComputesLabelsAsPhpUnitDoes(): void
+    public function testComputesTheLabelsOfStringsAndBytesAsPhpUnitsBytesGeneratorDoes(): void
     {
         $this->assertSame(hash('xxh3', 'bytes(0,4096)'), BytesEncoding::labelOfBytes(4096));
         $this->assertSame(hash('xxh3', 'element(' . hash('xxh3', 'bytes(0,4096)') . ')'), BytesEncoding::labelOfByte(4096));
-        $this->assertSame(hash('xxh3', 'booleans()'), BytesEncoding::labelOf('booleans'));
     }
 
     public function testEncodesEachByteAsTheChoiceOneFollowedByItsValueAndEndsWithZero(): void

@@ -15,6 +15,7 @@ use function is_int;
 use function is_string;
 use SebastianBergmann\ChoiceSequence\ChoiceSequence;
 use SebastianBergmann\ChoiceSequence\Span;
+use SebastianBergmann\ChoiceSequence\SpanKind;
 
 /**
  * What happened when an input was executed: its outcome, how it made the
@@ -175,7 +176,7 @@ final readonly class Result
         $maxima = [];
 
         foreach ($this->sequence->spans() as $span) {
-            $spans[] = [$span->start(), $span->end(), $span->label(), $span->parent()];
+            $spans[] = [$span->start(), $span->end(), $span->label(), $span->parent(), $span->kind()?->name];
         }
 
         foreach ($this->sequence->choices() as $index => $choice) {
@@ -205,6 +206,24 @@ final readonly class Result
     }
 
     /**
+     * @throws ProtocolException
+     */
+    private static function kindOf(mixed $name): ?SpanKind
+    {
+        if ($name === null) {
+            return null;
+        }
+
+        foreach (SpanKind::cases() as $kind) {
+            if ($kind->name === $name) {
+                return $kind;
+            }
+        }
+
+        throw new ProtocolException('Invalid kind of span');
+    }
+
+    /**
      * @param array<mixed> $data
      *
      * @throws ProtocolException
@@ -229,7 +248,7 @@ final readonly class Result
                 throw new ProtocolException('Invalid span');
             }
 
-            $spans[] = new Span($span[0], $span[1], $span[2], $parent);
+            $spans[] = new Span($span[0], $span[1], $span[2], $parent, self::kindOf($span[4] ?? null));
         }
 
         $maxima = [];

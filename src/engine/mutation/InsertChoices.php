@@ -10,6 +10,7 @@
 namespace SebastianBergmann\Rattle;
 
 use Random\Randomizer;
+use SebastianBergmann\ChoiceSequence\SpanKind;
 
 /**
  * Inserts a few random choices at the start or the end of a span, or at the
@@ -41,7 +42,7 @@ final readonly class InsertChoices implements Mutation
         $position = $randomizer->getInt(0, 1) === 0 ? $span['start'] : $span['end'];
 
         // at the boundary between bytes of a string, bytes are inserted
-        if (isset($candidate->labelsOfBytes()[$span['label']])) {
+        if ($candidate->isByteOfString($span)) {
             $byte = BytesEncoding::byte();
 
             // bytes after the span that ends the string would not be drawn
@@ -50,7 +51,7 @@ final readonly class InsertChoices implements Mutation
             }
 
             for ($i = $randomizer->getInt(1, self::LARGEST_NUMBER_OF_BYTES); $i > 0; $i--) {
-                $candidate->insert($position, [1, $byte->sample($randomizer, 0xFF)], [1, 0xFF], $span['label'], $span['parent']);
+                $candidate->insert($position, [1, $byte->sample($randomizer, 0xFF)], [1, 0xFF], $span['label'], $span['parent'], SpanKind::Element);
             }
 
             return true;

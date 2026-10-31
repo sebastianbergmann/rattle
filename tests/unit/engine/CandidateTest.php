@@ -9,6 +9,7 @@
  */
 namespace SebastianBergmann\Rattle;
 
+use function array_map;
 use function array_values;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Small;
@@ -16,6 +17,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use SebastianBergmann\ChoiceSequence\ChoiceSequence;
 use SebastianBergmann\ChoiceSequence\Span;
+use SebastianBergmann\ChoiceSequence\SpanKind;
 
 #[CoversClass(Candidate::class)]
 #[UsesClass(BytesEncoding::class)]
@@ -41,7 +43,12 @@ final class CandidateTest extends TestCase
             ],
             $this->bounds($candidate),
         );
-        $this->assertSame([BytesEncoding::labelOfByte(100) => true], $candidate->labelsOfBytes());
+        $spans = array_values($candidate->spans());
+
+        $this->assertSame(
+            [false, true, true, true],
+            array_map(static fn (array $span): bool => $candidate->isByteOfString($span), $spans),
+        );
     }
 
     public function testSetsAChoice(): void
@@ -84,7 +91,7 @@ final class CandidateTest extends TestCase
     {
         $candidate = Candidate::from(Sequences::ofBytes('ab'));
 
-        $candidate->insert(2, [1, 0x7A], [1, 0xFF], BytesEncoding::labelOfByte(100), 0);
+        $candidate->insert(2, [1, 0x7A], [1, 0xFF], BytesEncoding::labelOfByte(100), 0, SpanKind::Element);
 
         $this->assertSame([1, 0x61, 1, 0x7A, 1, 0x62, 0], $candidate->choices());
         $this->assertSame([[0, 7], [0, 2], [4, 6], [6, 7], [2, 4]], $this->bounds($candidate));

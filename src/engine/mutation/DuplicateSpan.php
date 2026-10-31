@@ -76,7 +76,7 @@ final readonly class DuplicateSpan implements Mutation
 
             assert($offset >= 0);
 
-            $candidate->addSpan($copied['start'] + $offset, $copied['end'] + $offset, $copied['label'], $copied['parent']);
+            $candidate->addSpan($copied['start'] + $offset, $copied['end'] + $offset, $copied['label'], $copied['parent'], $copied['kind']);
         }
 
         return true;

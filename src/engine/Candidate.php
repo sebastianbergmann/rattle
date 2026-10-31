@@ -15,6 +15,7 @@ use function array_splice;
 use function assert;
 use function count;
 use SebastianBergmann\ChoiceSequence\ChoiceSequence;
+use SebastianBergmann\ChoiceSequence\SpanKind;
 
 /**
  * A list of choices that is being mutated, with the maxima and the spans of
@@ -40,7 +41,7 @@ final class Candidate
     private array $maxima;
 
     /**
-     * @var list<array{start: non-negative-int, end: non-negative-int, label: non-empty-string, parent: ?non-negative-int}>
+     * @var list<array{start: non-negative-int, end: non-negative-int, label: non-empty-string, parent: ?non-negative-int, kind: ?SpanKind}>
      */
     private array $spans = [];
 
@@ -60,6 +61,7 @@ final class Candidate
                 'end'    => $span->end(),
                 'label'  => $span->label(),
                 'parent' => $span->parent(),
+                'kind'   => $span->kind(),
             ];
         }
 
@@ -131,7 +133,7 @@ final class Candidate
     /**
      * The spans that are not empty, with their index among all spans.
      *
-     * @return array<non-negative-int, array{start: non-negative-int, end: non-negative-int, label: non-empty-string, parent: ?non-negative-int}>
+     * @return array<non-negative-int, array{start: non-negative-int, end: non-negative-int, label: non-empty-string, parent: ?non-negative-int, kind: ?SpanKind}>
      */
     public function spans(): array
     {
@@ -147,42 +149,19 @@ final class Candidate
     }
 
     /**
-     * The labels of the spans that hold one byte of a binary string, [1, b],
-     * or end it, [0]. A span that holds a byte is recognised by its maxima, 1
-     * and 255: no other value of Input is drawn with these maxima. The span
-     * that ends an empty string is recognised as a span of one choice with
-     * the maximum 1 that covers the same choice as its parent, the span of
-     * the string: no other value of Input is drawn like this.
+     * Whether the span holds one byte of a binary string, [1, b], or ends it,
+     * [0]: a span of the kind SpanKind::Element that is part of a span of the
+     * kind SpanKind::Bytes.
      *
-     * @return array<non-empty-string, true>
+     * @param array{start: non-negative-int, end: non-negative-int, label: non-empty-string, parent: ?non-negative-int, kind: ?SpanKind} $span
      */
-    public function labelsOfBytes(): array
+    public function isByteOfString(array $span): bool
     {
-        $labels = [];
-        $spans  = $this->spans();
-
-        foreach ($spans as $span) {
-            $length = $span['end'] - $span['start'];
-
-            if ($length === 2 &&
-                $this->maximumAt($span['start']) === 1 &&
-                $this->maximumAt($span['start'] + 1) === 0xFF) {
-                $labels[$span['label']] = true;
-
-                continue;
-            }
-
-            if ($length === 1 &&
-                $span['parent'] !== null &&
-                $this->maximumAt($span['start']) === 1 &&
-                isset($spans[$span['parent']]) &&
-                $spans[$span['parent']]['start'] === $span['start'] &&
-                $spans[$span['parent']]['end'] === $span['end']) {
-                $labels[$span['label']] = true;
-            }
+        if ($span['kind'] !== SpanKind::Element || $span['parent'] === null) {
+            return false;
         }
 
-        return $labels;
+        return ($this->spans[$span['parent']]['kind'] ?? null) === SpanKind::Bytes;
     }
 
     /**
@@ -231,7 +210,7 @@ final class Candidate
      * Inserts choices before the choice at the position. Spans that start at
      * the position are moved behind the inserted choices, spans that end at
      * the position are not extended. When a label is given, the inserted
-     * choices form a span with that label and parent.
+     * choices form a span with that label, parent, and kind.
      *
      * @param non-negative-int         $position
      * @param list<non-negative-int>   $choices
@@ -239,7 +218,7 @@ final class Candidate
      * @param ?non-empty-string        $label
      * @param ?non-negative-int        $parent
      */
-    public function insert(int $position, array $choices, ?array $maxima = null, ?string $label = null, ?int $parent = null): void
+    public function insert(int $position, array $choices, ?array $maxima = null, ?string $label = null, ?int $parent = null, ?SpanKind $kind = null): void
     {
         $length = count($choices);
 
@@ -277,7 +256,7 @@ final class Candidate
         }
 
         if ($label !== null) {
-            $this->spans[] = ['start' => $position, 'end' => $position + $length, 'label' => $label, 'parent' => $parent];
+            $this->spans[] = ['start' => $position, 'end' => $position + $length, 'label' => $label, 'parent' => $parent, 'kind' => $kind];
         }
     }
 
@@ -289,11 +268,11 @@ final class Candidate
      * @param non-empty-string  $label
      * @param ?non-negative-int $parent
      */
-    public function addSpan(int $start, int $end, string $label, ?int $parent): void
+    public function addSpan(int $start, int $end, string $label, ?int $parent, ?SpanKind $kind = null): void
     {
         assert($start <= $end && $end <= count($this->choices));
 
-        $this->spans[] = ['start' => $start, 'end' => $end, 'label' => $label, 'parent' => $parent];
+        $this->spans[] = ['start' => $start, 'end' => $end, 'label' => $label, 'parent' => $parent, 'kind' => $kind];
     }
 
     /**

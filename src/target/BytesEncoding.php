@@ -10,12 +10,11 @@
 namespace SebastianBergmann\Rattle;
 
 use function chr;
-use function hash;
-use function implode;
 use function min;
 use function ord;
 use function strlen;
 use SebastianBergmann\ChoiceSequence\BernoulliDistribution;
+use SebastianBergmann\ChoiceSequence\Label;
 use SebastianBergmann\ChoiceSequence\WeightedRangesDistribution;
 
 /**
@@ -25,9 +24,11 @@ use SebastianBergmann\ChoiceSequence\WeightedRangesDistribution;
  * byte") followed by the value of the byte. Unless the maximum length is
  * reached, the choice 0 ends the string, also in a span of its own.
  *
- * The labels of the spans are computed as PHPUnit computes them, so that the
- * choice sequences of a bytes target and of PHPUnit's BytesGenerator have the
- * same structure.
+ * The labels of the spans are computed with Label::of() as PHPUnit's
+ * BytesGenerator computes them, so that the choice sequences of a bytes target
+ * and of PHPUnit's BytesGenerator have the same structure. The span of the
+ * string has the kind SpanKind::Bytes, the span of each byte, and of the
+ * choice that ends the string, has the kind SpanKind::Element.
  *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
@@ -38,26 +39,13 @@ final readonly class BytesEncoding
     public const float PROBABILITY_OF_ANOTHER_BYTE = 0.8;
 
     /**
-     * Returns a label that identifies how choices are drawn for a span, in the
-     * same way as PHPUnit's AbstractGenerator::labelOf().
-     *
-     * @param non-empty-string $name
-     *
-     * @return non-empty-string
-     */
-    public static function labelOf(string $name, string ...$components): string
-    {
-        return hash('xxh3', $name . '(' . implode(',', $components) . ')');
-    }
-
-    /**
      * @param non-negative-int $maximumLength
      *
      * @return non-empty-string
      */
     public static function labelOfBytes(int $maximumLength): string
     {
-        return self::labelOf('bytes', '0', (string) $maximumLength);
+        return Label::of('bytes', '0', (string) $maximumLength);
     }
 
     /**
@@ -67,7 +55,7 @@ final readonly class BytesEncoding
      */
     public static function labelOfByte(int $maximumLength): string
     {
-        return self::labelOf('element', self::labelOfBytes($maximumLength));
+        return Label::of('element', self::labelOfBytes($maximumLength));
     }
 
     public static function anotherByte(): BernoulliDistribution

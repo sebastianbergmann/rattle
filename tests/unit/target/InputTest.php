@@ -21,7 +21,9 @@ use Random\Engine\Xoshiro256StarStar;
 use Random\Randomizer;
 use SebastianBergmann\ChoiceSequence\ChoiceSequence;
 use SebastianBergmann\ChoiceSequence\ChoiceSource;
+use SebastianBergmann\ChoiceSequence\Label;
 use SebastianBergmann\ChoiceSequence\Span;
+use SebastianBergmann\ChoiceSequence\SpanKind;
 
 #[CoversClass(Input::class)]
 #[CoversClass(InputRejectedException::class)]
@@ -95,10 +97,10 @@ final class InputTest extends TestCase
 
         $this->assertEquals(
             [
-                new Span(0, 5, BytesEncoding::labelOfBytes(10), null),
-                new Span(0, 2, BytesEncoding::labelOfByte(10), 0),
-                new Span(2, 4, BytesEncoding::labelOfByte(10), 0),
-                new Span(4, 5, BytesEncoding::labelOfByte(10), 0),
+                new Span(0, 5, BytesEncoding::labelOfBytes(10), null, SpanKind::Bytes),
+                new Span(0, 2, BytesEncoding::labelOfByte(10), 0, SpanKind::Element),
+                new Span(2, 4, BytesEncoding::labelOfByte(10), 0, SpanKind::Element),
+                new Span(4, 5, BytesEncoding::labelOfByte(10), 0, SpanKind::Element),
             ],
             $sequence->spans(),
         );
@@ -164,7 +166,7 @@ final class InputTest extends TestCase
         new Input($source, false)->int(-10, 10);
 
         $this->assertEquals(
-            [new Span(0, 2, BytesEncoding::labelOf('integers', '-10', '10'), null)],
+            [new Span(0, 2, Label::of('integers', '-10', '10'), null)],
             $source->sequence()->spans(),
         );
     }

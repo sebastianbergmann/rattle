@@ -16,6 +16,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use SebastianBergmann\ChoiceSequence\ChoiceSequence;
 use SebastianBergmann\ChoiceSequence\Span;
+use SebastianBergmann\ChoiceSequence\SpanKind;
 
 #[CoversClass(Result::class)]
 #[UsesClass(Failure::class)]
@@ -38,6 +39,7 @@ final class ResultTest extends TestCase
             'empty span'                       => [['id' => 1, 'outcome' => 'passed', 'sequence' => ['choices' => [1], 'spans' => [[0, 0, 'a', null]], 'maxima' => []], 'features' => []]],
             'span without a label'             => [['id' => 1, 'outcome' => 'passed', 'sequence' => ['choices' => [1], 'spans' => [[0, 1, '', null]], 'maxima' => []], 'features' => []]],
             'negative parent of a span'        => [['id' => 1, 'outcome' => 'passed', 'sequence' => ['choices' => [1], 'spans' => [[0, 1, 'a', -1]], 'maxima' => []], 'features' => []]],
+            'unknown kind of span'             => [['id' => 1, 'outcome' => 'passed', 'sequence' => ['choices' => [1], 'spans' => [[0, 1, 'a', null, 'Other']], 'maxima' => []], 'features' => []]],
             'negative maximum'                 => [['id' => 1, 'outcome' => 'passed', 'sequence' => ['choices' => [1], 'spans' => [], 'maxima' => [-1]], 'features' => []]],
             'feature that is not an integer'   => [['id' => 1, 'outcome' => 'passed', 'sequence' => ['choices' => [1], 'spans' => [], 'maxima' => []], 'features' => ['a']]],
             'drawn value that is not a string' => [['id' => 1, 'outcome' => 'passed', 'sequence' => ['choices' => [], 'spans' => [], 'maxima' => []], 'features' => [], 'drawnValues' => [1]]],
@@ -48,7 +50,7 @@ final class ResultTest extends TestCase
     {
         $sequence = new ChoiceSequence(
             [1, 97, 0],
-            [new Span(0, 3, 'bytes', null), new Span(0, 2, 'byte', 0), new Span(2, 3, 'byte', 0)],
+            [new Span(0, 3, 'bytes', null, SpanKind::Bytes), new Span(0, 2, 'byte', 0, SpanKind::Element), new Span(2, 3, 'byte', 0, SpanKind::Element), new Span(1, 2, 'value', 1)],
             [1, 255, 1],
         );
 
