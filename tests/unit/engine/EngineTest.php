@@ -105,7 +105,7 @@ final class EngineTest extends TestCase
         $this->assertNotSame($first, $other);
     }
 
-    public function testReplaysTheInitialInputsFirst(): void
+    public function testReplaysTheInitialInputsFirstAndSmallestFirst(): void
     {
         $submitted = [];
         $engine    = $this->engine(
@@ -119,11 +119,10 @@ final class EngineTest extends TestCase
             },
         );
 
-        $engine->run([[1, 0x52, 0], [0]]);
+        $engine->run([[1, 0x52, 0], [1, 0x41, 0], [0]]);
 
-        $this->assertSame([[1, 0x52, 0], [0]], array_map(static fn (Job $job): ?array => $job->choices(), array_slice($submitted, 0, 2)));
+        $this->assertSame([[0], [1, 0x41, 0], [1, 0x52, 0]], array_map(static fn (Job $job): ?array => $job->choices(), array_slice($submitted, 0, 3)));
         $this->assertCount(20, $submitted);
-        // the empty string produces no feature that "R" does not produce
         $this->assertGreaterThanOrEqual(1, $engine->statistics()->corpusEntries);
     }
 

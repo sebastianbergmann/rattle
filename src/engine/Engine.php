@@ -16,6 +16,7 @@ use function is_int;
 use function microtime;
 use function min;
 use function unpack;
+use function usort;
 use Closure;
 use Random\Engine\Xoshiro256StarStar;
 use Random\Randomizer;
@@ -25,13 +26,15 @@ use Random\Randomizer;
  * from their results.
  *
  * The inputs to start with, the corpus that was stored before and imported
- * seeds, are replayed first. After that, an input is generated from a fresh
- * seed that is derived from the seed of the run and a counter, about one time
- * in ten and always while the corpus is empty, and otherwise created by
+ * seeds, are replayed first, smallest first in the order of choice sequences
+ * (shortlex), so that smaller inputs claim the features that they produce
+ * before larger inputs do. After that, an input is generated from a fresh
+ * seed that is derived from the seed of the run and a counter, about one
+ * time in ten and always while the corpus is empty, and otherwise created by
  * mutating a corpus entry that the scheduler chooses. An input that produced
- * a feature that is new is added to the corpus, an input that is a finding is
- * passed to the finding handler. The constant operands of comparisons that a
- * result reports, whatever its outcome, are added to the dictionary.
+ * a feature that is new is added to the corpus, an input that is a finding
+ * is passed to the finding handler. The constant operands of comparisons
+ * that a result reports, whatever its outcome, are added to the dictionary.
  *
  * All decisions are made with one random number generator that is seeded
  * with the seed of the run. A new batch is only composed when an executor is
@@ -127,6 +130,11 @@ final class Engine
      */
     public function run(array $initialInputs = []): Statistics
     {
+        // PHP compares a list with fewer elements as smaller, and lists with
+        // the same number of elements element by element, which is the
+        // shortlex order of choice sequences
+        usort($initialInputs, static fn (array $a, array $b): int => $a <=> $b);
+
         while (!$this->shouldStop()) {
             while ($this->executor->capacity() > 0 && !$this->shouldStop()) {
                 $batch = $this->nextBatch($initialInputs);
