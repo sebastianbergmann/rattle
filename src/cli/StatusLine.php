@@ -83,7 +83,10 @@ final class StatusLine
         $this->clock    = $clock;
     }
 
-    public function update(Statistics $statistics): void
+    /**
+     * @param string $prefix comes before the statistics, the number of properties that are fuzzed, for instance
+     */
+    public function update(Statistics $statistics, string $prefix = ''): void
     {
         $now = ($this->clock)();
 
@@ -93,7 +96,7 @@ final class StatusLine
 
         $this->lastUpdate = $now;
 
-        $this->show($statistics, $now);
+        $this->show($statistics, $now, $prefix);
     }
 
     public function finding(string $text): void
@@ -107,9 +110,9 @@ final class StatusLine
         }
     }
 
-    public function finish(Statistics $statistics): void
+    public function finish(Statistics $statistics, string $prefix = ''): void
     {
-        $this->show($statistics, ($this->clock)());
+        $this->show($statistics, ($this->clock)(), $prefix);
 
         if ($this->terminal) {
             fwrite($this->stream, "\n");
@@ -118,9 +121,9 @@ final class StatusLine
         $this->line = '';
     }
 
-    private function show(Statistics $statistics, float $now): void
+    private function show(Statistics $statistics, float $now, string $prefix): void
     {
-        $line = self::format($statistics, $now);
+        $line = $prefix . self::format($statistics, $now);
 
         if ($this->terminal) {
             $this->clear();

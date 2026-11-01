@@ -60,14 +60,17 @@ final class PhpunitTest extends TestCase
         $this->remove($this->directory);
     }
 
-    public function testFuzzesThePropertiesOfATestSuiteOneAfterAnother(): void
+    public function testFuzzesThePropertiesOfATestSuiteTogether(): void
     {
         [$exit, $output] = $this->fuzz([]);
 
         $this->assertSame(1, $exit, $output);
-        $this->assertStringContainsString('Target:   ' . self::PROPERTY . ' (property)', $output);
-        $this->assertStringContainsString('Target:   ' . self::OTHER . ' (property)', $output);
-        $this->assertStringContainsString('Finding: LogicException at ' . self::FIXTURE . '/src/Classifier.php:38', $output);
+        $this->assertStringContainsString('Target:   PHPUnit test suite (2 properties)', $output);
+        $this->assertStringContainsString('Finding: LogicException at ' . self::FIXTURE . '/src/Classifier.php:38' . "\n         " . self::PROPERTY . "\n", $output);
+
+        // the table at the end has a row for every property
+        $this->assertMatchesRegularExpression('/^' . preg_quote(self::PROPERTY, '/') . ' +[0-9,]+ +[0-9,]+ +[0-9,]+ +1$/m', $output);
+        $this->assertMatchesRegularExpression('/^' . preg_quote(self::OTHER, '/') . ' +1,000 +0 +0 +0$/m', $output);
 
         $findings = glob($this->directory . '/findings/classifiertest-testclassifieseverylist-*/*', GLOB_ONLYDIR);
 
@@ -94,21 +97,22 @@ final class PhpunitTest extends TestCase
         [$exit, $output] = $this->fuzz(['--filter', 'Counts']);
 
         $this->assertSame(0, $exit, $output);
+        $this->assertStringContainsString('Target:   PHPUnit test suite (1 property)', $output);
         $this->assertStringNotContainsString(self::PROPERTY, $output);
-        $this->assertStringContainsString('Target:   ' . self::OTHER . ' (property)', $output);
+        $this->assertMatchesRegularExpression('/^' . preg_quote(self::OTHER, '/') . ' +1,000 /m', $output);
     }
 
-    public function testThePropertiesShareTheTimeOfMaxTime(): void
+    public function testInterleavesThePropertiesUntilTheTimeOfMaxTimeIsUp(): void
     {
-        [$exit, $output] = $this->rattle(['fuzz', '--phpunit', '--configuration', self::FIXTURE . '/phpunit.xml', '--source', self::FIXTURE . '/src', '--jobs', '1', '--seed', '2', '--max-time', '6s', '--stop-on-finding', '--cache-directory', $this->directory . '/cache', '--findings-directory', $this->directory . '/findings']);
+        [$exit, $output] = $this->rattle(['fuzz', '--phpunit', '--configuration', self::FIXTURE . '/phpunit.xml', '--source', self::FIXTURE . '/src', '--jobs', '1', '--seed', '1', '--max-time', '3s', '--cache-directory', $this->directory . '/cache', '--findings-directory', $this->directory . '/findings']);
 
         $this->assertSame(1, $exit, $output);
 
-        // the first property gets half of the time and stops at its finding,
-        // so the second property gets the rest
-        $this->assertStringContainsString('Target:   ' . self::PROPERTY . " (property)\n", $output);
-        $this->assertMatchesRegularExpression('/' . preg_quote(self::PROPERTY, '/') . '.*?Time: {5}at most 3s of --max-time\n/s', $output);
-        $this->assertMatchesRegularExpression('/' . preg_quote(self::OTHER, '/') . '.*?Time: {5}at most [3-6]s of --max-time\n/s', $output);
+        // both properties are fuzzed until the time is up, the one that found
+        // a defect as well, because fuzzing does not stop on a finding
+        $this->assertMatchesRegularExpression('/^' . preg_quote(self::PROPERTY, '/') . ' +[1-9][0-9,]* /m', $output);
+        $this->assertMatchesRegularExpression('/^' . preg_quote(self::OTHER, '/') . ' +[1-9][0-9,]* /m', $output);
+        $this->assertMatchesRegularExpression('/properties: 2 of 2, executions: [0-9,]+ .*time: 3s/', $output);
     }
 
     public function testInstrumentsTheSourceOfTheConfigurationAndImportsACorpusForOneProperty(): void
@@ -144,7 +148,7 @@ final class PhpunitTest extends TestCase
 
         $options = ['--phpunit', '--configuration', $project . '/phpunit.xml', '--cache-directory', $this->directory . '/cache', '--findings-directory', $this->directory . '/findings'];
 
-        [$exit, $output] = $this->rattle(['fuzz', ...$options, '--jobs', '1', '--seed', '12', '--max-executions', '1000', '--stop-on-finding']);
+        [$exit, $output] = $this->rattle(['fuzz', ...$options, '--jobs', '1', '--seed', '1', '--max-executions', '1000', '--stop-on-finding']);
 
         $this->assertSame(1, $exit, $output);
 
@@ -238,7 +242,7 @@ final class PhpunitTest extends TestCase
                 '--jobs',
                 '1',
                 '--seed',
-                '12',
+                '1',
                 '--max-executions',
                 '1000',
                 '--stop-on-finding',

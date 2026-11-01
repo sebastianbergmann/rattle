@@ -13,6 +13,7 @@ use const PHP_EOL;
 use const PHP_INT_MAX;
 use const SIGINT;
 use const STDOUT;
+use function array_keys;
 use function count;
 use function escapeshellarg;
 use function fclose;
@@ -26,13 +27,14 @@ use function is_resource;
 use function max;
 use function microtime;
 use function mkdir;
+use function number_format;
 use function pcntl_async_signals;
 use function pcntl_signal;
 use function printf;
 use function random_int;
-use function round;
 use function sprintf;
 use function stream_isatty;
+use function strlen;
 use function unlink;
 use Closure;
 use SebastianBergmann\ChoiceSequence\ChoiceSource;
@@ -84,74 +86,7 @@ final readonly class FuzzCommand implements Command
             return $this->fuzz($arguments, $configuration, $this->executionOptions($arguments) . $arguments->target(), $arguments->maximumTime(), $stderr, $jobs, $seed, $dictionary, $isInterrupted);
         }
 
-        try {
-            $properties = (new PropertyLister)->list($configuration);
-        } catch (WorkerException $e) {
-            print $e->getMessage() . PHP_EOL;
-
-            return 2;
-        }
-
-        if ($properties === []) {
-            print 'The PHPUnit test suite has no properties' . ($phpunit->filter() === null ? '' : ' that match the filter') . PHP_EOL;
-
-            return 2;
-        }
-
-        // the inputs of a corpus directory and the log of the inputs belong
-        // to one target
-        if (count($properties) > 1 && ($arguments->corpusDirectories() !== [] || $arguments->inputLog() !== null)) {
-            print 'The options --corpus and --log-inputs can only be used with --phpunit when the filter selects one property' . PHP_EOL;
-
-            return 2;
-        }
-
-        // the properties are fuzzed one after another and share the time of
-        // --max-time: every property gets an equal share of the time that is
-        // left, so a property that ends early leaves its time to the ones
-        // after it, while --max-executions applies to every property
-        $deadline = null;
-        $result   = 0;
-
-        if ($arguments->maximumTime() !== null) {
-            $deadline = microtime(true) + $arguments->maximumTime();
-        }
-
-        foreach ($properties as $index => $property) {
-            if ($interrupted) {
-                break;
-            }
-
-            $maximumTime = null;
-
-            if ($deadline !== null) {
-                $maximumTime = ($deadline - microtime(true)) / (count($properties) - $index);
-
-                if ($maximumTime <= 0) {
-                    printf(
-                        PHP_EOL . 'The time of --max-time is up, %d of %d properties were not fuzzed.' . PHP_EOL,
-                        count($properties) - $index,
-                        count($properties),
-                    );
-
-                    break;
-                }
-            }
-
-            if ($index > 0) {
-                print PHP_EOL;
-            }
-
-            $status = $this->fuzz($arguments, $configuration->withTarget($property), $this->executionOptions($arguments) . $this->reproduction($phpunit, $property), $maximumTime, $stderr, $jobs, $seed, $dictionary, $isInterrupted);
-
-            if ($status === 2) {
-                return 2;
-            }
-
-            $result = max($result, $status);
-        }
-
-        return $result;
+        return $this->fuzzTestSuite($arguments, $configuration, $phpunit, $stderr, $jobs, $seed, $dictionary, $isInterrupted);
     }
 
     /**
@@ -179,10 +114,6 @@ final readonly class FuzzCommand implements Command
         }
 
         $name = $target->name();
-
-        if ($configuration->phpunit() !== null) {
-            $name = PropertyDirectory::nameOf($target->name());
-        }
 
         $corpusDirectory   = $arguments->cacheDirectory() . '/' . $name . '/corpus';
         $findingsDirectory = $arguments->findingsDirectory() . '/' . $name;
@@ -230,28 +161,10 @@ final readonly class FuzzCommand implements Command
             $target,
             $reproduction,
             $seed,
-            static function (Minimization $minimization, string $directory) use ($status): void
-            {
-                $notes = [];
-
-                if ($minimization->isFlaky()) {
-                    $notes[] = 'flaky, not minimized';
-                } elseif (!$minimization->minimalInputReproduced()) {
-                    $notes[] = 'the minimal input did not fail again, kept the input as found';
-                }
-
-                $status->finding(
-                    sprintf(
-                        'Finding: %s%s' . PHP_EOL . '         %s',
-                        $minimization->failure()->describe(),
-                        $notes === [] ? '' : ' (' . implode(', ', $notes) . ')',
-                        $directory,
-                    ),
-                );
-            },
+            $this->findingListener($status, null),
         );
 
-        $this->printHeader($target, $configuration->phpunit() !== null, $maximumTime, $seed, $jobs, $configuration, $corpusDirectory, $numberOfStored, $findingsDirectory, $findings->numberOfKnownFindings(), $arguments->maximumNumberOfChoices());
+        $this->printHeader($target, $seed, $jobs, $configuration, $corpusDirectory, $numberOfStored, $findingsDirectory, $findings->numberOfKnownFindings(), $arguments->maximumNumberOfChoices());
 
         foreach ($loader->warnings() as $warning) {
             print 'Warning: ' . $warning . PHP_EOL;
@@ -271,10 +184,7 @@ final readonly class FuzzCommand implements Command
             $findings,
             new EngineConfiguration($seed, $arguments->maximumNumberOfExecutions(), $maximumTime, $arguments->stopOnFinding()),
             $status->update(...),
-            is_resource($log) ? static function (Job $job) use ($log): void
-            {
-                fwrite($log, $job->isReplay() ? 'replay ' . implode(',', $job->choices()) . "\n" : 'generate ' . $job->seed() . "\n");
-            } : null,
+            $this->inputLogger($log),
             $isInterrupted,
         );
 
@@ -295,9 +205,225 @@ final readonly class FuzzCommand implements Command
 
         $status->finish($statistics);
 
+        print PHP_EOL;
+
+        $this->printSummary($statistics, $isInterrupted());
+
+        $written = $this->writeFoundTokens($arguments->cacheDirectory() . '/' . $name, $dictionary);
+
+        if ($written !== null) {
+            printf(
+                '%d token%s found in comparisons %s written to %s' . PHP_EOL,
+                $written,
+                $written === 1 ? ' that was' : 's that were',
+                $written === 1 ? 'was' : 'were',
+                $arguments->cacheDirectory() . '/' . $name . '/dictionary.txt',
+            );
+        }
+
+        return $statistics->findings > 0 ? 1 : 0;
+    }
+
+    /**
+     * Fuzzes the properties of a PHPUnit test suite together, with one pool
+     * of workers that serves all of them (see TargetScheduler). Every
+     * property has an engine, a corpus, and findings of its own, while the
+     * dictionary is shared, because the constant operands of comparisons are
+     * found in the code that all properties exercise.
+     *
+     * @param ?Closure(int, string): void $stderr
+     * @param positive-int                $jobs
+     * @param list<non-empty-string>      $tokens        the tokens of the dictionary file
+     * @param Closure(): bool             $isInterrupted
+     *
+     * @return 0|1|2
+     */
+    private function fuzzTestSuite(Arguments $arguments, WorkerConfiguration $configuration, PhpunitTestSuite $phpunit, ?Closure $stderr, int $jobs, int $seed, array $tokens, Closure $isInterrupted): int
+    {
+        $executor = new ProcessExecutor($configuration->withTarget(''), $jobs, $stderr);
+
+        try {
+            $properties = $executor->properties() ?? [];
+            $target     = $executor->target();
+        } catch (WorkerException $e) {
+            $executor->shutdown();
+
+            print $e->getMessage() . PHP_EOL;
+
+            return 2;
+        }
+
+        $error = null;
+
+        if ($properties === []) {
+            $error = 'The PHPUnit test suite has no properties' . ($phpunit->filter() === null ? '' : ' that match the filter');
+        } elseif (count($properties) > 1 && ($arguments->corpusDirectories() !== [] || $arguments->inputLog() !== null)) {
+            // the inputs of a corpus directory and the log of the inputs
+            // belong to one target
+            $error = 'The options --corpus and --log-inputs can only be used with --phpunit when the filter selects one property';
+        }
+
+        foreach ($arguments->corpusDirectories() as $directory) {
+            if ($error === null && !is_dir($directory)) {
+                $error = sprintf('The corpus directory "%s" does not exist', $directory);
+            }
+        }
+
+        if ($error !== null) {
+            $executor->shutdown();
+
+            print $error . PHP_EOL;
+
+            return 2;
+        }
+
+        $status                = new StatusLine(STDOUT, stream_isatty(STDOUT), static fn (): float => microtime(true));
+        $dictionary            = new Dictionary($tokens);
+        $ids                   = new JobIds;
+        $loader                = new InputLoader;
+        $log                   = $arguments->inputLog() !== null ? fopen($arguments->inputLog(), 'w') : null;
+        $engines               = [];
+        $minimizationExecutors = [];
+        $numberOfStoredInputs  = 0;
+        $numberOfKnownFindings = 0;
+
+        foreach ($properties as $index => $property) {
+            $name            = PropertyDirectory::nameOf($property);
+            $corpusDirectory = $arguments->cacheDirectory() . '/' . $name . '/corpus';
+            $initialInputs   = $loader->choiceSequencesIn($corpusDirectory);
+
+            $numberOfStoredInputs += count($initialInputs);
+
+            foreach ($arguments->corpusDirectories() as $directory) {
+                foreach ($loader->choiceSequencesIn($directory) as $input) {
+                    $initialInputs[] = $input;
+                }
+            }
+
+            // the worker that minimizes the inputs of a property is only
+            // started when the property has a finding
+            $minimizationExecutors[] = $minimizationExecutor = new ProcessExecutor($configuration->withTarget($property), 1, $stderr);
+
+            $findings = new FindingProcessor(
+                new Minimizer($minimizationExecutor, $arguments->maximumNumberOfShrinkingAttempts(), $isInterrupted),
+                new FindingStore($arguments->findingsDirectory() . '/' . $name),
+                new TargetDescription($property, null, $target->maximumNumberOfChoices()),
+                $this->executionOptions($arguments) . $this->reproduction($phpunit, $property),
+                $seed,
+                $this->findingListener($status, $property),
+            );
+
+            $numberOfKnownFindings += $findings->numberOfKnownFindings();
+
+            $corpus = new Corpus($corpusDirectory);
+
+            $engines[$property] = new Engine(
+                $executor,
+                $corpus,
+                $dictionary,
+                Mutator::create($corpus, $dictionary, $target->maximumNumberOfChoices()),
+                $findings,
+                // every property draws from a random number generator of its
+                // own, so that the properties are not mutated in lockstep
+                new EngineConfiguration(Engine::seedOf($seed, $index), $arguments->maximumNumberOfExecutions(), null, $arguments->stopOnFinding(), EngineConfiguration::DEFAULT_BATCH_SIZE, $property),
+                null,
+                $this->inputLogger($log),
+                $isInterrupted,
+                $ids,
+            );
+
+            $engines[$property]->start($initialInputs);
+        }
+
         printf(
-            PHP_EOL . '%s%d new finding%s, %d known finding%s found again.' . PHP_EOL,
-            $isInterrupted() ? 'Interrupted. ' : '',
+            'Target:   PHPUnit test suite (%d propert%s)' . PHP_EOL .
+            'Seed:     %d' . PHP_EOL .
+            'Jobs:     %d' . PHP_EOL .
+            'Sources:  %s' . PHP_EOL .
+            'Corpus:   %s (%d stored input%s)' . PHP_EOL .
+            'Findings: %s (%d known)' . PHP_EOL . PHP_EOL,
+            count($properties),
+            count($properties) === 1 ? 'y' : 'ies',
+            $seed,
+            $jobs,
+            $configuration->sources() === [] ? 'none, no code is instrumented' : implode(', ', $configuration->sources()),
+            $arguments->cacheDirectory(),
+            $numberOfStoredInputs,
+            $numberOfStoredInputs === 1 ? '' : 's',
+            $arguments->findingsDirectory(),
+            $numberOfKnownFindings,
+        );
+
+        foreach ($loader->warnings() as $warning) {
+            print 'Warning: ' . $warning . PHP_EOL;
+        }
+
+        $start     = microtime(true);
+        $scheduler = new TargetScheduler(
+            $executor,
+            $engines,
+            $seed,
+            $arguments->maximumTime(),
+            $isInterrupted,
+            function () use ($status, $engines, $dictionary, $start): void
+            {
+                $status->update($this->totals($engines, $dictionary, $start), $this->activeProperties($engines));
+            },
+        );
+
+        try {
+            $scheduler->run();
+        } catch (CorpusException|FindingException|ProtocolException|WorkerException $e) {
+            print PHP_EOL . $e->getMessage() . PHP_EOL;
+
+            return 2;
+        } finally {
+            $executor->shutdown();
+
+            foreach ($minimizationExecutors as $minimizationExecutor) {
+                $minimizationExecutor->shutdown();
+            }
+
+            if (is_resource($log)) {
+                fclose($log);
+            }
+        }
+
+        $totals = $this->totals($engines, $dictionary, $start);
+
+        $status->finish($totals, $this->activeProperties($engines));
+
+        print PHP_EOL;
+
+        $this->printTable($engines);
+        $this->printSummary($totals, $isInterrupted());
+
+        $written = null;
+
+        foreach ($properties as $property) {
+            $written = $this->writeFoundTokens($arguments->cacheDirectory() . '/' . PropertyDirectory::nameOf($property), $dictionary);
+        }
+
+        if ($written !== null) {
+            printf(
+                '%d token%s found in comparisons %s written to the dictionary.txt of every property.' . PHP_EOL,
+                $written,
+                $written === 1 ? ' that was' : 's that were',
+                $written === 1 ? 'was' : 'were',
+            );
+        }
+
+        return $totals->findings > 0 ? 1 : 0;
+    }
+
+    /**
+     * Shows how many findings were found, and how the corpus was reduced.
+     */
+    private function printSummary(Statistics $statistics, bool $interrupted): void
+    {
+        printf(
+            '%s%d new finding%s, %d known finding%s found again.' . PHP_EOL,
+            $interrupted ? 'Interrupted. ' : '',
             $statistics->findings,
             $statistics->findings === 1 ? '' : 's',
             $statistics->duplicateFindings,
@@ -324,10 +450,135 @@ final readonly class FuzzCommand implements Command
                 $statistics->removedInputs === 1 ? 'was' : 'were',
             );
         }
+    }
 
-        $this->writeFoundTokens($arguments->cacheDirectory() . '/' . $name, $dictionary);
+    /**
+     * Shows how fuzzing went for every property.
+     *
+     * @param non-empty-array<non-empty-string, Engine> $engines
+     */
+    private function printTable(array $engines): void
+    {
+        $width = strlen('Property');
 
-        return $statistics->findings > 0 ? 1 : 0;
+        foreach (array_keys($engines) as $property) {
+            $width = max($width, strlen($property));
+        }
+
+        $format = '%-' . $width . 's  %10s  %8s  %6s  %8s' . PHP_EOL;
+
+        printf($format, 'Property', 'Executions', 'Features', 'Corpus', 'Findings');
+
+        foreach ($engines as $property => $engine) {
+            $statistics = $engine->statistics();
+
+            printf(
+                $format,
+                $property,
+                number_format($statistics->executions),
+                number_format($statistics->features),
+                number_format($statistics->corpusEntries),
+                number_format($statistics->findings),
+            );
+        }
+
+        print PHP_EOL;
+    }
+
+    /**
+     * The statistics of all properties together.
+     *
+     * @param non-empty-array<non-empty-string, Engine> $engines
+     */
+    private function totals(array $engines, Dictionary $dictionary, float $start): Statistics
+    {
+        $totals = new Statistics($start);
+
+        foreach ($engines as $engine) {
+            $statistics = $engine->statistics();
+
+            $totals->executions        += $statistics->executions;
+            $totals->rejected          += $statistics->rejected;
+            $totals->findings          += $statistics->findings;
+            $totals->duplicateFindings += $statistics->duplicateFindings;
+            $totals->features          += $statistics->features;
+            $totals->corpusEntries     += $statistics->corpusEntries;
+            $totals->reducedEntries    += $statistics->reducedEntries;
+            $totals->removedInputs     += $statistics->removedInputs;
+        }
+
+        $totals->tokens = $dictionary->numberOfTokens();
+
+        return $totals;
+    }
+
+    /**
+     * The number of properties that are still fuzzed, for the status line.
+     *
+     * @param non-empty-array<non-empty-string, Engine> $engines
+     */
+    private function activeProperties(array $engines): string
+    {
+        $active = 0;
+
+        foreach ($engines as $engine) {
+            if (!$engine->isDone()) {
+                $active++;
+            }
+        }
+
+        return sprintf('properties: %d of %d, ', $active, count($engines));
+    }
+
+    /**
+     * Shows a finding as soon as it was minimized and stored, with the
+     * property whose finding it is, when there is one.
+     *
+     * @param ?non-empty-string $property
+     *
+     * @return Closure(Minimization, string): void
+     */
+    private function findingListener(StatusLine $status, ?string $property): Closure
+    {
+        return static function (Minimization $minimization, string $directory) use ($status, $property): void
+        {
+            $notes = [];
+
+            if ($minimization->isFlaky()) {
+                $notes[] = 'flaky, not minimized';
+            } elseif (!$minimization->minimalInputReproduced()) {
+                $notes[] = 'the minimal input did not fail again, kept the input as found';
+            }
+
+            $status->finding(
+                sprintf(
+                    'Finding: %s%s' . PHP_EOL . '%s         %s',
+                    $minimization->failure()->describe(),
+                    $notes === [] ? '' : ' (' . implode(', ', $notes) . ')',
+                    $property === null ? '' : '         ' . $property . PHP_EOL,
+                    $directory,
+                ),
+            );
+        };
+    }
+
+    /**
+     * Logs every input that is submitted, when the inputs are logged.
+     *
+     * @param null|false|resource $log
+     *
+     * @return ?Closure(Job): void
+     */
+    private function inputLogger(mixed $log): ?Closure
+    {
+        if (!is_resource($log)) {
+            return null;
+        }
+
+        return static function (Job $job) use ($log): void
+        {
+            fwrite($log, $job->isReplay() ? 'replay ' . implode(',', $job->choices()) . "\n" : 'generate ' . $job->seed() . "\n");
+        };
     }
 
     /**
@@ -335,9 +586,10 @@ final readonly class FuzzCommand implements Command
      * was instrumented to a dictionary file next to the corpus, where they
      * can be looked at and passed with --dictionary. The dictionary file of an
      * earlier run is removed when no tokens were found, so that it does not
-     * outlive the comparisons it was found in.
+     * outlive the comparisons it was found in. Returns the number of tokens
+     * that were written, or null.
      */
-    private function writeFoundTokens(string $directory, Dictionary $dictionary): void
+    private function writeFoundTokens(string $directory, Dictionary $dictionary): ?int
     {
         $path   = $directory . '/dictionary.txt';
         $tokens = $dictionary->foundTokens();
@@ -347,7 +599,7 @@ final readonly class FuzzCommand implements Command
                 @unlink($path);
             }
 
-            return;
+            return null;
         }
 
         $contents = (new DictionaryWriter)->write('the constant operands of comparisons that rattle found in the code that it instrumented', $tokens);
@@ -356,16 +608,10 @@ final readonly class FuzzCommand implements Command
             @file_put_contents($path, $contents) === false) {
             printf('Warning: Cannot write the tokens that were found in comparisons to "%s"' . PHP_EOL, $path);
 
-            return;
+            return null;
         }
 
-        printf(
-            '%d token%s found in comparisons %s written to %s' . PHP_EOL,
-            count($tokens),
-            count($tokens) === 1 ? ' that was' : 's that were',
-            count($tokens) === 1 ? 'was' : 'were',
-            $path,
-        );
+        return count($tokens);
     }
 
     /**
@@ -417,10 +663,7 @@ final readonly class FuzzCommand implements Command
         return $reproduction . ' ' . escapeshellarg($property);
     }
 
-    /**
-     * @param ?float $maximumTime the share of a property of the time of --max-time
-     */
-    private function printHeader(TargetDescription $target, bool $property, ?float $maximumTime, int $seed, int $jobs, WorkerConfiguration $configuration, string $corpusDirectory, int $numberOfStoredInputs, string $findingsDirectory, int $numberOfKnownFindings, int $maximumNumberOfChoices): void
+    private function printHeader(TargetDescription $target, int $seed, int $jobs, WorkerConfiguration $configuration, string $corpusDirectory, int $numberOfStoredInputs, string $findingsDirectory, int $numberOfKnownFindings, int $maximumNumberOfChoices): void
     {
         printf(
             'Target:   %s (%s)' . PHP_EOL .
@@ -430,7 +673,7 @@ final readonly class FuzzCommand implements Command
             'Corpus:   %s (%d stored input%s)' . PHP_EOL .
             'Findings: %s (%d known)' . PHP_EOL,
             $target->name(),
-            $property ? 'property' : ($target->isBytesTarget() ? sprintf('bytes, at most %d', $target->maximumLength()) : 'structured'),
+            $target->isBytesTarget() ? sprintf('bytes, at most %d', $target->maximumLength()) : 'structured',
             $seed,
             $jobs,
             $configuration->sources() === [] ? 'none, no code is instrumented' : implode(', ', $configuration->sources()),
@@ -440,10 +683,6 @@ final readonly class FuzzCommand implements Command
             $findingsDirectory,
             $numberOfKnownFindings,
         );
-
-        if ($property && $maximumTime !== null) {
-            printf('Time:     at most %s of --max-time' . PHP_EOL, StatusLine::duration(round($maximumTime)));
-        }
 
         if ($target->maximumNumberOfChoices() > $maximumNumberOfChoices) {
             printf(

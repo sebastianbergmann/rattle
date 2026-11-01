@@ -38,6 +38,20 @@ final class StatusLineTest extends TestCase
         $this->assertStringEndsWith('time: 1h01m01s', StatusLine::format($statistics, 3661.0));
     }
 
+    public function testShowsAPrefixBeforeTheStatistics(): void
+    {
+        $stream = $this->stream();
+        $status = new StatusLine($stream, false, fn (): float => $this->now);
+
+        $this->now = 10.0;
+        $status->update($this->statistics(), 'properties: 1 of 2, ');
+
+        $this->assertSame(
+            "properties: 1 of 2, executions: 12,345 (1,235/s), features: 67, corpus: 8, tokens: 3, findings: 2, rejected: 9, time: 10s\n",
+            $this->contents($stream),
+        );
+    }
+
     public function testUpdatesALineEveryTenSecondsWhenTheOutputIsNotATerminal(): void
     {
         $stream = $this->stream();
