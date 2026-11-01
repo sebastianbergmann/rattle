@@ -190,6 +190,20 @@ final class PhpunitTest extends TestCase
         $this->assertFalse(is_dir($this->directory . '/findings'), $output);
     }
 
+    public function testFindsADefectBehindAComparisonWithATokenThatIsInsertedIntoAStringOfUnicodeCharacters(): void
+    {
+        [$exit, $output] = $this->rattle(['fuzz', '--phpunit', '--configuration', self::FIXTURE . '/characters.xml', '--jobs', '1', '--seed', '1', '--max-executions', '2000', '--stop-on-finding', '--cache-directory', $this->directory . '/cache', '--findings-directory', $this->directory . '/findings']);
+
+        $this->assertSame(1, $exit, $output);
+        $this->assertStringContainsString('Finding: LogicException at ' . self::FIXTURE . '/src/CommandParser.php:23', $output);
+
+        $findings = glob($this->directory . '/findings/commandparsertest-testparseseverycommand-*/*', GLOB_ONLYDIR);
+
+        $this->assertIsArray($findings);
+        $this->assertCount(1, $findings);
+        $this->assertStringContainsString('"$command = \'SHUTDOWN\';"', (string) file_get_contents(($findings[0] ?? '') . '/finding.json'));
+    }
+
     public function testReportsATestSuiteWithoutProperties(): void
     {
         [$exit, $output] = $this->fuzz(['--filter', 'DoesNotMatchAnyProperty']);

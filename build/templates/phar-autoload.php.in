@@ -36,7 +36,7 @@ if (PHP_OS_FAMILY === 'Windows') {
     die(2);
 }
 
-$requiredExtensions = ['ctype', 'dom', 'json', 'libxml', 'pcntl', 'tokenizer'];
+$requiredExtensions = ['ctype', 'dom', 'json', 'libxml', 'mbstring', 'pcntl', 'tokenizer'];
 
 $unavailableExtensions = array_filter(
     $requiredExtensions,

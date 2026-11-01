@@ -16,6 +16,7 @@ use PHPUnit\Framework\Attributes\Small;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use SebastianBergmann\ChoiceSequence\ChoiceSequence;
+use SebastianBergmann\ChoiceSequence\CodePoints;
 use SebastianBergmann\ChoiceSequence\Span;
 use SebastianBergmann\ChoiceSequence\SpanKind;
 
@@ -47,6 +48,22 @@ final class CandidateTest extends TestCase
 
         $this->assertSame(
             [false, true, true, true],
+            array_map(static fn (array $span): bool => $candidate->isByteOfString($span), $spans),
+        );
+    }
+
+    public function testKnowsTheSpansOfTheCharactersOfAStringOfUnicodeCharacters(): void
+    {
+        $candidate = Candidate::from(Sequences::ofCharacters('a€'));
+        $spans     = array_values($candidate->spans());
+
+        $this->assertSame([1, CodePoints::index(0x61), 1, CodePoints::index(0x20AC), 0], $candidate->choices());
+        $this->assertSame(
+            [false, true, true, true],
+            array_map(static fn (array $span): bool => $candidate->isCharacterOfString($span), $spans),
+        );
+        $this->assertSame(
+            [false, false, false, false],
             array_map(static fn (array $span): bool => $candidate->isByteOfString($span), $spans),
         );
     }

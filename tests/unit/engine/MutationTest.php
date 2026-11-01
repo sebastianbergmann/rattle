@@ -24,6 +24,7 @@ use PHPUnit\Framework\TestCase;
 use Random\Engine\Xoshiro256StarStar;
 use Random\Randomizer;
 use SebastianBergmann\ChoiceSequence\ChoiceSequence;
+use SebastianBergmann\ChoiceSequence\CodePoints;
 use SebastianBergmann\ChoiceSequence\Span;
 
 #[CoversClass(RandomChoice::class)]
@@ -353,6 +354,30 @@ final class MutationTest extends TestCase
         }));
 
         $this->assertFalse((new InsertToken(new Dictionary(['XY'])))->apply($candidate, $this->randomizer()));
+    }
+
+    public function testInsertsATokenIntoAStringOfUnicodeCharactersAsCharacters(): void
+    {
+        $candidate = Candidate::from(Sequences::ofCharacters('a'));
+
+        $this->assertTrue((new InsertToken(new Dictionary(['X€'])))->apply($candidate, $this->randomizer()));
+
+        $this->assertContains(
+            $candidate->choices(),
+            [
+                [1, CodePoints::index(0x58), 1, CodePoints::index(0x20AC), 1, CodePoints::index(0x61), 0],
+                [1, CodePoints::index(0x61), 1, CodePoints::index(0x58), 1, CodePoints::index(0x20AC), 0],
+            ],
+        );
+        $this->assertSame(CodePoints::LARGEST_INDEX, $candidate->maximumAt(3));
+    }
+
+    public function testInsertsNoTokenThatIsNotValidUtf8IntoAStringOfUnicodeCharacters(): void
+    {
+        $candidate = Candidate::from(Sequences::ofCharacters('a'));
+
+        $this->assertFalse((new InsertToken(new Dictionary(["\x89PNG"])))->apply($candidate, $this->randomizer()));
+        $this->assertSame([1, CodePoints::index(0x61), 0], $candidate->choices());
     }
 
     public function testInsertsNoTokenWhileTheDictionaryIsEmpty(): void

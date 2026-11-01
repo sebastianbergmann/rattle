@@ -9,11 +9,15 @@
  */
 namespace SebastianBergmann\Rattle;
 
+use function assert;
 use function count;
+use function mb_ord;
+use function mb_str_split;
 use function min;
 use Closure;
 use SebastianBergmann\ChoiceSequence\ChoiceSequence;
 use SebastianBergmann\ChoiceSequence\ChoiceSource;
+use SebastianBergmann\ChoiceSequence\CodePoints;
 use SebastianBergmann\ChoiceSequence\SpanKind;
 use SebastianBergmann\ChoiceSequence\UniformDistribution;
 
@@ -72,6 +76,50 @@ final readonly class Sequences
         $source->startSpan('element', SpanKind::Element);
         $source->draw(1, new UniformDistribution);
         $source->endSpan();
+        $source->endSpan();
+
+        return $source->sequence();
+    }
+
+    /**
+     * Creates the choice sequence of a string of Unicode characters as
+     * PHPUnit's generators draw it: the string is a span of the kind
+     * Characters, each character is a span of the kind Element that consists
+     * of the choice 1 followed by the index of its code point in the order of
+     * CodePoints, and the choice 0 that ends the string is a span of the kind
+     * Element as well.
+     */
+    public static function ofCharacters(string $string): ChoiceSequence
+    {
+        $choices = [];
+
+        foreach (mb_str_split($string, 1, 'UTF-8') as $character) {
+            $codePoint = mb_ord($character, 'UTF-8');
+
+            assert($codePoint !== false && $codePoint >= 0 && $codePoint <= 0x10FFFF);
+
+            $choices[] = 1;
+            $choices[] = CodePoints::index($codePoint);
+        }
+
+        $choices[] = 0;
+
+        $source = ChoiceSource::replay(new ChoiceSequence($choices));
+
+        $source->startSpan('string', SpanKind::Characters);
+
+        do {
+            $source->startSpan('character', SpanKind::Element);
+
+            $another = $source->draw(1, new UniformDistribution) === 1;
+
+            if ($another) {
+                $source->draw(CodePoints::LARGEST_INDEX, new UniformDistribution);
+            }
+
+            $source->endSpan();
+        } while ($another);
+
         $source->endSpan();
 
         return $source->sequence();

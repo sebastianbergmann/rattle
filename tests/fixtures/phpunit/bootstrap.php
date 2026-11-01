@@ -12,4 +12,8 @@
     if ($class === 'SebastianBergmann\Rattle\Fixture\Phpunit\Classifier') {
         require __DIR__ . '/src/Classifier.php';
     }
+
+    if ($class === 'SebastianBergmann\Rattle\Fixture\Phpunit\CommandParser') {
+        require __DIR__ . '/src/CommandParser.php';
+    }
 });

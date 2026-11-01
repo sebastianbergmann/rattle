@@ -27,6 +27,7 @@
         "ext-dom": "*",
         "ext-json": "*",
         "ext-libxml": "*",
+        "ext-mbstring": "*",
         "ext-pcntl": "*",
         "nikic/php-parser": "^5.9.0",
         "sebastian/choice-sequence": "^1.0@dev",

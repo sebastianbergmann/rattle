@@ -166,6 +166,23 @@ final class Candidate
     }
 
     /**
+     * Whether the span holds one character of a string of Unicode characters,
+     * [1, c] where c is the index of its code point in the order of
+     * CodePoints, or ends it, [0]: a span of the kind SpanKind::Element that
+     * is part of a span of the kind SpanKind::Characters.
+     *
+     * @param array{start: non-negative-int, end: non-negative-int, label: non-empty-string, parent: ?non-negative-int, kind: ?SpanKind} $span
+     */
+    public function isCharacterOfString(array $span): bool
+    {
+        if ($span['kind'] !== SpanKind::Element || $span['parent'] === null) {
+            return false;
+        }
+
+        return ($this->spans[$span['parent']]['kind'] ?? null) === SpanKind::Characters;
+    }
+
+    /**
      * Whether the span holds an element of a collection, a span of the kind
      * SpanKind::Element that does not end the collection. The generators of
      * PHPUnit mark the elements of lists, arrays, strings, and binary strings
