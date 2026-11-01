@@ -9,9 +9,11 @@
  */
 namespace SebastianBergmann\Rattle;
 
+use function array_map;
 use function array_shift;
 use function assert;
 use function count;
+use function str_repeat;
 use function strlen;
 use Closure;
 use LogicException;
@@ -189,6 +191,113 @@ final class TargetSchedulerTest extends TestCase
         $this->assertGreaterThanOrEqual(3, count($history->series()));
     }
 
+    public function testCountsOnlyTheFeaturesBeyondTheOnesThatATargetHadAsDiscoveriesWhenItsCorpusIsReplayed(): void
+    {
+        foreach ([5 => false, 3 => true] as $features => $discovered) {
+            $engines = $this->engines(
+                [
+                    // every length of the string takes another edge
+                    'growing' => static function (string $bytes): void
+                    {
+                        Edges::through(1 + strlen($bytes), null);
+                    },
+                ],
+                5,
+                false,
+                ['growing' => ['a', 'ab', 'abc', 'abcd', 'abcde']],
+            );
+
+            $history = TargetHistory::fromArray(['version' => 1, 'target' => 'growing', 'features' => $features, 'decayedExecutions' => 100.0]);
+
+            $this->assertNotNull($history);
+
+            (new TargetScheduler($engines['executor'], $engines['engines'], 1, null, null, null, ['growing' => $history]))->run();
+
+            // the corpus of five inputs reaches five features again
+            $this->assertSame(5, $history->features());
+            $this->assertSame($discovered, $history->lastDiscovery() !== null);
+            $this->assertSame($discovered, $history->discoveries() > 1.0);
+
+            Edges::reset();
+        }
+    }
+
+    public function testReplaysTheStoredCorporaOfAllTargetsFirst(): void
+    {
+        $engines = $this->engines(
+            [
+                'saturated' => static function (string $bytes): void
+                {
+                    Edges::through(1, null);
+                },
+                'new' => static function (string $bytes): void
+                {
+                    Edges::through(1, null);
+                },
+            ],
+            null,
+            false,
+            ['saturated' => ['a', 'b', 'c'], 'new' => ['d', 'e', 'f']],
+        );
+
+        $saturated = $engines['engines']['saturated'] ?? null;
+        $new       = $engines['engines']['new'] ?? null;
+
+        $this->assertNotNull($saturated);
+        $this->assertNotNull($new);
+
+        $history = TargetHistory::fromArray(['version' => 1, 'target' => 'saturated', 'decayedExecutions' => 10000.0]);
+
+        $this->assertNotNull($history);
+
+        (new TargetScheduler(
+            $engines['executor'],
+            $engines['engines'],
+            1,
+            null,
+            static fn (): bool => $saturated->statistics()->executions + $new->statistics()->executions >= 32,
+            null,
+            ['saturated' => $history],
+        ))->run();
+
+        $this->assertTrue($saturated->hasReplayedInputsToStartWith());
+        $this->assertTrue($new->hasReplayedInputsToStartWith());
+    }
+
+    public function testKeepsTheFeaturesOfATargetWhoseCorpusWasNotReplayedCompletely(): void
+    {
+        $inputs = [];
+
+        for ($length = 1; $length <= 40; $length++) {
+            $inputs[] = str_repeat('a', $length);
+        }
+
+        $engines = $this->engines(
+            [
+                'growing' => static function (string $bytes): void
+                {
+                    Edges::through(1 + strlen($bytes), null);
+                },
+            ],
+            null,
+            false,
+            ['growing' => $inputs],
+        );
+
+        $growing = $engines['engines']['growing'] ?? null;
+
+        $this->assertNotNull($growing);
+
+        $history = TargetHistory::fromArray(['version' => 1, 'target' => 'growing', 'features' => 50]);
+
+        $this->assertNotNull($history);
+
+        (new TargetScheduler($engines['executor'], $engines['engines'], 1, null, static fn (): bool => $growing->statistics()->executions >= 16, null, ['growing' => $history]))->run();
+
+        $this->assertFalse($growing->hasReplayedInputsToStartWith());
+        $this->assertSame(50, $history->features());
+    }
+
     public function testStopsFuzzingATargetThatFoundADefectWhileTheOtherTargetsGoOn(): void
     {
         $engines = $this->engines(
@@ -226,10 +335,11 @@ final class TargetSchedulerTest extends TestCase
      *
      * @param non-empty-array<non-empty-string, Closure(string): void> $targets
      * @param ?positive-int                                            $maximumNumberOfExecutions
+     * @param array<non-empty-string, list<string>>                    $storedInputs              the bytes of the stored inputs of the targets
      *
      * @return array{executor: Executor, engines: non-empty-array<non-empty-string, Engine>}
      */
-    private function engines(array $targets, ?int $maximumNumberOfExecutions, bool $stopOnFinding): array
+    private function engines(array $targets, ?int $maximumNumberOfExecutions, bool $stopOnFinding, array $storedInputs = []): array
     {
         $runners = [];
 
@@ -326,7 +436,12 @@ final class TargetSchedulerTest extends TestCase
                 $ids,
             );
 
-            $engines[$name]->start([]);
+            $engines[$name]->start(
+                array_map(
+                    static fn (string $bytes): array => BytesEncoding::choicesFor($bytes, 64),
+                    $storedInputs[$name] ?? [],
+                ),
+            );
         }
 
         return ['executor' => $executor, 'engines' => $engines];

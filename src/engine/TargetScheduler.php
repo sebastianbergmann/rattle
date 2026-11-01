@@ -13,6 +13,7 @@ use function array_keys;
 use function assert;
 use function count;
 use function hash;
+use function max;
 use function microtime;
 use Closure;
 use Random\Engine\Xoshiro256StarStar;
@@ -47,6 +48,14 @@ use Random\Randomizer;
  * before it learned instead of with the same weight for every target. The
  * history also records when the target discovered features, and what it did
  * in the run when the run ends.
+ *
+ * A run starts by replaying the stored corpora of the targets, which reaches
+ * the features that the targets had again. Only the features beyond the
+ * number of features that a target had at the end of the run before count as
+ * discoveries, so that a target whose code changed, and reaches more features
+ * than before, is fuzzed more often again. The targets whose inputs to start
+ * with are not all submitted are chosen first, one of them at random, so that
+ * this is known early.
  *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
@@ -103,6 +112,14 @@ final class TargetScheduler
     private array $histories = [];
 
     /**
+     * The number of features of each target at the end of the run before,
+     * beyond which features count as discoveries.
+     *
+     * @var array<non-empty-string, non-negative-int>
+     */
+    private array $baselines = [];
+
+    /**
      * How likely the next input of a target is to produce a feature that is
      * new for it.
      */
@@ -132,6 +149,7 @@ final class TargetScheduler
             $history = $histories[$target] ?? new TargetHistory($target);
 
             $this->histories[$target]   = $history;
+            $this->baselines[$target]   = $history->features();
             $this->discoveries[$target] = $history->discoveries();
             $this->executions[$target]  = $history->decayedExecutions();
         }
@@ -225,6 +243,18 @@ final class TargetScheduler
      */
     private function choose(): ?array
     {
+        $replaying = [];
+
+        foreach ($this->activeEngines() as $target => $engine) {
+            if ($engine->hasInputsToStartWith()) {
+                $replaying[] = [$target, $engine];
+            }
+        }
+
+        if ($replaying !== []) {
+            return RandomElement::of($this->randomizer, $replaying);
+        }
+
         $candidates = [];
         $total      = 0.0;
 
@@ -289,9 +319,12 @@ final class TargetScheduler
 
             $engine->process($targetResults);
 
-            $decay       = self::DECAY ** count($targetResults);
-            $statistics  = $engine->statistics();
-            $discoveries = $statistics->features - $features;
+            $decay      = self::DECAY ** count($targetResults);
+            $statistics = $engine->statistics();
+
+            // the features that replaying the corpus reaches again are not
+            // discoveries
+            $discoveries = max(0, $statistics->features - max($features, $this->baselines[$target] ?? 0));
 
             $this->discoveries[$target] = ($this->discoveries[$target] ?? 0.0) * $decay + $discoveries;
             $this->executions[$target]  = ($this->executions[$target] ?? 0.0) * $decay + count($targetResults);
@@ -336,7 +369,9 @@ final class TargetScheduler
                 $this->executions[$target] ?? 0.0,
                 $statistics->executions,
                 $executions === 0 ? 0.0 : ($end - $this->start) * $statistics->executions / $executions,
-                $statistics->features,
+                // a target whose corpus was not replayed completely did not
+                // reach all the features that it had again
+                $engine->hasReplayedInputsToStartWith() ? $statistics->features : max($history->features(), $statistics->features),
                 $statistics->findings,
             );
         }

@@ -275,6 +275,23 @@ final class Engine
         return $this->pending !== [];
     }
 
+    /**
+     * Whether inputs to start with are left that were not submitted yet.
+     */
+    public function hasInputsToStartWith(): bool
+    {
+        return $this->initialInputs !== [];
+    }
+
+    /**
+     * Whether all inputs to start with were submitted and their results were
+     * processed.
+     */
+    public function hasReplayedInputsToStartWith(): bool
+    {
+        return $this->initialInputs === [] && $this->initialPositions === [];
+    }
+
     public function statistics(): Statistics
     {
         return $this->statistics;
