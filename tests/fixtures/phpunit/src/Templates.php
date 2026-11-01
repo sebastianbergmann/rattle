@@ -10,11 +10,16 @@
 namespace SebastianBergmann\Rattle\Fixture\Phpunit;
 
 use function file_get_contents;
+use function str_contains;
 
 final class Templates
 {
     public function load(string $name): string
     {
+        if (str_contains($name, "\0")) {
+            return '';
+        }
+
         $template = @file_get_contents(__DIR__ . '/templates/' . $name);
 
         return $template === false ? '' : $template;

@@ -148,7 +148,7 @@ final class PhpunitTest extends TestCase
 
         $options = ['--phpunit', '--configuration', $project . '/phpunit.xml', '--cache-directory', $this->directory . '/cache', '--findings-directory', $this->directory . '/findings'];
 
-        [$exit, $output] = $this->rattle(['fuzz', ...$options, '--jobs', '1', '--seed', '1', '--max-executions', '1000', '--stop-on-finding']);
+        [$exit, $output] = $this->rattle(['fuzz', ...$options, '--jobs', '1', '--seed', '20', '--max-executions', '1000', '--stop-on-finding']);
 
         $this->assertSame(1, $exit, $output);
 
@@ -216,6 +216,23 @@ final class PhpunitTest extends TestCase
         $this->assertStringContainsString('Finding: LogicException at ' . self::FIXTURE . '/src/CommandParser.php:23', $output);
     }
 
+    public function testFindsAnExampleThatControlsADangerousSinkAndReplaysItWithRegress(): void
+    {
+        $options = ['--phpunit', '--configuration', self::FIXTURE . '/detectors.xml', '--cache-directory', $this->directory . '/cache', '--findings-directory', $this->directory . '/findings'];
+
+        [$exit, $output] = $this->rattle(['fuzz', ...$options, '--jobs', '1', '--seed', '5', '--max-executions', '700', '--stop-on-finding']);
+
+        $this->assertSame(1, $exit, $output);
+        $this->assertStringContainsString('Finding: ' . PathTraversal::class . ' at ' . self::FIXTURE . '/src/Templates.php:23', $output);
+
+        // the finding fails again when rattle replays it, as the detectors
+        // run there as well
+        [$exit, $output] = $this->rattle(['regress', ...$options]);
+
+        $this->assertSame(1, $exit, $output);
+        $this->assertStringContainsString(PathTraversal::class . ' at ' . self::FIXTURE . '/src/Templates.php:23', $output);
+    }
+
     public function testReportsATestSuiteWithoutProperties(): void
     {
         [$exit, $output] = $this->fuzz(['--filter', 'DoesNotMatchAnyProperty']);
@@ -242,7 +259,7 @@ final class PhpunitTest extends TestCase
                 '--jobs',
                 '1',
                 '--seed',
-                '1',
+                '20',
                 '--max-executions',
                 '1000',
                 '--stop-on-finding',

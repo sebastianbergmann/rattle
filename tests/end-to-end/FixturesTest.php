@@ -62,7 +62,7 @@ final class FixturesTest extends TestCase
         return [
             'a warning for a digit string that is too long for an int' => [
                 'csv',
-                3,
+                5,
                 8000,
                 'Warning at %s/csv/src/IntegerColumn.php:46',
                 '10000000000000000000',
@@ -108,9 +108,41 @@ final class FixturesTest extends TestCase
                 'a=$a',
                 [],
             ],
+            'a path traversal that reaches the sentinel of the file system' => [
+                'traversal',
+                6,
+                1200,
+                'SebastianBergmann\\Rattle\\PathTraversal at %s/traversal/src/TemplateLoader.php:30',
+                null,
+                [],
+            ],
+            'a command injection that runs the sentinel command' => [
+                'command',
+                9,
+                1000,
+                'SebastianBergmann\\Rattle\\CommandInjection at %s/command/src/Thumbnailer.php:56',
+                null,
+                [],
+            ],
+            'an unsafe deserialization that creates an object of the sentinel class' => [
+                'deserialization',
+                1,
+                1200,
+                'SebastianBergmann\\Rattle\\UnsafeDeserialization at %s/deserialization/src/SessionDecoder.php:26',
+                null,
+                [],
+            ],
+            'a code injection that evaluates code which creates an object of the sentinel class' => [
+                'evaluation',
+                3,
+                2000,
+                'SebastianBergmann\\Rattle\\CodeInjection at %s/evaluation/src/Calculator.php:20',
+                null,
+                [],
+            ],
             'a target that calls exit()' => [
                 'exit',
-                2,
+                1,
                 8000,
                 'Process exited with status 0',
                 '-h',
@@ -232,7 +264,7 @@ final class FixturesTest extends TestCase
 
     public function testAWorkerThatDiesIsReplacedAndFuzzingContinues(): void
     {
-        [$exit, $output] = $this->fuzz('exit', ['--seed', '2', '--max-executions', '20000']);
+        [$exit, $output] = $this->fuzz('exit', ['--seed', '1', '--max-executions', '20000']);
 
         $this->assertSame(1, $exit, $output);
         $this->assertStringContainsString('executions: 20,000', $output);
@@ -242,7 +274,7 @@ final class FixturesTest extends TestCase
 
     public function testFindingsAreDeduplicatedAcrossRunsThroughTheFindingsDirectory(): void
     {
-        [$exit] = $this->fuzz('exit', ['--seed', '2', '--max-executions', '8000', '--stop-on-finding']);
+        [$exit] = $this->fuzz('exit', ['--seed', '1', '--max-executions', '8000', '--stop-on-finding']);
 
         $this->assertSame(1, $exit);
 
@@ -269,7 +301,7 @@ final class FixturesTest extends TestCase
 
         $options = ['--bootstrap', $project . '/bootstrap.php', '--source', $project . '/exit/src', '--cache-directory', $this->directory . '/cache', '--findings-directory', $this->directory . '/findings'];
 
-        [$exit] = $this->rattle(array_merge(['fuzz', $project . '/exit/target.php', '--jobs', '1', '--seed', '2', '--max-executions', '8000', '--stop-on-finding'], $options));
+        [$exit] = $this->rattle(array_merge(['fuzz', $project . '/exit/target.php', '--jobs', '1', '--seed', '1', '--max-executions', '8000', '--stop-on-finding'], $options));
 
         $this->assertSame(1, $exit);
 

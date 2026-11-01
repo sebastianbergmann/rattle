@@ -11,7 +11,10 @@ namespace SebastianBergmann\Rattle;
 
 use function array_pop;
 use function explode;
+use function sprintf;
+use function str_repeat;
 use function str_starts_with;
+use function strlen;
 use function substr;
 
 /**
@@ -25,6 +28,9 @@ use function substr;
  * enough ../ from every directory, and which is never touched: the detector
  * reports the path before PHP operates on it.
  *
+ * The fuzzer adds the sentinels to the strings of inputs as tokens (see
+ * Dictionary), which is how an input comes to have them.
+ *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
  * @internal This class is not covered by the backward compatibility promise for sebastian/rattle
@@ -32,6 +38,28 @@ use function substr;
 final readonly class Sentinels
 {
     public const string NAME = 'rattle-sentinel';
+
+    /**
+     * The tokens that bring the sentinels into the strings of inputs.
+     *
+     * @return non-empty-list<non-empty-string>
+     */
+    public static function tokens(): array
+    {
+        return [
+            // a path that climbs to the sentinel of the file system from
+            // every directory that is up to 16 levels below the root
+            str_repeat('../', 16) . self::NAME,
+            // the sentinel command, as a command, and as a command whose
+            // output a shell substitutes into a command line
+            self::NAME,
+            '$(' . self::NAME . ')',
+            // the serialized data of an object of the sentinel class
+            sprintf('O:%d:"%s":0:{}', strlen(Sentinel::class), Sentinel::class),
+            // code that creates an object of the sentinel class
+            'new \\' . Sentinel::class . ';',
+        ];
+    }
 
     /**
      * Whether the path leads to the sentinel of the file system, possibly

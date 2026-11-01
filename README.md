@@ -156,6 +156,7 @@ Run `rattle --help` for all options. The exit code is 0 when there is no new fin
 | the time limit (`--timeout`, 1 second by default) was exceeded | yes |
 | a fatal error, for instance because the memory limit was exceeded | yes, identified by where it happened |
 | the process ended, because the code called `exit()` or was killed by a signal | yes, identified by the exit status or the signal |
+| the input controls a dangerous sink (see [Detecting vulnerabilities](#detecting-vulnerabilities)) | yes, identified by the kind of vulnerability and where it was detected |
 | `reject()` was called, or the input needs too many choices | no |
 
 Two findings are the same when their failure signatures, as defined by `sebastian/choice-sequence`, are the same. A finding that is the same as one that is known is counted, but not stored again.
@@ -210,6 +211,27 @@ A constant operand is a string, an integer, which becomes its decimal representa
 
 The status line shows how many tokens the dictionary has (`tokens`). When fuzzing ends, the tokens that were found in comparisons are written to `dictionary.txt` next to the corpus of the target, in the format of `--dictionary`, so that you can look at them and pass them to another fuzzer. When no tokens were found, the `dictionary.txt` of an earlier run is removed.
 
+## Detecting vulnerabilities
+
+An input does not have to make your code fail to be a finding. rattle also detects inputs that control a dangerous sink. A detection does not mean that your code merely reached the sink: it means that the input made your code use a sentinel there, which only the input can have brought. The input is the proof of the vulnerability.
+
+| Finding | The input made your code … |
+|---|---|
+| `PathTraversal` | operate on a file whose path leads to `/rattle-sentinel`, such as `templates/../../../../../../rattle-sentinel`: open, read, write, check, delete, or rename it, or create, open, or remove a directory |
+| `CodeInjection` | include a file whose path leads to `/rattle-sentinel`, or create an object of the class `SebastianBergmann\Rattle\Sentinel` in code that it evaluates with `eval()` |
+| `UnsafeDeserialization` | create an object of the class `SebastianBergmann\Rattle\Sentinel` with `unserialize()` |
+| `CommandInjection` | run the command `rattle-sentinel`, for instance because a shell interpreted a command line such as `convert $(rattle-sentinel) thumbnail.png` |
+
+The classes of the findings are in the namespace `SebastianBergmann\Rattle`. The detectors need no configuration and are always on:
+
+* They work at runtime, in your code as well as in the code that it uses from `vendor/`. The stream wrapper for `file://` of the worker processes sees every operation on files. The command `rattle-sentinel` is in a directory that is appended to the `PATH` of every worker process, and signals the worker when it runs. The class `SebastianBergmann\Rattle\Sentinel` reports when an object of it is created or unserialized.
+* Nothing is done to the sentinels: an operation on `/rattle-sentinel` is stopped before it is performed, and `rattle-sentinel` does nothing but signal the worker.
+* The sentinels are added to the strings of inputs like the tokens of the dictionary, as one in 64 tokens, however many tokens the dictionary has, so that they take little from fuzzing code that does not reach a sink.
+* A detection throws an error into your code at the sink, and is a finding even when your code catches it.
+* A detection is reported at the innermost frame in your source directories: the line of your code that passed the data of the input on to the sink, whether the sink is called there or in the code that it uses. When no frame is in your source directories, it is reported at the innermost frame that is not rattle's own code.
+
+The detectors run in rattle's worker processes, so `rattle run` and `rattle regress` reproduce their findings. Without rattle, your code does not necessarily fail on the input of such a finding.
+
 ## Directory layout
 
 ```
@@ -245,5 +267,6 @@ in CI. It replays the minimal input of every finding and every input of the corp
 
 * When rattle is installed with Composer, `nikic/php-parser` must be compatible with the version that your project uses. The PHAR does not have this constraint.
 * Not every construct is instrumented, see [How coverage is measured](#how-coverage-is-measured).
+* A detector only detects an input that reaches its sentinel. A path that leaves the directory that your code meant to use, but not the project, such as `templates/../.env`, is not detected, and neither is a command that your code runs with an environment of its own whose `PATH` does not have the directory of `rattle-sentinel`.
 * Coverage is collected by instrumented PHP code, which is slower than collecting it in the engine.
 * To instrument files while they are included, rattle replaces PHP's stream wrapper for `file://` in its worker processes. Other operations of the code under test on files are passed on to PHP's own wrapper, which makes them slower. As with every stream wrapper that is written in PHP, PHP buffers what is read through it: a file that is changed through one handle may still be read as it was through another handle until that handle seeks.

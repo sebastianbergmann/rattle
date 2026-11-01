@@ -278,7 +278,7 @@ final class ProcessExecutorTest extends TestCase
         $source = str_replace(realpath((string) getcwd()) . '/', '', (string) realpath(dirname(__DIR__, 2) . '/fixtures/phpunit/src/Templates.php'));
 
         $this->assertSame(Outcome::Failed, $result->outcome());
-        $this->assertSame(sprintf('%s at %s:%d', PathTraversal::class, $source, 18), $result->failure()?->describe());
+        $this->assertSame(sprintf('%s at %s:%d', PathTraversal::class, $source, 23), $result->failure()?->describe());
         $this->assertSame($choices, $result->sequence()->choices());
     }
 

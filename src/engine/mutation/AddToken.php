@@ -61,7 +61,7 @@ final readonly class AddToken implements Mutation
     public function apply(Candidate $candidate, Randomizer $randomizer): bool
     {
         // the dictionary can be empty before tokens are found in the code
-        // that is instrumented
+        // that is instrumented, unless it has sentinels
         if ($this->dictionary->isEmpty()) {
             return false;
         }
@@ -88,6 +88,11 @@ final readonly class AddToken implements Mutation
 
         $position = RandomElement::of($randomizer, $positions);
         $token    = $this->dictionary->randomToken($randomizer);
+
+        // no sentinel was drawn, and there are no other tokens
+        if ($token === null) {
+            return false;
+        }
 
         if ($candidate->isCharacterOfString($position)) {
             $values  = self::indicesOfCodePointsOf($token);

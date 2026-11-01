@@ -179,7 +179,7 @@ final readonly class FuzzCommand implements Command
         $engine = new Engine(
             $executor,
             $corpus     = new Corpus($corpusDirectory),
-            $dictionary = new Dictionary($tokens),
+            $dictionary = new Dictionary($tokens, Sentinels::tokens()),
             Mutator::create($corpus, $dictionary, $target->maximumNumberOfChoices()),
             $findings,
             new EngineConfiguration($seed, $arguments->maximumNumberOfExecutions(), $maximumTime, $arguments->stopOnFinding()),
@@ -278,7 +278,7 @@ final readonly class FuzzCommand implements Command
         }
 
         $status                = new StatusLine(STDOUT, stream_isatty(STDOUT), static fn (): float => microtime(true));
-        $dictionary            = new Dictionary($tokens);
+        $dictionary            = new Dictionary($tokens, Sentinels::tokens());
         $ids                   = new JobIds;
         $loader                = new InputLoader;
         $log                   = $arguments->inputLog() !== null ? fopen($arguments->inputLog(), 'w') : null;

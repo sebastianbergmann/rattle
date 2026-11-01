@@ -10,6 +10,7 @@
 namespace SebastianBergmann\Rattle;
 
 use function array_keys;
+use function count;
 use function range;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Small;
@@ -65,14 +66,45 @@ final class DictionaryTest extends TestCase
         $dictionary->addFoundTokens(['b', 'c']);
 
         for ($i = 0; $i < 100; $i++) {
-            $chosen[$dictionary->randomToken($randomizer)] = true;
+            $token = $dictionary->randomToken($randomizer);
+
+            $this->assertNotNull($token);
+
+            $chosen[$token] = true;
         }
 
         $this->assertEqualsCanonicalizing(['a', 'b', 'c'], array_keys($chosen));
     }
 
-    public function testIsEmptyWithoutTokens(): void
+    public function testIsEmptyWithoutTokensAndSentinels(): void
     {
         $this->assertTrue((new Dictionary)->isEmpty());
+        $this->assertFalse((new Dictionary([], ['sentinel']))->isEmpty());
+        $this->assertNull((new Dictionary)->randomToken(new Randomizer(new Xoshiro256StarStar(1))));
+    }
+
+    public function testChoosesASentinelInOneOf64TokensHoweverManyOtherTokensThereAre(): void
+    {
+        $randomizer = new Randomizer(new Xoshiro256StarStar(1));
+
+        foreach ([[], ['a'], ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']] as $tokens) {
+            $dictionary = new Dictionary($tokens, ['sentinel']);
+            $sentinels  = 0;
+            $none       = 0;
+
+            for ($i = 0; $i < 64000; $i++) {
+                $token = $dictionary->randomToken($randomizer);
+
+                if ($token === 'sentinel') {
+                    $sentinels++;
+                } elseif ($token === null) {
+                    $none++;
+                }
+            }
+
+            $this->assertEqualsWithDelta(1000, $sentinels, 150);
+            $this->assertSame($tokens === [] ? 64000 - $sentinels : 0, $none);
+            $this->assertSame(count($tokens), $dictionary->numberOfTokens());
+        }
     }
 }
