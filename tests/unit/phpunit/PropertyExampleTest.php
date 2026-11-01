@@ -74,6 +74,16 @@ final class PropertyExampleTest extends TestCase
         $this->assertSame(0, $span->parent());
     }
 
+    public function testHasTheSpansOfAStringOfUnicodeCharacters(): void
+    {
+        $example = PropertyExample::fromArray(['spans' => [['start' => 0, 'end' => 3, 'label' => 'string', 'parent' => null, 'kind' => 'characters'], ['start' => 0, 'end' => 2, 'label' => 'character', 'parent' => 0, 'kind' => 'element']]] + self::passed());
+
+        $span = $example->sequence()->spans()[0] ?? null;
+
+        $this->assertNotNull($span);
+        $this->assertSame(SpanKind::Characters, $span->kind());
+    }
+
     #[DataProvider('outcomesOfExamplesThatDidNotFalsifyTheProperty')]
     public function testMapsTheOutcomesOfExamplesThatDidNotFalsifyTheProperty(string $outcome, Outcome $expected): void
     {
