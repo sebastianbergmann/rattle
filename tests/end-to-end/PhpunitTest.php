@@ -181,6 +181,15 @@ final class PhpunitTest extends TestCase
         $this->assertStringEqualsFile($input . '.minimized', "choice-sequence v1\n1\n7\n1\n3\n1\n9\n0\n");
     }
 
+    public function testStopsWhenPhpunitAbortsAnExampleWithoutCheckingTheProperty(): void
+    {
+        [$exit, $output] = $this->rattle(['fuzz', '--phpunit', '--configuration', self::FIXTURE . '/aborted.xml', '--source', self::FIXTURE . '/src', '--jobs', '1', '--max-executions', '10', '--cache-directory', $this->directory . '/cache', '--findings-directory', $this->directory . '/findings']);
+
+        $this->assertSame(2, $exit, $output);
+        $this->assertStringContainsString('PHPUnit aborted an example of the property without checking it: RuntimeException at ' . self::FIXTURE . '/aborted/AbortedTest.php:20: cannot be set up', $output);
+        $this->assertFalse(is_dir($this->directory . '/findings'), $output);
+    }
+
     public function testReportsATestSuiteWithoutProperties(): void
     {
         [$exit, $output] = $this->fuzz(['--filter', 'DoesNotMatchAnyProperty']);

@@ -20,6 +20,7 @@ use SebastianBergmann\ChoiceSequence\SpanKind;
 #[UsesClass(Failure::class)]
 #[UsesClass(ProtocolData::class)]
 #[UsesClass(ProtocolException::class)]
+#[UsesClass(WorkerException::class)]
 #[Small]
 final class PropertyExampleTest extends TestCase
 {
@@ -31,6 +32,7 @@ final class PropertyExampleTest extends TestCase
         return [
             'unknown outcome'                       => [['outcome' => 'unknown'] + self::passed()],
             'failure missing'                       => [['outcome' => 'failed'] + self::passed()],
+            'failure of aborted example missing'    => [['outcome' => 'aborted'] + self::passed()],
             'unknown kind of failure'               => [self::failed(['kind' => 'unknown'])],
             'signature that does not match'         => [self::failed(['signature' => 'RuntimeException at src/Other.php:1'])],
             'span that ends after the last choice'  => [['spans' => [['start' => 0, 'end' => 4, 'label' => 'a', 'parent' => null, 'kind' => null]]] + self::passed()],
@@ -103,6 +105,14 @@ final class PropertyExampleTest extends TestCase
 
         $this->assertNotNull($failure);
         $this->assertSame('Failed: message', $failure->describe());
+    }
+
+    public function testAnExampleThatPhpunitAbortedIsAnErrorOfTheProperty(): void
+    {
+        $this->expectException(WorkerException::class);
+        $this->expectExceptionMessageIsOrContains('PHPUnit aborted an example of the property without checking it: RuntimeException at src/Parser.php:12: message');
+
+        PropertyExample::fromArray(['outcome' => 'aborted'] + self::failed([]));
     }
 
     public function testHasTheValuesOfTheExampleAsPhpunitPrintsThemForACounterexample(): void

@@ -39,7 +39,7 @@ use SebastianBergmann\ChoiceSequence\SpanKind;
  */
 final readonly class PropertyExample
 {
-    private const array OUTCOMES = ['errored', 'failed', 'incomplete', 'passed', 'rejected', 'skipped', 'timeout'];
+    private const array OUTCOMES = ['aborted', 'errored', 'failed', 'incomplete', 'passed', 'rejected', 'skipped', 'timeout'];
 
     /**
      * @var 'errored'|'failed'|'incomplete'|'passed'|'rejected'|'skipped'|'timeout'
@@ -54,7 +54,14 @@ final readonly class PropertyExample
     private ?array $values;
 
     /**
+     * An example that PHPUnit aborted failed or errored without checking the
+     * property, in setUp(), for instance, or because a generator raised an
+     * exception while its arguments were generated. As when PHPUnit checks
+     * the property, this is the error of the property rather than a finding,
+     * and the property cannot be fuzzed.
+     *
      * @throws ProtocolException
+     * @throws WorkerException   when PHPUnit aborted the example
      */
     public static function fromArray(mixed $data): self
     {
@@ -63,6 +70,18 @@ final readonly class PropertyExample
 
         if (!in_array($outcome, self::OUTCOMES, true)) {
             throw new ProtocolException('Invalid outcome');
+        }
+
+        if ($outcome === 'aborted') {
+            $failure = self::failureFrom(ProtocolData::array($data['failure'] ?? null));
+
+            throw new WorkerException(
+                sprintf(
+                    'PHPUnit aborted an example of the property without checking it: %s: %s',
+                    $failure->describe(),
+                    $failure->message(),
+                ),
+            );
         }
 
         $failure = null;
