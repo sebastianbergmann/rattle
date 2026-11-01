@@ -99,25 +99,41 @@ final class Engine
      * @var array<non-negative-int, CorpusEntry>
      */
     private array $parents = [];
+    private readonly JobIds $ids;
 
     /**
-     * The number of inputs to start with, which are submitted first and
-     * therefore have the smallest IDs.
+     * The inputs to start with that were not submitted yet, smallest first.
+     *
+     * @var list<list<non-negative-int>>
+     */
+    private array $initialInputs = [];
+
+    /**
+     * The positions of the inputs to start with among them, by the IDs of the
+     * inputs.
+     *
+     * @var array<non-negative-int, non-negative-int>
+     */
+    private array $initialPositions = [];
+
+    /**
+     * The number of inputs to start with that were submitted.
      *
      * @var non-negative-int
      */
-    private int $numberOfInitialInputs = 0;
+    private int $numberOfSubmittedInitialInputs = 0;
 
     /**
      * The results of inputs to start with that arrived before the results of
-     * the inputs to start with that were submitted before them, by ID.
+     * the inputs to start with that were submitted before them, by their
+     * positions.
      *
      * @var array<non-negative-int, Result>
      */
     private array $earlyInitialResults = [];
 
     /**
-     * The ID of the input to start with whose result is processed next.
+     * The position of the input to start with whose result is processed next.
      *
      * @var non-negative-int
      */
@@ -151,8 +167,9 @@ final class Engine
      * @param ?Closure(Statistics): void $progress    is called after results were processed
      * @param ?Closure(Job): void        $submitted   is called for every input that is submitted
      * @param ?Closure(): bool           $interrupted tells whether fuzzing was interrupted, by Ctrl+C for instance
+     * @param ?JobIds                    $ids         hands out the IDs of the inputs, which an engine shares with the other engines that use the same executor
      */
-    public function __construct(Executor $executor, Corpus $corpus, Dictionary $dictionary, Mutator $mutator, FindingHandler $findings, EngineConfiguration $configuration, ?Closure $progress = null, ?Closure $submitted = null, ?Closure $interrupted = null)
+    public function __construct(Executor $executor, Corpus $corpus, Dictionary $dictionary, Mutator $mutator, FindingHandler $findings, EngineConfiguration $configuration, ?Closure $progress = null, ?Closure $submitted = null, ?Closure $interrupted = null, ?JobIds $ids = null)
     {
         $this->executor      = $executor;
         $this->corpus        = $corpus;
@@ -166,23 +183,27 @@ final class Engine
         $this->progress      = $progress;
         $this->submitted     = $submitted;
         $this->interrupted   = $interrupted;
+        $this->ids           = $ids ?? new JobIds;
     }
 
     /**
+     * Fuzzes the target until it is done, and processes the results of the
+     * inputs that were submitted before.
+     *
      * @param list<list<non-negative-int>> $initialInputs the inputs to start with, which are replayed first
+     *
+     * @throws CorpusException
+     * @throws FindingException
+     * @throws ProtocolException
+     * @throws WorkerException
      */
     public function run(array $initialInputs = []): Statistics
     {
-        // PHP compares a list with fewer elements as smaller, and lists with
-        // the same number of elements element by element, which is the
-        // shortlex order of choice sequences
-        usort($initialInputs, static fn (array $a, array $b): int => $a <=> $b);
+        $this->start($initialInputs);
 
-        $this->numberOfInitialInputs = count($initialInputs);
-
-        while (!$this->shouldStop()) {
-            while ($this->executor->capacity() > 0 && !$this->shouldStop()) {
-                $batch = $this->nextBatch($initialInputs);
+        while (!$this->isDone()) {
+            while ($this->executor->capacity() > 0 && !$this->isDone()) {
+                $batch = $this->nextBatch();
 
                 if ($batch === []) {
                     break;
@@ -195,7 +216,7 @@ final class Engine
         }
 
         // the inputs that were submitted before fuzzing stopped are processed
-        while ($this->pending !== []) {
+        while ($this->hasPendingInputs()) {
             $results = $this->executor->collect();
 
             if ($results === [] && $this->isInterrupted()) {
@@ -208,17 +229,64 @@ final class Engine
         return $this->statistics;
     }
 
+    /**
+     * Sets the inputs to start with, which are replayed first. Calling run()
+     * does this; an engine that shares its executor with other engines is
+     * started with this method and then composes batches and processes
+     * results when it is asked to.
+     *
+     * @param list<list<non-negative-int>> $initialInputs
+     */
+    public function start(array $initialInputs): void
+    {
+        // PHP compares a list with fewer elements as smaller, and lists with
+        // the same number of elements element by element, which is the
+        // shortlex order of choice sequences
+        usort($initialInputs, static fn (array $a, array $b): int => $a <=> $b);
+
+        $this->initialInputs = $initialInputs;
+    }
+
+    /**
+     * Whether no more inputs are submitted: because a finding was found and
+     * the engine stops on a finding, because the maximum number of
+     * executions or the maximum time was reached, or because fuzzing was
+     * interrupted.
+     *
+     * @phpstan-impure
+     */
+    public function isDone(): bool
+    {
+        if ($this->stopped || $this->isInterrupted()) {
+            return true;
+        }
+
+        if ($this->configuration->maximumNumberOfExecutions() !== null &&
+            $this->numberOfSubmittedInputs >= $this->configuration->maximumNumberOfExecutions()) {
+            return true;
+        }
+
+        return $this->configuration->maximumTime() !== null &&
+               $this->statistics->elapsed(microtime(true)) >= $this->configuration->maximumTime();
+    }
+
+    public function hasPendingInputs(): bool
+    {
+        return $this->pending !== [];
+    }
+
     public function statistics(): Statistics
     {
         return $this->statistics;
     }
 
     /**
-     * @param list<list<non-negative-int>> $initialInputs
+     * Composes the next batch of inputs, which is empty when the engine has
+     * submitted as many inputs as it may.
      *
      * @return list<Job>
      */
-    private function nextBatch(array &$initialInputs): array
+    public function nextBatch(): array
     {
         $size = $this->configuration->batchSize();
 
@@ -229,12 +297,16 @@ final class Engine
         $batch = [];
 
         for ($i = 0; $i < $size; $i++) {
-            $id = $this->numberOfSubmittedInputs++;
+            $id = $this->ids->next();
 
-            if ($initialInputs !== []) {
+            $this->numberOfSubmittedInputs++;
+
+            if ($this->initialInputs !== []) {
                 // all features of an input to start with are needed to tell
                 // whether a smaller input produced them all
-                $job = Job::replay($id, array_shift($initialInputs))->withAllFeatures();
+                $job = Job::replay($id, array_shift($this->initialInputs))->withAllFeatures();
+
+                $this->initialPositions[$id] = $this->numberOfSubmittedInitialInputs++;
             } elseif ($this->corpus->isEmpty() || $this->randomizer->nextFloat() < EngineConfiguration::PROBABILITY_OF_GENERATION) {
                 $job = Job::generate($id, self::seedOf($this->configuration->seed(), $this->numberOfGeneratedInputs++));
             } else {
@@ -252,6 +324,10 @@ final class Engine
                 }
             }
 
+            if ($this->configuration->target() !== null) {
+                $job = $job->withTarget($this->configuration->target());
+            }
+
             $this->pending[$id] = $job;
             $batch[]            = $job;
 
@@ -264,23 +340,29 @@ final class Engine
     }
 
     /**
+     * Processes the results of inputs that the engine submitted.
+     *
      * @param list<Result> $results
      *
      * @throws CorpusException
      */
-    private function process(array $results): void
+    public function process(array $results): void
     {
         foreach ($results as $result) {
-            if ($result->id() >= $this->numberOfInitialInputs) {
+            $position = $this->initialPositions[$result->id()] ?? null;
+
+            if ($position === null) {
                 $this->processResult($result, false);
 
                 continue;
             }
 
+            unset($this->initialPositions[$result->id()]);
+
             // the results of the inputs to start with are processed in the
             // order in which the inputs were submitted, smallest first, also
             // when several workers return them in another order
-            $this->earlyInitialResults[$result->id()] = $result;
+            $this->earlyInitialResults[$position] = $result;
 
             while (isset($this->earlyInitialResults[$this->nextInitialInput])) {
                 $this->processResult($this->earlyInitialResults[$this->nextInitialInput], true);
@@ -371,24 +453,6 @@ final class Engine
         if ($this->corpus->remove($choices)) {
             $this->statistics->removedInputs++;
         }
-    }
-
-    /**
-     * @phpstan-impure
-     */
-    private function shouldStop(): bool
-    {
-        if ($this->stopped || $this->isInterrupted()) {
-            return true;
-        }
-
-        if ($this->configuration->maximumNumberOfExecutions() !== null &&
-            $this->numberOfSubmittedInputs >= $this->configuration->maximumNumberOfExecutions()) {
-            return true;
-        }
-
-        return $this->configuration->maximumTime() !== null &&
-               $this->statistics->elapsed(microtime(true)) >= $this->configuration->maximumTime();
     }
 
     /**

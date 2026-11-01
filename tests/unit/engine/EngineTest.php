@@ -12,6 +12,7 @@ namespace SebastianBergmann\Rattle;
 use function array_map;
 use function array_reverse;
 use function array_slice;
+use function array_unique;
 use function array_values;
 use function count;
 use function file_put_contents;
@@ -62,6 +63,7 @@ use SebastianBergmann\Rattle\Instrumentation\Features;
 #[UsesClass(Location::class)]
 #[UsesClass(Mutator::class)]
 #[UsesClass(Dictionary::class)]
+#[UsesClass(JobIds::class)]
 #[UsesClass(Outcome::class)]
 #[UsesClass(RandomChoice::class)]
 #[UsesClass(Result::class)]
@@ -163,6 +165,71 @@ final class EngineTest extends TestCase
         } finally {
             $this->removeDirectory($directory);
         }
+    }
+
+    public function testProcessesTheResultsOfTheInputsToStartWithSmallestFirstWhateverTheirIds(): void
+    {
+        $directory = sys_get_temp_dir() . '/rattle-engine-' . uniqid();
+        $inputs    = ['A' => [1, 0x41, 0], 'AA' => [1, 0x41, 1, 0x41, 0]];
+        $ids       = new JobIds;
+
+        foreach ($inputs as $choices) {
+            $this->store($directory, $choices);
+        }
+
+        // other engines that share the IDs handed out the first ones
+        $ids->next();
+        $ids->next();
+
+        $statistics = $this->engineWithStoredCorpus($directory, $ids)->run(array_values($inputs));
+
+        try {
+            $this->assertSame(1, $statistics->removedInputs);
+            $this->assertFileExists($this->pathOf($directory, $inputs['A']));
+            $this->assertFileDoesNotExist($this->pathOf($directory, $inputs['AA']));
+        } finally {
+            $this->removeDirectory($directory);
+        }
+    }
+
+    public function testComposesBatchesForThePropertyThatItFuzzesWithIdsFromTheIdsThatItShares(): void
+    {
+        $ids    = new JobIds;
+        $corpus = new Corpus;
+        $engine = new Engine(
+            $this->executor(static function (string $bytes): void
+            {
+            }),
+            $corpus,
+            $dictionary = new Dictionary,
+            Mutator::create($corpus, $dictionary, 8192),
+            $this->findings(),
+            new EngineConfiguration(1, 3, null, false, 2, 'Vendor\\ParserTest::testRoundTrip'),
+            null,
+            null,
+            null,
+            $ids,
+        );
+
+        $ids->next();
+
+        $engine->start([[0]]);
+
+        $first  = $engine->nextBatch();
+        $second = $engine->nextBatch();
+
+        $this->assertSame([1, 2], array_map(static fn (Job $job): int => $job->id(), $first));
+        $this->assertSame([3], array_map(static fn (Job $job): int => $job->id(), $second));
+        $this->assertSame([0], ($first[0] ?? null)?->choices());
+        $this->assertSame(['Vendor\\ParserTest::testRoundTrip'], array_values(array_unique(array_map(static fn (Job $job): ?string => $job->target(), [...$first, ...$second]))));
+        $this->assertSame([], $engine->nextBatch());
+        $this->assertTrue($engine->isDone());
+        $this->assertTrue($engine->hasPendingInputs());
+
+        $engine->process([new Result(1, Outcome::Passed, null, new ChoiceSequence([0]), [1], null)]);
+
+        $this->assertSame(1, $engine->statistics()->executions);
+        $this->assertSame(1, $engine->statistics()->corpusEntries);
     }
 
     public function testReplacesAStoredInputWithTheChoicesThatItConsumed(): void
@@ -390,7 +457,7 @@ final class EngineTest extends TestCase
      * takes the same edges for every string that contains "A", throws for
      * "C", and takes fewer edges for every other string.
      */
-    private function engineWithStoredCorpus(string $directory): Engine
+    private function engineWithStoredCorpus(string $directory, ?JobIds $ids = null): Engine
     {
         $corpus     = new Corpus($directory);
         $dictionary = new Dictionary;
@@ -451,6 +518,10 @@ final class EngineTest extends TestCase
             Mutator::create($corpus, $dictionary, 8192),
             $this->findings(),
             new EngineConfiguration(1, 4, null, false, 4),
+            null,
+            null,
+            null,
+            $ids,
         );
     }
 

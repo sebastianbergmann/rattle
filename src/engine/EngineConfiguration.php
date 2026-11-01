@@ -40,17 +40,24 @@ final readonly class EngineConfiguration
     private int $batchSize;
 
     /**
-     * @param ?positive-int $maximumNumberOfExecutions
-     * @param ?float        $maximumTime               in seconds
-     * @param positive-int  $batchSize
+     * @var ?non-empty-string
      */
-    public function __construct(int $seed, ?int $maximumNumberOfExecutions = null, ?float $maximumTime = null, bool $stopOnFinding = false, int $batchSize = self::DEFAULT_BATCH_SIZE)
+    private ?string $target;
+
+    /**
+     * @param ?positive-int     $maximumNumberOfExecutions
+     * @param ?float            $maximumTime               in seconds
+     * @param positive-int      $batchSize
+     * @param ?non-empty-string $target                    the test ID of the property whose examples the inputs are, when the workers serve all the properties of a PHPUnit test suite
+     */
+    public function __construct(int $seed, ?int $maximumNumberOfExecutions = null, ?float $maximumTime = null, bool $stopOnFinding = false, int $batchSize = self::DEFAULT_BATCH_SIZE, ?string $target = null)
     {
         $this->seed                      = $seed;
         $this->maximumNumberOfExecutions = $maximumNumberOfExecutions;
         $this->maximumTime               = $maximumTime;
         $this->stopOnFinding             = $stopOnFinding;
         $this->batchSize                 = $batchSize;
+        $this->target                    = $target;
     }
 
     public function seed(): int
@@ -82,5 +89,13 @@ final readonly class EngineConfiguration
     public function batchSize(): int
     {
         return $this->batchSize;
+    }
+
+    /**
+     * @return ?non-empty-string
+     */
+    public function target(): ?string
+    {
+        return $this->target;
     }
 }
