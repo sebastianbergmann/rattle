@@ -51,6 +51,15 @@ final class Statistics
     public int $corpusEntries = 0;
 
     /**
+     * The number of stored inputs that were removed from the directory of the
+     * corpus because they produce no feature that a smaller input does not
+     * produce.
+     *
+     * @var non-negative-int
+     */
+    public int $removedInputs = 0;
+
+    /**
      * The number of tokens in the dictionary: the tokens of the dictionary
      * file and the ones that were found in comparisons.
      *

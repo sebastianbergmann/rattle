@@ -10,6 +10,7 @@
 namespace SebastianBergmann\Rattle;
 
 use function file_get_contents;
+use function file_put_contents;
 use function hash;
 use function is_dir;
 use function rmdir;
@@ -87,6 +88,27 @@ final class CorpusTest extends TestCase
         $this->assertSame(hash('sha256', $encoded), Corpus::fileNameOf($encoded));
         $this->assertSame($encoded, file_get_contents($this->directory . '/' . hash('sha256', $encoded)));
         $this->assertCount(3, (array) scandir($this->directory));
+    }
+
+    public function testRemovesAnInputThatItStored(): void
+    {
+        $this->directory = sys_get_temp_dir() . '/rattle-corpus-' . uniqid();
+
+        $corpus = new Corpus($this->directory);
+
+        $corpus->add(new ChoiceSequence([1, 2]), [10]);
+
+        file_put_contents($this->directory . '/other-name', "choice-sequence v1\n3\n");
+
+        $this->assertTrue($corpus->remove([1, 2]));
+        $this->assertFalse($corpus->remove([1, 2]));
+        $this->assertFalse($corpus->remove([3]));
+        $this->assertSame(['.', '..', 'other-name'], scandir($this->directory));
+    }
+
+    public function testRemovesNothingWithoutADirectory(): void
+    {
+        $this->assertFalse((new Corpus)->remove([1, 2]));
     }
 
     public function testCannotStoreEntriesWhereNoDirectoryCanBeCreated(): void

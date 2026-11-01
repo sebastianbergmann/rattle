@@ -225,7 +225,7 @@ fuzz/findings/                    --findings-directory
 
 Inputs are stored in the format of `sebastian/choice-sequence`: the line `choice-sequence v1` followed by one choice per line. The name of a corpus file is the SHA-256 of its content, and the name of a finding's directory is the SHA-256 of its failure signature.
 
-When rattle starts, it replays the corpus to continue where it left off, and treats the findings that are stored as known.
+When rattle starts, it replays the corpus to continue where it left off, and treats the findings that are stored as known. It replays the stored inputs smallest first and removes the ones that produce no feature that a smaller input does not produce, so that the corpus keeps only the inputs that its features need. An input that is a finding now is kept, and the inputs of a directory that you pass with `--corpus` are never removed.
 
 ## From findings to regression tests
 

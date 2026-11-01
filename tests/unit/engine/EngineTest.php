@@ -10,14 +10,27 @@
 namespace SebastianBergmann\Rattle;
 
 use function array_map;
+use function array_reverse;
 use function array_slice;
+use function array_values;
 use function count;
+use function file_put_contents;
+use function is_dir;
+use function mkdir;
+use function rmdir;
+use function scandir;
+use function str_contains;
+use function sys_get_temp_dir;
+use function uniqid;
+use function unlink;
 use Closure;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Small;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use SebastianBergmann\ChoiceSequence\ChoiceSequence;
+use SebastianBergmann\ChoiceSequence\Encoder;
 use SebastianBergmann\Rattle\Instrumentation\Edges;
 use SebastianBergmann\Rattle\Instrumentation\Features;
 
@@ -124,6 +137,48 @@ final class EngineTest extends TestCase
         $this->assertSame([[0], [1, 0x41, 0], [1, 0x52, 0]], array_map(static fn (Job $job): ?array => $job->choices(), array_slice($submitted, 0, 3)));
         $this->assertCount(20, $submitted);
         $this->assertGreaterThanOrEqual(1, $engine->statistics()->corpusEntries);
+    }
+
+    public function testRemovesStoredInputsThatProduceNoFeatureThatASmallerInputDoesNotProduce(): void
+    {
+        $directory = sys_get_temp_dir() . '/rattle-engine-' . uniqid();
+        $inputs    = ['A' => [1, 0x41, 0], 'AA' => [1, 0x41, 1, 0x41, 0], 'B' => [1, 0x42, 0], 'C' => [1, 0x43, 0]];
+
+        foreach ($inputs as $choices) {
+            $this->store($directory, $choices);
+        }
+
+        $statistics = $this->engineWithStoredCorpus($directory)->run(array_values($inputs));
+
+        try {
+            // "AA" and "B" produce no feature that "A" does not produce, and
+            // "C" is a finding, which is kept; the results arrive in reverse
+            // order, but are processed smallest first
+            $this->assertSame(2, $statistics->removedInputs);
+            $this->assertFileExists($this->pathOf($directory, $inputs['A']));
+            $this->assertFileDoesNotExist($this->pathOf($directory, $inputs['AA']));
+            $this->assertFileDoesNotExist($this->pathOf($directory, $inputs['B']));
+            $this->assertFileExists($this->pathOf($directory, $inputs['C']));
+        } finally {
+            $this->removeDirectory($directory);
+        }
+    }
+
+    public function testReplacesAStoredInputWithTheChoicesThatItConsumed(): void
+    {
+        $directory = sys_get_temp_dir() . '/rattle-engine-' . uniqid();
+
+        $this->store($directory, [1, 0x41, 0, 7]);
+
+        $statistics = $this->engineWithStoredCorpus($directory)->run([[1, 0x41, 0, 7]]);
+
+        try {
+            $this->assertSame(1, $statistics->removedInputs);
+            $this->assertFileDoesNotExist($this->pathOf($directory, [1, 0x41, 0, 7]));
+            $this->assertFileExists($this->pathOf($directory, [1, 0x41, 0]));
+        } finally {
+            $this->removeDirectory($directory);
+        }
     }
 
     public function testGeneratesInputsWhileTheCorpusIsEmpty(): void
@@ -293,6 +348,107 @@ final class EngineTest extends TestCase
             $submitted,
             $interrupted,
         );
+    }
+
+    /**
+     * An engine that only replays the inputs to start with, with an executor
+     * that returns the results of each batch in reverse order. Its target
+     * takes the same edges for every string that contains "A", throws for
+     * "C", and takes fewer edges for every other string.
+     */
+    private function engineWithStoredCorpus(string $directory): Engine
+    {
+        $corpus     = new Corpus($directory);
+        $dictionary = new Dictionary;
+        $executor   = $this->executor(
+            static function (string $bytes): void
+            {
+                Edges::through(1, null);
+
+                if (str_contains($bytes, 'A')) {
+                    Edges::through(2, null);
+                }
+
+                if ($bytes === 'C') {
+                    throw new LogicException;
+                }
+            },
+        );
+
+        return new Engine(
+            new readonly class($executor) implements Executor
+            {
+                public function __construct(private Executor $executor)
+                {
+                }
+
+                public function target(): TargetDescription
+                {
+                    return $this->executor->target();
+                }
+
+                public function capacity(): int
+                {
+                    return $this->executor->capacity();
+                }
+
+                public function submit(array $jobs): void
+                {
+                    $this->executor->submit($jobs);
+                }
+
+                public function collect(): array
+                {
+                    return array_reverse($this->executor->collect());
+                }
+
+                public function execute(Job $job): Result
+                {
+                    return $this->executor->execute($job);
+                }
+
+                public function shutdown(): void
+                {
+                    $this->executor->shutdown();
+                }
+            },
+            $corpus,
+            $dictionary,
+            Mutator::create($corpus, $dictionary, 8192),
+            $this->findings(),
+            new EngineConfiguration(1, 4, null, false, 4),
+        );
+    }
+
+    /**
+     * @param list<non-negative-int> $choices
+     */
+    private function store(string $directory, array $choices): void
+    {
+        if (!is_dir($directory)) {
+            mkdir($directory);
+        }
+
+        file_put_contents($this->pathOf($directory, $choices), (new Encoder)->encode(new ChoiceSequence($choices)));
+    }
+
+    /**
+     * @param list<non-negative-int> $choices
+     */
+    private function pathOf(string $directory, array $choices): string
+    {
+        return $directory . '/' . Corpus::fileNameOf((new Encoder)->encode(new ChoiceSequence($choices)));
+    }
+
+    private function removeDirectory(string $directory): void
+    {
+        foreach ((array) scandir($directory) as $file) {
+            if ($file !== '.' && $file !== '..') {
+                unlink($directory . '/' . $file);
+            }
+        }
+
+        rmdir($directory);
     }
 
     /**

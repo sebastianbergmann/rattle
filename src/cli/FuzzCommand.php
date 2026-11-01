@@ -304,6 +304,16 @@ final readonly class FuzzCommand implements Command
             $statistics->duplicateFindings === 1 ? ' was' : 's were',
         );
 
+        if ($statistics->removedInputs > 0) {
+            printf(
+                '%d stored input%s that produce%s no feature that a smaller input does not produce %s removed from the corpus.' . PHP_EOL,
+                $statistics->removedInputs,
+                $statistics->removedInputs === 1 ? '' : 's',
+                $statistics->removedInputs === 1 ? 's' : '',
+                $statistics->removedInputs === 1 ? 'was' : 'were',
+            );
+        }
+
         $this->writeFoundTokens($arguments->cacheDirectory() . '/' . $name, $dictionary);
 
         return $statistics->findings > 0 ? 1 : 0;

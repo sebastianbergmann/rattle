@@ -16,6 +16,7 @@ use function is_dir;
 use function is_file;
 use function mkdir;
 use function sprintf;
+use function unlink;
 use SebastianBergmann\ChoiceSequence\ChoiceSequence;
 use SebastianBergmann\ChoiceSequence\Encoder;
 
@@ -23,9 +24,7 @@ use SebastianBergmann\ChoiceSequence\Encoder;
  * The inputs that produced features that no input before them produced, and
  * the set of known features.
  *
- * An input is added when it produced at least one feature that is new. The
- * entries are kept: replacing an entry with a smaller one that produces the
- * same features is left for later.
+ * An input is added when it produced at least one feature that is new.
  *
  * When the corpus has a directory, each entry is stored there in the format
  * "choice-sequence v1", in a file whose name is the hexadecimal SHA-256 of
@@ -92,6 +91,35 @@ final class Corpus
         $this->store($sequence);
 
         return $entry;
+    }
+
+    /**
+     * Removes the input with the given choices from the directory of the
+     * corpus, when it is stored there under the name that the corpus gives
+     * it, and returns whether it was removed. Files that were stored under
+     * another name are left alone.
+     *
+     * @param list<non-negative-int> $choices
+     *
+     * @throws CorpusException
+     */
+    public function remove(array $choices): bool
+    {
+        if ($this->directory === null) {
+            return false;
+        }
+
+        $path = $this->directory . '/' . self::fileNameOf((new Encoder)->encode(new ChoiceSequence($choices)));
+
+        if (!is_file($path)) {
+            return false;
+        }
+
+        if (!@unlink($path)) {
+            throw new CorpusException(sprintf('Cannot remove the corpus entry "%s"', $path));
+        }
+
+        return true;
     }
 
     /**

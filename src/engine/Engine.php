@@ -11,6 +11,7 @@ namespace SebastianBergmann\Rattle;
 
 use function array_shift;
 use function assert;
+use function count;
 use function hash;
 use function is_int;
 use function microtime;
@@ -35,6 +36,12 @@ use Random\Randomizer;
  * a feature that is new is added to the corpus, an input that is a finding
  * is passed to the finding handler. The constant operands of comparisons
  * that a result reports, whatever its outcome, are added to the dictionary.
+ *
+ * An input to start with that was stored in the directory of the corpus is
+ * removed from it when it is rejected or produces no feature that a smaller
+ * input to start with did not produce, so that the stored corpus keeps only
+ * the inputs that its features need. A stored input that is a finding now is
+ * kept.
  *
  * All decisions are made with one random number generator that is seeded
  * with the seed of the run. A new batch is only composed when an executor is
@@ -79,6 +86,29 @@ final class Engine
      * @var array<non-negative-int, Job>
      */
     private array $pending = [];
+
+    /**
+     * The number of inputs to start with, which are submitted first and
+     * therefore have the smallest IDs.
+     *
+     * @var non-negative-int
+     */
+    private int $numberOfInitialInputs = 0;
+
+    /**
+     * The results of inputs to start with that arrived before the results of
+     * the inputs to start with that were submitted before them, by ID.
+     *
+     * @var array<non-negative-int, Result>
+     */
+    private array $earlyInitialResults = [];
+
+    /**
+     * The ID of the input to start with whose result is processed next.
+     *
+     * @var non-negative-int
+     */
+    private int $nextInitialInput = 0;
 
     /**
      * @var non-negative-int
@@ -135,6 +165,8 @@ final class Engine
         // shortlex order of choice sequences
         usort($initialInputs, static fn (array $a, array $b): int => $a <=> $b);
 
+        $this->numberOfInitialInputs = count($initialInputs);
+
         while (!$this->shouldStop()) {
             while ($this->executor->capacity() > 0 && !$this->shouldStop()) {
                 $batch = $this->nextBatch($initialInputs);
@@ -187,7 +219,9 @@ final class Engine
             $id = $this->numberOfSubmittedInputs++;
 
             if ($initialInputs !== []) {
-                $job = Job::replay($id, array_shift($initialInputs));
+                // all features of an input to start with are needed to tell
+                // whether a smaller input produced them all
+                $job = Job::replay($id, array_shift($initialInputs))->withAllFeatures();
             } elseif ($this->corpus->isEmpty() || $this->randomizer->nextFloat() < EngineConfiguration::PROBABILITY_OF_GENERATION) {
                 $job = Job::generate($id, self::seedOf($this->configuration->seed(), $this->numberOfGeneratedInputs++));
             } else {
@@ -207,41 +241,30 @@ final class Engine
 
     /**
      * @param list<Result> $results
+     *
+     * @throws CorpusException
      */
     private function process(array $results): void
     {
         foreach ($results as $result) {
-            $job = $this->pending[$result->id()] ?? null;
-
-            assert($job !== null);
-
-            unset($this->pending[$result->id()]);
-
-            $this->statistics->executions++;
-
-            $this->dictionary->addFoundTokens($result->tokens());
-
-            if ($result->isFinding()) {
-                if ($this->findings->handle($result, $job)) {
-                    $this->statistics->findings++;
-
-                    if ($this->configuration->stopOnFinding()) {
-                        $this->stopped = true;
-                    }
-                } else {
-                    $this->statistics->duplicateFindings++;
-                }
+            if ($result->id() >= $this->numberOfInitialInputs) {
+                $this->processResult($result, false);
 
                 continue;
             }
 
-            if ($result->outcome() === Outcome::Rejected) {
-                $this->statistics->rejected++;
+            // the results of the inputs to start with are processed in the
+            // order in which the inputs were submitted, smallest first, also
+            // when several workers return them in another order
+            $this->earlyInitialResults[$result->id()] = $result;
 
-                continue;
+            while (isset($this->earlyInitialResults[$this->nextInitialInput])) {
+                $this->processResult($this->earlyInitialResults[$this->nextInitialInput], true);
+
+                unset($this->earlyInitialResults[$this->nextInitialInput]);
+
+                $this->nextInitialInput++;
             }
-
-            $this->corpus->add($result->sequence(), $result->features());
         }
 
         $this->statistics->features      = $this->corpus->numberOfFeatures();
@@ -250,6 +273,72 @@ final class Engine
 
         if ($this->progress !== null) {
             ($this->progress)($this->statistics);
+        }
+    }
+
+    /**
+     * @param bool $initial whether the result is the one of an input to start with
+     *
+     * @throws CorpusException
+     */
+    private function processResult(Result $result, bool $initial): void
+    {
+        $job = $this->pending[$result->id()] ?? null;
+
+        assert($job !== null);
+
+        unset($this->pending[$result->id()]);
+
+        $this->statistics->executions++;
+
+        $this->dictionary->addFoundTokens($result->tokens());
+
+        if ($result->isFinding()) {
+            if ($this->findings->handle($result, $job)) {
+                $this->statistics->findings++;
+
+                if ($this->configuration->stopOnFinding()) {
+                    $this->stopped = true;
+                }
+            } else {
+                $this->statistics->duplicateFindings++;
+            }
+
+            return;
+        }
+
+        if ($result->outcome() === Outcome::Rejected) {
+            $this->statistics->rejected++;
+
+            if ($initial) {
+                $this->removeStoredInput($job);
+            }
+
+            return;
+        }
+
+        $entry = $this->corpus->add($result->sequence(), $result->features());
+
+        // an input to start with that produced no feature that a smaller one
+        // did not produce is removed from the directory of the corpus, and so
+        // is one that consumed fewer choices than it has, because the choices
+        // that it consumed are stored instead
+        if ($initial && ($entry === null || $entry->sequence()->choices() !== $job->choices())) {
+            $this->removeStoredInput($job);
+        }
+    }
+
+    /**
+     * @throws CorpusException
+     */
+    private function removeStoredInput(Job $job): void
+    {
+        $choices = $job->choices();
+
+        assert($choices !== null);
+
+        if ($this->corpus->remove($choices)) {
+            $this->statistics->removedInputs++;
         }
     }
 
