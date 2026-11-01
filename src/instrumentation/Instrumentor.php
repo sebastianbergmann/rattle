@@ -30,6 +30,10 @@ use PhpParser\PhpVersion;
  * which the block starts, so that a block has the same index in every worker,
  * however the files are included.
  *
+ * When the constant operands of comparisons are collected, they are found in
+ * the same traversal of the code (see ComparisonOperandFinder), which does
+ * not change the code.
+ *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
  * @internal This class is not covered by the backward compatibility promise for sebastian/rattle
@@ -37,10 +41,15 @@ use PhpParser\PhpVersion;
 final readonly class Instrumentor
 {
     private Parser $parser;
+    private ?ComparisonOperands $operands;
 
-    public function __construct()
+    /**
+     * @param ?ComparisonOperands $operands collects the constant operands of the comparisons in the code that is instrumented, null to not look for them
+     */
+    public function __construct(?ComparisonOperands $operands = null)
     {
-        $this->parser = (new ParserFactory)->createForVersion(PhpVersion::getHostVersion());
+        $this->parser   = (new ParserFactory)->createForVersion(PhpVersion::getHostVersion());
+        $this->operands = $operands;
     }
 
     /**
@@ -66,7 +75,15 @@ final readonly class Instrumentor
 
         $finder = new BlockFinder($this->parser->getTokens());
 
-        (new NodeTraverser($finder))->traverse($ast);
+        if ($this->operands === null) {
+            (new NodeTraverser($finder))->traverse($ast);
+        } else {
+            $operandFinder = new ComparisonOperandFinder;
+
+            (new NodeTraverser($finder, $operandFinder))->traverse($ast);
+
+            $this->operands->add($operandFinder->operands());
+        }
 
         $edits = new SourceEdits($code);
 

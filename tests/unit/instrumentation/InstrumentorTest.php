@@ -30,6 +30,8 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(SourceEdits::class)]
 #[CoversClass(InstrumentationFailedException::class)]
 #[CoversClass(Edges::class)]
+#[CoversClass(ComparisonOperandFinder::class)]
+#[CoversClass(ComparisonOperands::class)]
 #[Small]
 final class InstrumentorTest extends TestCase
 {
@@ -195,6 +197,21 @@ final class InstrumentorTest extends TestCase
         $this->assertSame($first, $second);
         $this->assertNotSame($first, $third);
         $this->assertStringContainsString('\\' . Edges::class . '::$previous = ', $first);
+    }
+
+    public function testCollectsTheConstantOperandsOfComparisonsWithoutChangingTheInstrumentedCode(): void
+    {
+        $code     = '<?php function f($a) { if ($a === "a") { return str_starts_with($a, "b"); } }';
+        $operands = new ComparisonOperands;
+
+        $this->assertSame(
+            (new Instrumentor)->instrument($code, 'a.php'),
+            (new Instrumentor($operands))->instrument($code, 'a.php'),
+        );
+
+        (new Instrumentor($operands))->instrument('<?php $a === "c";', 'b.php');
+
+        $this->assertSame(['a', 'b', 'c'], $operands->takeUnreported());
     }
 
     public function testCannotInstrumentCodeThatCannotBeParsed(): void
