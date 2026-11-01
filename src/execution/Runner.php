@@ -187,7 +187,7 @@ final class Runner implements InputRunner
         $features = [];
 
         if ($outcome !== Outcome::Rejected) {
-            $features = $this->newFeatures->of($edges);
+            $features = $job->reportAllFeatures() ? $this->newFeatures->all($edges) : $this->newFeatures->of($edges);
         }
 
         return new Result($job->id(), $outcome, null, $source->sequence(), $features, $drawnValues);

@@ -13,7 +13,8 @@ use SebastianBergmann\Rattle\Instrumentation\Features;
 
 /**
  * The features of an execution that no execution before it in this process
- * had, so that a worker reports every feature only once.
+ * had, so that a worker reports every feature only once, unless an input asks
+ * for all the features that it produced.
  *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
@@ -40,6 +41,25 @@ final class NewFeatures
                 $this->seen[$feature] = true;
                 $features[]           = $feature;
             }
+        }
+
+        return $features;
+    }
+
+    /**
+     * All features of an execution, which are seen afterwards, as the ones
+     * that of() returns are.
+     *
+     * @param array<int, positive-int> $hits how often each edge was taken
+     *
+     * @return list<int>
+     */
+    public function all(array $hits): array
+    {
+        $features = Features::fromEdges($hits);
+
+        foreach ($features as $feature) {
+            $this->seen[$feature] = true;
         }
 
         return $features;

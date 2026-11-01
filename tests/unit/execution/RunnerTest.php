@@ -118,6 +118,26 @@ final class RunnerTest extends TestCase
         $this->assertSame([], $again->features());
     }
 
+    public function testReportsAllFeaturesWhenTheInputAsksForThem(): void
+    {
+        $runner = $this->runner(static function (Input $input): void
+        {
+            Edges::through(1, null);
+
+            if ($input->bool()) {
+                Edges::through(2, null);
+            }
+        });
+
+        $first = $runner->run(Job::replay(1, [1]));
+        $all   = $runner->run(Job::replay(2, [1])->withAllFeatures());
+        $again = $runner->run(Job::replay(3, [0]));
+
+        $this->assertSame([1, 1 << 28 | 2], $first->features());
+        $this->assertSame([1, 1 << 28 | 2], $all->features());
+        $this->assertSame([], $again->features());
+    }
+
     public function testAnInputThatEndsWithAnExpectedThrowableIsNotAFinding(): void
     {
         $runner = $this->runner(

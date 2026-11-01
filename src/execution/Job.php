@@ -20,6 +20,10 @@ use SebastianBergmann\ChoiceSequence\ChoiceSource;
  * An input to be executed: a choice sequence that is replayed, or a seed
  * from which the choices are generated at random.
  *
+ * The result of an input has the features that it produced and that the
+ * process that executed it had not seen before, unless the input asks for
+ * all the features that it produced.
+ *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
  * @internal This class is not covered by the backward compatibility promise for sebastian/rattle
@@ -37,6 +41,7 @@ final readonly class Job
     private ?array $choices;
     private ?int $seed;
     private bool $reportDrawnValues;
+    private bool $reportAllFeatures;
 
     /**
      * @param non-negative-int       $id
@@ -64,28 +69,38 @@ final readonly class Job
     {
         $id                = $data['id'] ?? null;
         $reportDrawnValues = $data['drawnValues'] ?? null;
+        $reportAllFeatures = $data['allFeatures'] ?? false;
 
-        if (!is_int($id) || $id < 0 || !is_bool($reportDrawnValues)) {
+        if (!is_int($id) || $id < 0 || !is_bool($reportDrawnValues) || !is_bool($reportAllFeatures)) {
             throw new ProtocolException('Invalid input');
         }
 
         if (isset($data['seed']) && is_int($data['seed'])) {
-            return self::generate($id, $data['seed'], $reportDrawnValues);
+            return new self($id, null, $data['seed'], $reportDrawnValues, $reportAllFeatures);
         }
 
-        return self::replay($id, ProtocolData::listOfNonNegativeIntegers($data['choices'] ?? null), $reportDrawnValues);
+        return new self($id, ProtocolData::listOfNonNegativeIntegers($data['choices'] ?? null), null, $reportDrawnValues, $reportAllFeatures);
     }
 
     /**
      * @param non-negative-int        $id
      * @param ?list<non-negative-int> $choices
      */
-    private function __construct(int $id, ?array $choices, ?int $seed, bool $reportDrawnValues)
+    private function __construct(int $id, ?array $choices, ?int $seed, bool $reportDrawnValues, bool $reportAllFeatures = false)
     {
         $this->id                = $id;
         $this->choices           = $choices;
         $this->seed              = $seed;
         $this->reportDrawnValues = $reportDrawnValues;
+        $this->reportAllFeatures = $reportAllFeatures;
+    }
+
+    /**
+     * The same input, whose result has all the features that it produced.
+     */
+    public function withAllFeatures(): self
+    {
+        return new self($this->id, $this->choices, $this->seed, $this->reportDrawnValues, true);
     }
 
     /**
@@ -124,6 +139,11 @@ final readonly class Job
         return $this->reportDrawnValues;
     }
 
+    public function reportAllFeatures(): bool
+    {
+        return $this->reportAllFeatures;
+    }
+
     /**
      * The choice sequence that is replayed, or an empty one for an input that
      * is generated.
@@ -146,14 +166,22 @@ final readonly class Job
     }
 
     /**
-     * @return array{id: non-negative-int, drawnValues: bool, choices?: list<non-negative-int>, seed?: int}
+     * @return array{id: non-negative-int, drawnValues: bool, allFeatures?: true, choices?: list<non-negative-int>, seed?: int}
      */
     public function asArray(): array
     {
-        if ($this->choices !== null) {
-            return ['id' => $this->id, 'drawnValues' => $this->reportDrawnValues, 'choices' => $this->choices];
+        $data = ['id' => $this->id, 'drawnValues' => $this->reportDrawnValues];
+
+        if ($this->reportAllFeatures) {
+            $data['allFeatures'] = true;
         }
 
-        return ['id' => $this->id, 'drawnValues' => $this->reportDrawnValues, 'seed' => (int) $this->seed];
+        if ($this->choices !== null) {
+            $data['choices'] = $this->choices;
+        } else {
+            $data['seed'] = (int) $this->seed;
+        }
+
+        return $data;
     }
 }
