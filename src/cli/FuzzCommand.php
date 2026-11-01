@@ -90,7 +90,7 @@ final readonly class FuzzCommand implements Command
             return $this->fuzz($arguments, $configuration, $this->executionOptions($arguments) . $arguments->target(), $arguments->maximumTime(), $stderr, $jobs, $seed, $dictionary, $isInterrupted, $phpBinaries);
         }
 
-        return $this->fuzzTestSuite($arguments, $configuration, $phpunit, $stderr, $jobs, $seed, $dictionary, $isInterrupted);
+        return $this->fuzzTestSuite($arguments, $configuration, $phpunit, $stderr, $jobs, $seed, $dictionary, $isInterrupted, $phpBinaries);
     }
 
     /**
@@ -265,10 +265,11 @@ final readonly class FuzzCommand implements Command
      * @param positive-int                $jobs
      * @param list<non-empty-string>      $tokens        the tokens of the dictionary file
      * @param Closure(): bool             $isInterrupted
+     * @param list<PhpBinary>             $phpBinaries   the versions of PHP that the corpus and the findings are compared on
      *
      * @return 0|1|2
      */
-    private function fuzzTestSuite(Arguments $arguments, WorkerConfiguration $configuration, PhpunitTestSuite $phpunit, ?Closure $stderr, int $jobs, int $seed, array $tokens, Closure $isInterrupted): int
+    private function fuzzTestSuite(Arguments $arguments, WorkerConfiguration $configuration, PhpunitTestSuite $phpunit, ?Closure $stderr, int $jobs, int $seed, array $tokens, Closure $isInterrupted, array $phpBinaries): int
     {
         $executor = new ProcessExecutor($configuration->withTarget(''), $jobs, $stderr);
 
@@ -319,6 +320,11 @@ final readonly class FuzzCommand implements Command
         $numberOfStoredInputs  = 0;
         $numberOfKnownFindings = 0;
 
+        // the inputs of all properties are compared on the versions of PHP
+        // with executors whose workers serve all properties, which are only
+        // started when they are needed
+        $comparison = $phpBinaries === [] ? null : $this->differentialExecutor(new ProcessExecutor($configuration->withTarget(''), 1, $stderr), $phpBinaries, $configuration->withTarget(''), $stderr, null);
+
         foreach ($properties as $index => $property) {
             $name            = PropertyDirectory::nameOf($property);
             $corpusDirectory = $arguments->cacheDirectory() . '/' . $name . '/corpus';
@@ -347,6 +353,22 @@ final readonly class FuzzCommand implements Command
 
             $numberOfKnownFindings += $findings->numberOfKnownFindings();
 
+            $differences = null;
+
+            if ($comparison !== null) {
+                $differential = $comparison->forTarget($property);
+                $handler      = new FindingProcessor(
+                    new Minimizer($differential, $arguments->maximumNumberOfShrinkingAttempts(), $isInterrupted),
+                    new FindingStore($arguments->findingsDirectory() . '/' . $name),
+                    new TargetDescription($property, null, $target->maximumNumberOfChoices()),
+                    $this->phpOptions($phpBinaries) . $this->executionOptions($arguments) . $this->reproduction($phpunit, $property),
+                    $seed,
+                    $this->findingListener($status, $property),
+                );
+
+                $differences = new DifferenceFinder($differential, $report === null ? $handler : new FindingRecorder($handler, $report, $property));
+            }
+
             $corpus = new Corpus($corpusDirectory);
 
             $engines[$property] = new Engine(
@@ -362,6 +384,7 @@ final readonly class FuzzCommand implements Command
                 $this->inputLogger($log),
                 $isInterrupted,
                 $ids,
+                $differences === null ? null : $differences->check(...),
             );
 
             $engines[$property]->start($initialInputs);
@@ -375,7 +398,7 @@ final readonly class FuzzCommand implements Command
             'Jobs:     %d' . PHP_EOL .
             'Sources:  %s' . PHP_EOL .
             'Corpus:   %s (%d stored input%s)' . PHP_EOL .
-            'Findings: %s (%d known)' . PHP_EOL . PHP_EOL,
+            'Findings: %s (%d known)' . PHP_EOL,
             count($properties),
             count($properties) === 1 ? 'y' : 'ies',
             $seed,
@@ -387,6 +410,12 @@ final readonly class FuzzCommand implements Command
             $arguments->findingsDirectory(),
             $numberOfKnownFindings,
         );
+
+        if ($comparison !== null) {
+            printf('Versions: %s, which the corpus and the findings are compared on' . PHP_EOL, implode(', ', $comparison->labels()));
+        }
+
+        print PHP_EOL;
 
         foreach ($loader->warnings() as $warning) {
             print 'Warning: ' . $warning . PHP_EOL;
@@ -418,6 +447,8 @@ final readonly class FuzzCommand implements Command
             foreach ($minimizationExecutors as $minimizationExecutor) {
                 $minimizationExecutor->shutdown();
             }
+
+            $comparison?->shutdown();
 
             if (is_resource($log)) {
                 fclose($log);

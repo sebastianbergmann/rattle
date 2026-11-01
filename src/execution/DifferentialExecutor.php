@@ -98,6 +98,17 @@ final class DifferentialExecutor implements Executor
     }
 
     /**
+     * An executor that executes the inputs of a property on the same versions,
+     * with the same executors.
+     *
+     * @param non-empty-string $target the test ID of the property
+     */
+    public function forTarget(string $target): self
+    {
+        return new self($this->executors, $target);
+    }
+
+    /**
      * The names of the versions, the one that fuzzes first.
      *
      * @return non-empty-list<non-empty-string>

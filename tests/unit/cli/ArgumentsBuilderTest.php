@@ -61,7 +61,6 @@ final class ArgumentsBuilderTest extends TestCase
             'status without --phpunit'                      => [['rattle', 'status']],
             'status with an argument'                       => [['rattle', 'status', '--phpunit', 'target.php']],
             'status in JSON and HTML'                       => [['rattle', 'status', '--phpunit', '--json', '--html', 'status.html']],
-            'PHP binaries for properties'                   => [['rattle', 'fuzz', '--phpunit', '--php', '/usr/bin/php8.6']],
             'empty SARIF file'                              => [['rattle', 'regress', 'target.php', '--sarif', '']],
         ];
     }

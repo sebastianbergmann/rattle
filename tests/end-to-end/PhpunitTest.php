@@ -27,6 +27,7 @@ use function proc_open;
 use function realpath;
 use function rmdir;
 use function scandir;
+use function sprintf;
 use function str_replace;
 use function stream_get_contents;
 use function sys_get_temp_dir;
@@ -290,6 +291,17 @@ final class PhpunitTest extends TestCase
         $this->assertSame('path-traversal', $result['ruleId']);
         $this->assertSame('SebastianBergmann\\Rattle\\Fixture\\Phpunit\\TemplatesTest::testLoadsEveryTemplate', $result['property']);
         $this->assertSame(self::FIXTURE . '/src/Templates.php', $result['uri']);
+    }
+
+    public function testFindsAnExampleOfAPropertyWhoseOutcomeDiffersBetweenVersionsOfPhp(): void
+    {
+        [$exit, $output] = $this->rattle(['fuzz', '--phpunit', '--configuration', self::FIXTURE . '/versions.xml', '--php', self::FIXTURE . '/../php/php-precision-5', '--jobs', '1', '--seed', '1', '--max-executions', '300', '--stop-on-finding', '--cache-directory', $this->directory . '/cache', '--findings-directory', $this->directory . '/findings']);
+
+        $first = PhpBinary::current()->label();
+
+        $this->assertSame(1, $exit, $output);
+        $this->assertStringContainsString(sprintf('Versions: %s, %s (php-precision-5), which the corpus and the findings are compared on', $first, $first), $output);
+        $this->assertStringContainsString(sprintf('Finding: Difference between PHP versions: %s: passes; %s (php-precision-5): LengthException at %s/src/Ratio.php:31', $first, $first, self::FIXTURE), $output);
     }
 
     public function testReportsATestSuiteWithoutProperties(): void

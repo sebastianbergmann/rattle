@@ -348,10 +348,6 @@ final readonly class ArgumentsBuilder
             throw new ArgumentsBuilderException('The options --json and --html cannot be used together');
         }
 
-        if ($phpunit && $phpBinaries !== []) {
-            throw new ArgumentsBuilderException('The option --php cannot be used with --phpunit yet');
-        }
-
         if ($phpunit && $seedsDirectory !== null) {
             throw new ArgumentsBuilderException('The option --seeds cannot be used with --phpunit, because properties are not bytes targets');
         }

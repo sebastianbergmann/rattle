@@ -20,4 +20,8 @@
     if ($class === 'SebastianBergmann\Rattle\Fixture\Phpunit\Templates') {
         require __DIR__ . '/src/Templates.php';
     }
+
+    if ($class === 'SebastianBergmann\Rattle\Fixture\Phpunit\Ratio') {
+        require __DIR__ . '/src/Ratio.php';
+    }
 });
