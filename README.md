@@ -11,6 +11,26 @@ rattle runs your code with one input after another for minutes or days. It instr
 
 The inputs of rattle are choice sequences of [`sebastian/choice-sequence`](https://github.com/sebastianbergmann/choice-sequence), the same as for PHPUnit's property-based testing. Inputs are represented, shrunk, compared, and stored in the same way by both tools.
 
+## Background
+
+### Fuzz testing
+
+Fuzz testing runs code with one generated input after another and watches for failures: uncaught exceptions, warnings, timeouts, and fatal errors. It does not compare results with expected values. Its oracle is implicit: the code must not fail, whatever its input. This makes it effective where code processes data that it cannot trust, in parsers, decoders, and validators, for instance.
+
+Coverage-guided fuzzing learns from the code that it runs. The code is instrumented, an input that reaches code that no input reached before is kept, and the inputs that are kept are mutated further. This way, the fuzzer works its way into the code instead of guessing. [Security through chaos](https://phpunit.expert/articles/security-through-chaos.html) shows how a coverage-guided fuzzer found a defect in a CSV parser whose tests covered every line and every branch.
+
+### Why rattle fuzzes the properties of a PHPUnit test suite
+
+A property states what must be true for every input of a kind, and generators describe these inputs ([Property-Based Testing](https://phpunit.expert/articles/property-based-testing.html)). PHPUnit checks a property with a number of random examples and shrinks a counterexample to the smallest input that still falsifies the property ([Smaller input, greater insight](https://phpunit.expert/articles/smaller-input-greater-insight.html)). Property-based testing and fuzz testing both generate inputs, and both reduce a failing input to a small one. They differ in what they know and in how long they run. A property describes its valid inputs and has an explicit oracle, its assertions, and PHPUnit checks it within seconds on every test run. A fuzzer assumes little about its inputs and runs for hours, guided by coverage.
+
+A fuzz target needs what a property already has: a description of valid inputs and a way to tell whether the code behaves as it should. This is why rattle fuzzes the properties of a PHPUnit test suite as they are. As PHPUnit and rattle share choice sequences, rattle mutates the choices from which the generators of a property build its arguments, not the arguments themselves. Every mutated input is therefore a valid input of the property, without a grammar or an encoding of your own. A finding has the same failure signature as a counterexample of PHPUnit that fails in the same way, and `rattle regress --phpunit` replays the findings as regression tests. PHPUnit keeps checking the properties quickly on every test run, while rattle explores their inputs for as long as you let it.
+
+### Fuzz testing and mutation testing
+
+Mutation testing and fuzz testing both make changes on purpose, but to different things and to answer different questions. Mutation testing changes the code under test and asks whether the tests notice: it measures how strong their oracles are. Fuzz testing changes the inputs and asks whether the code fails: it searches for the inputs that the tests did not think of.
+
+Neither replaces the other. A mutation score tells that the tests detect changes to the code for the inputs that they use, not that these are the inputs that matter: the CSV parser in [Security through chaos](https://phpunit.expert/articles/security-through-chaos.html) had a mutation score of 100% for its covered code, and fuzzing still found a defect in it. Conversely, fuzzing a property whose assertions are weak finds little more than the inputs that make the code throw an exception or trigger a warning, and mutation testing tells whether the assertions are strong enough. When rattle mutates, it changes inputs, never your code.
+
 ## Installation
 
 You can add rattle as a development-time dependency to your project using [Composer](https://getcomposer.org/):
