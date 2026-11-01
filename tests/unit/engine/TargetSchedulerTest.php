@@ -11,6 +11,7 @@ namespace SebastianBergmann\Rattle;
 
 use function array_shift;
 use function assert;
+use function count;
 use function strlen;
 use Closure;
 use LogicException;
@@ -56,6 +57,7 @@ use SebastianBergmann\Rattle\Instrumentation\Features;
 #[UsesClass(Statistics::class)]
 #[UsesClass(SwapSpans::class)]
 #[UsesClass(Target::class)]
+#[UsesClass(TargetHistory::class)]
 #[UsesClass(TargetDescription::class)]
 #[UsesClass(ValueExporter::class)]
 #[Small]
@@ -110,6 +112,81 @@ final class TargetSchedulerTest extends TestCase
 
         $this->assertGreaterThan(2 * $flat->statistics()->executions, $growing->statistics()->executions);
         $this->assertGreaterThan(0, $flat->statistics()->executions);
+    }
+
+    public function testStartsWithTheWeightsThatTheHistoriesOfTheTargetsKeptFromEarlierRuns(): void
+    {
+        $engines = $this->engines(
+            [
+                'saturated' => static function (string $bytes): void
+                {
+                    Edges::through(1, null);
+                },
+                'new' => static function (string $bytes): void
+                {
+                    Edges::through(1, null);
+                },
+            ],
+            null,
+            false,
+        );
+
+        $saturated = $engines['engines']['saturated'] ?? null;
+        $new       = $engines['engines']['new'] ?? null;
+
+        $this->assertNotNull($saturated);
+        $this->assertNotNull($new);
+
+        // earlier runs executed the saturated target 10,000 times without a
+        // discovery
+        $history = TargetHistory::fromArray(['version' => 1, 'target' => 'saturated', 'discoveries' => 0.0, 'decayedExecutions' => 10000.0]);
+
+        $this->assertNotNull($history);
+
+        (new TargetScheduler(
+            $engines['executor'],
+            $engines['engines'],
+            1,
+            null,
+            static fn (): bool => $saturated->statistics()->executions + $new->statistics()->executions >= 2000,
+            null,
+            ['saturated' => $history],
+        ))->run();
+
+        $this->assertLessThan($new->statistics()->executions / 4, $saturated->statistics()->executions);
+    }
+
+    public function testRecordsWhatTheTargetsDidInTheRunInTheirHistories(): void
+    {
+        $engines = $this->engines(
+            [
+                'growing' => static function (string $bytes): void
+                {
+                    Edges::through(1 + strlen($bytes), null);
+                },
+            ],
+            500,
+            false,
+        );
+
+        $growing = $engines['engines']['growing'] ?? null;
+
+        $this->assertNotNull($growing);
+
+        $scheduler = new TargetScheduler($engines['executor'], $engines['engines'], 1);
+
+        $scheduler->run();
+
+        $history = $scheduler->histories()['growing'] ?? null;
+
+        $this->assertNotNull($history);
+        $this->assertSame(1, $history->runs());
+        $this->assertSame(500, $history->executions());
+        $this->assertSame($growing->statistics()->features, $history->features());
+        $this->assertGreaterThan(0.0, $history->discoveries());
+        $this->assertGreaterThan(0.0, $history->decayedExecutions());
+        $this->assertNotNull($history->lastDiscovery());
+        $this->assertGreaterThanOrEqual(3, count($history->series()));
     }
 
     public function testStopsFuzzingATargetThatFoundADefectWhileTheOtherTargetsGoOn(): void

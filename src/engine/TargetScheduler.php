@@ -42,6 +42,12 @@ use Random\Randomizer;
  * when the target reached its maximum number of executions, or found a
  * defect and fuzzing stops on a finding.
  *
+ * The decayed numbers of the discoveries and executions of a target are kept
+ * in its history (see TargetHistory), so that a run starts with what the runs
+ * before it learned instead of with the same weight for every target. The
+ * history also records when the target discovered features, and what it did
+ * in the run when the run ends.
+ *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
  * @internal This class is not covered by the backward compatibility promise for sebastian/rattle
@@ -92,6 +98,11 @@ final class TargetScheduler
     private array $targets = [];
 
     /**
+     * @var array<non-empty-string, TargetHistory>
+     */
+    private array $histories = [];
+
+    /**
      * How likely the next input of a target is to produce a feature that is
      * new for it.
      */
@@ -105,8 +116,9 @@ final class TargetScheduler
      * @param ?float                                    $maximumTime in seconds, for all targets together
      * @param ?Closure(): bool                          $interrupted tells whether fuzzing was interrupted, by Ctrl+C for instance
      * @param ?Closure(): void                          $progress    is called after results were processed
+     * @param array<non-empty-string, TargetHistory>    $histories   the histories of the targets, by their names, which are updated
      */
-    public function __construct(Executor $executor, array $engines, int $seed, ?float $maximumTime = null, ?Closure $interrupted = null, ?Closure $progress = null)
+    public function __construct(Executor $executor, array $engines, int $seed, ?float $maximumTime = null, ?Closure $interrupted = null, ?Closure $progress = null, array $histories = [])
     {
         $this->executor    = $executor;
         $this->engines     = $engines;
@@ -117,8 +129,11 @@ final class TargetScheduler
         $this->progress    = $progress;
 
         foreach (array_keys($engines) as $target) {
-            $this->discoveries[$target] = 0.0;
-            $this->executions[$target]  = 0.0;
+            $history = $histories[$target] ?? new TargetHistory($target);
+
+            $this->histories[$target]   = $history;
+            $this->discoveries[$target] = $history->discoveries();
+            $this->executions[$target]  = $history->decayedExecutions();
         }
     }
 
@@ -130,6 +145,10 @@ final class TargetScheduler
      */
     public function run(): void
     {
+        foreach ($this->histories as $history) {
+            $history->begin($this->start);
+        }
+
         while (!$this->isDone()) {
             while ($this->executor->capacity() > 0 && !$this->isDone()) {
                 $chosen = $this->choose();
@@ -166,6 +185,18 @@ final class TargetScheduler
 
             $this->process($results);
         }
+
+        $this->endHistories();
+    }
+
+    /**
+     * The histories of the targets, by their names.
+     *
+     * @return array<non-empty-string, TargetHistory>
+     */
+    public function histories(): array
+    {
+        return $this->histories;
     }
 
     /**
@@ -258,14 +289,56 @@ final class TargetScheduler
 
             $engine->process($targetResults);
 
-            $decay = self::DECAY ** count($targetResults);
+            $decay       = self::DECAY ** count($targetResults);
+            $statistics  = $engine->statistics();
+            $discoveries = $statistics->features - $features;
 
-            $this->discoveries[$target] = ($this->discoveries[$target] ?? 0.0) * $decay + ($engine->statistics()->features - $features);
+            $this->discoveries[$target] = ($this->discoveries[$target] ?? 0.0) * $decay + $discoveries;
             $this->executions[$target]  = ($this->executions[$target] ?? 0.0) * $decay + count($targetResults);
+
+            if ($discoveries > 0) {
+                ($this->histories[$target] ?? null)?->discover(microtime(true), $statistics->executions, $statistics->features);
+            }
         }
 
         if ($this->progress !== null) {
             ($this->progress)();
+        }
+    }
+
+    /**
+     * Records in the history of every target what it did in the run, and
+     * gives every target its share of the time of the run, in proportion to
+     * its executions.
+     */
+    private function endHistories(): void
+    {
+        $end        = microtime(true);
+        $executions = 0;
+
+        foreach ($this->engines as $engine) {
+            $executions += $engine->statistics()->executions;
+        }
+
+        foreach ($this->engines as $target => $engine) {
+            $history    = $this->histories[$target] ?? null;
+            $statistics = $engine->statistics();
+
+            if ($history === null) {
+                // @codeCoverageIgnoreStart
+                continue;
+                // @codeCoverageIgnoreEnd
+            }
+
+            $history->end(
+                $end,
+                $this->discoveries[$target] ?? 0.0,
+                $this->executions[$target] ?? 0.0,
+                $statistics->executions,
+                $executions === 0 ? 0.0 : ($end - $this->start) * $statistics->executions / $executions,
+                $statistics->features,
+                $statistics->findings,
+            );
         }
     }
 

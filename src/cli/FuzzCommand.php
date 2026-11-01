@@ -15,6 +15,7 @@ use const SIGINT;
 use const STDOUT;
 use function array_keys;
 use function count;
+use function dirname;
 use function escapeshellarg;
 use function fclose;
 use function file_put_contents;
@@ -290,6 +291,7 @@ final readonly class FuzzCommand implements Command
         $loader                = new InputLoader;
         $log                   = $arguments->inputLog() !== null ? fopen($arguments->inputLog(), 'w') : null;
         $engines               = [];
+        $histories             = [];
         $minimizationExecutors = [];
         $numberOfStoredInputs  = 0;
         $numberOfKnownFindings = 0;
@@ -340,6 +342,8 @@ final readonly class FuzzCommand implements Command
             );
 
             $engines[$property]->start($initialInputs);
+
+            $histories[$property] = TargetHistory::fromFile($this->historyFile($arguments, $property), $property);
         }
 
         printf(
@@ -376,6 +380,7 @@ final readonly class FuzzCommand implements Command
             {
                 $status->update($this->totals($engines, $dictionary, $start), $this->activeProperties($engines));
             },
+            $histories,
         );
 
         try {
@@ -399,6 +404,15 @@ final readonly class FuzzCommand implements Command
         $totals = $this->totals($engines, $dictionary, $start);
 
         $status->finish($totals, $this->activeProperties($engines));
+
+        // what the run learned about the properties is kept for later runs
+        foreach ($scheduler->histories() as $property => $history) {
+            $file = $this->historyFile($arguments, $property);
+
+            if ((!is_dir(dirname($file)) && !@mkdir(dirname($file), 0o777, true)) || !$history->write($file)) {
+                printf('Warning: Cannot write "%s"' . PHP_EOL, $file);
+            }
+        }
 
         print PHP_EOL;
 
@@ -425,6 +439,17 @@ final readonly class FuzzCommand implements Command
         }
 
         return $totals->findings > 0 ? 1 : 0;
+    }
+
+    /**
+     * The file in which what rattle knows about a property from the runs that
+     * fuzzed it is kept, next to its corpus.
+     *
+     * @param non-empty-string $property
+     */
+    private function historyFile(Arguments $arguments, string $property): string
+    {
+        return $arguments->cacheDirectory() . '/' . PropertyDirectory::nameOf($property) . '/statistics.json';
     }
 
     /**
