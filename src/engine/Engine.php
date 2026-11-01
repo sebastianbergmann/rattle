@@ -30,7 +30,8 @@ use Random\Randomizer;
  * in ten and always while the corpus is empty, and otherwise created by
  * mutating a corpus entry that the scheduler chooses. An input that produced
  * a feature that is new is added to the corpus, an input that is a finding is
- * passed to the finding handler.
+ * passed to the finding handler. The constant operands of comparisons that a
+ * result reports, whatever its outcome, are added to the dictionary.
  *
  * All decisions are made with one random number generator that is seeded
  * with the seed of the run. A new batch is only composed when an executor is
@@ -46,6 +47,7 @@ final class Engine
 {
     private readonly Executor $executor;
     private readonly Corpus $corpus;
+    private readonly Dictionary $dictionary;
     private readonly Scheduler $scheduler;
     private readonly Mutator $mutator;
     private readonly FindingHandler $findings;
@@ -104,10 +106,11 @@ final class Engine
      * @param ?Closure(Job): void        $submitted   is called for every input that is submitted
      * @param ?Closure(): bool           $interrupted tells whether fuzzing was interrupted, by Ctrl+C for instance
      */
-    public function __construct(Executor $executor, Corpus $corpus, Mutator $mutator, FindingHandler $findings, EngineConfiguration $configuration, ?Closure $progress = null, ?Closure $submitted = null, ?Closure $interrupted = null)
+    public function __construct(Executor $executor, Corpus $corpus, Dictionary $dictionary, Mutator $mutator, FindingHandler $findings, EngineConfiguration $configuration, ?Closure $progress = null, ?Closure $submitted = null, ?Closure $interrupted = null)
     {
         $this->executor      = $executor;
         $this->corpus        = $corpus;
+        $this->dictionary    = $dictionary;
         $this->scheduler     = new Scheduler($corpus);
         $this->mutator       = $mutator;
         $this->findings      = $findings;
@@ -207,6 +210,8 @@ final class Engine
             unset($this->pending[$result->id()]);
 
             $this->statistics->executions++;
+
+            $this->dictionary->addFoundTokens($result->tokens());
 
             if ($result->isFinding()) {
                 if ($this->findings->handle($result, $job)) {

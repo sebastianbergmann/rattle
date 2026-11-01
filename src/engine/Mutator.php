@@ -37,28 +37,29 @@ final readonly class Mutator
     private int $maximumNumberOfChoices;
 
     /**
-     * @param list<non-empty-string> $dictionary
-     * @param positive-int           $maximumNumberOfChoices
+     * The tokens of the dictionary are inserted even when it is empty when
+     * fuzzing starts, because tokens are added to it while the target is
+     * fuzzed.
+     *
+     * @param positive-int $maximumNumberOfChoices
      */
-    public static function create(Corpus $corpus, array $dictionary, int $maximumNumberOfChoices): self
+    public static function create(Corpus $corpus, Dictionary $dictionary, int $maximumNumberOfChoices): self
     {
-        $mutations = [
-            new RandomChoice,
-            new BoundaryChoice,
-            new ArithmeticChoice,
-            new DeleteSpan,
-            new DuplicateSpan,
-            new SwapSpans,
-            new CrossOver($corpus),
-            new InsertChoices,
-            new DeleteChoices,
-        ];
-
-        if ($dictionary !== []) {
-            $mutations[] = new InsertToken($dictionary);
-        }
-
-        return new self($mutations, $maximumNumberOfChoices);
+        return new self(
+            [
+                new RandomChoice,
+                new BoundaryChoice,
+                new ArithmeticChoice,
+                new DeleteSpan,
+                new DuplicateSpan,
+                new SwapSpans,
+                new CrossOver($corpus),
+                new InsertChoices,
+                new DeleteChoices,
+                new InsertToken($dictionary),
+            ],
+            $maximumNumberOfChoices,
+        );
     }
 
     /**

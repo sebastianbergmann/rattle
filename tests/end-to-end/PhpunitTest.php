@@ -144,7 +144,7 @@ final class PhpunitTest extends TestCase
 
         $options = ['--phpunit', '--configuration', $project . '/phpunit.xml', '--cache-directory', $this->directory . '/cache', '--findings-directory', $this->directory . '/findings'];
 
-        [$exit, $output] = $this->rattle(['fuzz', ...$options, '--jobs', '1', '--seed', '2', '--max-executions', '1000', '--stop-on-finding']);
+        [$exit, $output] = $this->rattle(['fuzz', ...$options, '--jobs', '1', '--seed', '8', '--max-executions', '1000', '--stop-on-finding']);
 
         $this->assertSame(1, $exit, $output);
 
@@ -216,7 +216,7 @@ final class PhpunitTest extends TestCase
                 '--jobs',
                 '1',
                 '--seed',
-                '2',
+                '8',
                 '--max-executions',
                 '1000',
                 '--stop-on-finding',

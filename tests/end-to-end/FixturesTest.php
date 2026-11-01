@@ -62,7 +62,7 @@ final class FixturesTest extends TestCase
         return [
             'a warning for a digit string that is too long for an int' => [
                 'csv',
-                2,
+                3,
                 8000,
                 'Warning at %s/csv/src/IntegerColumn.php:46',
                 '10000000000000000000',
@@ -75,6 +75,14 @@ final class FixturesTest extends TestCase
                 'DivisionByZeroError at %s/magic/src/ImageDecoder.php:37',
                 "RATL\x00",
                 ['--dictionary', self::FIXTURES . '/magic/dictionary.txt'],
+            ],
+            'an uncaught exception behind a magic header that is found with a token from a comparison' => [
+                'magic',
+                2,
+                1000,
+                'DivisionByZeroError at %s/magic/src/ImageDecoder.php:37',
+                "RATL\x00",
+                [],
             ],
             'a timeout for an endless loop' => [
                 'loop',

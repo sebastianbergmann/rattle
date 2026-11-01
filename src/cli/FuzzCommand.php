@@ -155,12 +155,12 @@ final readonly class FuzzCommand implements Command
      * @param ?float                      $maximumTime   in seconds, null for no time limit
      * @param ?Closure(int, string): void $stderr
      * @param positive-int                $jobs
-     * @param list<non-empty-string>      $dictionary
+     * @param list<non-empty-string>      $tokens        the tokens of the dictionary file
      * @param Closure(): bool             $isInterrupted
      *
      * @return 0|1|2
      */
-    private function fuzz(Arguments $arguments, WorkerConfiguration $configuration, string $reproduction, ?float $maximumTime, ?Closure $stderr, int $jobs, int $seed, array $dictionary, Closure $isInterrupted): int
+    private function fuzz(Arguments $arguments, WorkerConfiguration $configuration, string $reproduction, ?float $maximumTime, ?Closure $stderr, int $jobs, int $seed, array $tokens, Closure $isInterrupted): int
     {
         $executor = new ProcessExecutor($configuration, $jobs, $stderr);
 
@@ -261,7 +261,8 @@ final readonly class FuzzCommand implements Command
 
         $engine = new Engine(
             $executor,
-            $corpus = new Corpus($corpusDirectory),
+            $corpus     = new Corpus($corpusDirectory),
+            $dictionary = new Dictionary($tokens),
             Mutator::create($corpus, $dictionary, $target->maximumNumberOfChoices()),
             $findings,
             new EngineConfiguration($seed, $arguments->maximumNumberOfExecutions(), $maximumTime, $arguments->stopOnFinding()),

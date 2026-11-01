@@ -47,6 +47,7 @@ use SebastianBergmann\Rattle\Instrumentation\Features;
 #[UsesClass(Job::class)]
 #[UsesClass(Location::class)]
 #[UsesClass(Mutator::class)]
+#[UsesClass(Dictionary::class)]
 #[UsesClass(Outcome::class)]
 #[UsesClass(RandomChoice::class)]
 #[UsesClass(Result::class)]
@@ -72,6 +73,17 @@ final class EngineTest extends TestCase
         $this->assertSame(1, $statistics->findings);
         $this->assertLessThan(1000, $statistics->executions);
         $this->assertStringStartsWith('LogicException at ', $findings->results[0]?->failure()?->describe() ?? '');
+    }
+
+    public function testFindsAMagicHeaderWithATokenThatWasFoundInAComparison(): void
+    {
+        $findings = $this->findings();
+        $engine   = $this->engine($this->magicHeader(), $findings, new EngineConfiguration(1, 1000, null, true), [], null, null, $this->executorThatFindsTokens($this->executor($this->magicHeader()), ['RATL']));
+
+        $statistics = $engine->run();
+
+        $this->assertSame(1, $statistics->findings);
+        $this->assertLessThan(1000, $statistics->executions);
     }
 
     public function testFindsAMagicHeaderWithoutADictionary(): void
@@ -167,8 +179,9 @@ final class EngineTest extends TestCase
                     false,
                 ),
             ),
-            $corpus = new Corpus,
-            Mutator::create($corpus, [], 100),
+            $corpus     = new Corpus,
+            $dictionary = new Dictionary,
+            Mutator::create($corpus, $dictionary, 100),
             $findings,
             new EngineConfiguration(1, 100),
             static function (Statistics $statistics) use (&$progress): void
@@ -260,17 +273,19 @@ final class EngineTest extends TestCase
 
     /**
      * @param Closure(string): void  $target
-     * @param list<non-empty-string> $dictionary
+     * @param list<non-empty-string> $tokens      the tokens of the dictionary file
      * @param ?Closure(Job): void    $submitted
      * @param ?Closure(): bool       $interrupted
      */
-    private function engine(Closure $target, FindingHandler $findings, EngineConfiguration $configuration, array $dictionary = [], ?Closure $submitted = null, ?Closure $interrupted = null): Engine
+    private function engine(Closure $target, FindingHandler $findings, EngineConfiguration $configuration, array $tokens = [], ?Closure $submitted = null, ?Closure $interrupted = null, ?Executor $executor = null): Engine
     {
-        $corpus = new Corpus;
+        $corpus     = new Corpus;
+        $dictionary = new Dictionary($tokens);
 
         return new Engine(
-            new InProcessExecutor(new Runner(Target::bytes('target', $target, 64), 8192, 0, false)),
+            $executor ?? $this->executor($target),
             $corpus,
+            $dictionary,
             Mutator::create($corpus, $dictionary, 8192),
             $findings,
             $configuration,
@@ -278,6 +293,70 @@ final class EngineTest extends TestCase
             $submitted,
             $interrupted,
         );
+    }
+
+    /**
+     * @param Closure(string): void $target
+     */
+    private function executor(Closure $target): InProcessExecutor
+    {
+        return new InProcessExecutor(new Runner(Target::bytes('target', $target, 64), 8192, 0, false));
+    }
+
+    /**
+     * An executor that reports tokens with its first result, as a worker
+     * reports the constant operands of the comparisons in the code that it
+     * instrumented.
+     *
+     * @param non-empty-list<non-empty-string> $tokens
+     */
+    private function executorThatFindsTokens(Executor $executor, array $tokens): Executor
+    {
+        return new readonly class($executor, $tokens) implements Executor
+        {
+            /**
+             * @param non-empty-list<non-empty-string> $tokens
+             */
+            public function __construct(private Executor $executor, private array $tokens)
+            {
+            }
+
+            public function target(): TargetDescription
+            {
+                return $this->executor->target();
+            }
+
+            public function capacity(): int
+            {
+                return $this->executor->capacity();
+            }
+
+            public function submit(array $jobs): void
+            {
+                $this->executor->submit($jobs);
+            }
+
+            public function collect(): array
+            {
+                $results = $this->executor->collect();
+
+                if (isset($results[0]) && $results[0]->id() === 0) {
+                    $results[0] = $results[0]->withTokens($this->tokens);
+                }
+
+                return $results;
+            }
+
+            public function execute(Job $job): Result
+            {
+                return $this->executor->execute($job);
+            }
+
+            public function shutdown(): void
+            {
+                $this->executor->shutdown();
+            }
+        };
     }
 
     /**

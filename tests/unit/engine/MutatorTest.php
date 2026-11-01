@@ -37,6 +37,7 @@ use SebastianBergmann\ChoiceSequence\ChoiceSequence;
 #[UsesClass(InsertChoices::class)]
 #[UsesClass(DeleteChoices::class)]
 #[UsesClass(InsertToken::class)]
+#[UsesClass(Dictionary::class)]
 #[Small]
 final class MutatorTest extends TestCase
 {
@@ -47,9 +48,9 @@ final class MutatorTest extends TestCase
 
         $this->assertNotNull($entry);
 
-        $first  = $this->mutations(Mutator::create($corpus, ['RATL'], 8192), $entry, 1);
-        $second = $this->mutations(Mutator::create($corpus, ['RATL'], 8192), $entry, 1);
-        $third  = $this->mutations(Mutator::create($corpus, ['RATL'], 8192), $entry, 2);
+        $first  = $this->mutations(Mutator::create($corpus, new Dictionary(['RATL']), 8192), $entry, 1);
+        $second = $this->mutations(Mutator::create($corpus, new Dictionary(['RATL']), 8192), $entry, 1);
+        $third  = $this->mutations(Mutator::create($corpus, new Dictionary(['RATL']), 8192), $entry, 2);
 
         $this->assertSame($first, $second);
         $this->assertNotSame($first, $third);

@@ -29,22 +29,18 @@ use SebastianBergmann\ChoiceSequence\SpanKind;
  */
 final readonly class InsertToken implements Mutation
 {
-    /**
-     * @var list<non-empty-string>
-     */
-    private array $tokens;
+    private Dictionary $dictionary;
 
-    /**
-     * @param list<non-empty-string> $tokens
-     */
-    public function __construct(array $tokens)
+    public function __construct(Dictionary $dictionary)
     {
-        $this->tokens = $tokens;
+        $this->dictionary = $dictionary;
     }
 
     public function apply(Candidate $candidate, Randomizer $randomizer): bool
     {
-        if ($this->tokens === []) {
+        // the dictionary can be empty before tokens are found in the code
+        // that is instrumented
+        if ($this->dictionary->isEmpty()) {
             return false;
         }
 
@@ -61,7 +57,7 @@ final readonly class InsertToken implements Mutation
         }
 
         $position = RandomElement::of($randomizer, $positions);
-        $token    = RandomElement::of($randomizer, $this->tokens);
+        $token    = $this->dictionary->randomToken($randomizer);
 
         // each byte is inserted as a span of its own, like the bytes that
         // were drawn

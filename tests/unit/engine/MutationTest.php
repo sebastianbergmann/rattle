@@ -42,6 +42,7 @@ use SebastianBergmann\ChoiceSequence\Span;
 #[UsesClass(CorpusEntry::class)]
 #[UsesClass(BytesEncoding::class)]
 #[UsesClass(Input::class)]
+#[UsesClass(Dictionary::class)]
 #[Small]
 final class MutationTest extends TestCase
 {
@@ -51,7 +52,7 @@ final class MutationTest extends TestCase
     {
         $randomizer = $this->randomizer();
 
-        foreach ([new RandomChoice, new BoundaryChoice, new ArithmeticChoice, new DeleteSpan, new DuplicateSpan, new SwapSpans, new CrossOver(new Corpus), new DeleteChoices, new InsertToken(['token'])] as $mutation) {
+        foreach ([new RandomChoice, new BoundaryChoice, new ArithmeticChoice, new DeleteSpan, new DuplicateSpan, new SwapSpans, new CrossOver(new Corpus), new DeleteChoices, new InsertToken(new Dictionary(['token']))] as $mutation) {
             $this->assertFalse($mutation->apply(Candidate::from(new ChoiceSequence([])), $randomizer), $mutation::class);
         }
 
@@ -319,7 +320,7 @@ final class MutationTest extends TestCase
         for ($i = 0; $i < self::ROUNDS; $i++) {
             $candidate = Candidate::from(Sequences::ofBytes('ab'));
 
-            $this->assertTrue((new InsertToken(['XY']))->apply($candidate, $randomizer));
+            $this->assertTrue((new InsertToken(new Dictionary(['XY'])))->apply($candidate, $randomizer));
 
             $bytes = BytesEncoding::bytesFor($candidate->choices(), 100);
 
@@ -342,7 +343,7 @@ final class MutationTest extends TestCase
 
         $candidate = Candidate::from(Sequences::drawn([1, 0, 3], $draw));
 
-        $this->assertTrue((new InsertToken(['XY']))->apply($candidate, $this->randomizer()));
+        $this->assertTrue((new InsertToken(new Dictionary(['XY'])))->apply($candidate, $this->randomizer()));
         $this->assertSame([1, 1, 0x58, 1, 0x59, 0, 3], $candidate->choices());
 
         $candidate = Candidate::from(Sequences::drawn([1], static function (Input $input): void
@@ -351,7 +352,19 @@ final class MutationTest extends TestCase
             $input->int(0, 1);
         }));
 
-        $this->assertFalse((new InsertToken(['XY']))->apply($candidate, $this->randomizer()));
+        $this->assertFalse((new InsertToken(new Dictionary(['XY'])))->apply($candidate, $this->randomizer()));
+    }
+
+    public function testInsertsNoTokenWhileTheDictionaryIsEmpty(): void
+    {
+        $dictionary = new Dictionary;
+        $mutation   = new InsertToken($dictionary);
+
+        $this->assertFalse($mutation->apply(Candidate::from(Sequences::ofBytes('ab')), $this->randomizer()));
+
+        $dictionary->addFoundTokens(['XY']);
+
+        $this->assertTrue($mutation->apply(Candidate::from(Sequences::ofBytes('ab')), $this->randomizer()));
     }
 
     private function randomizer(): Randomizer
