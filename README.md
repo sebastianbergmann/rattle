@@ -143,6 +143,26 @@ rattle status --phpunit [--cache-directory <dir>] [--json | --html <file>]
 
 shows the status without running the test suite: as a table, in JSON with `--json`, which is what `status.json` has, or with `--html <file>` as a dashboard in one HTML file that needs nothing else, with a chart of the features of every property over its executions, which you can keep as an artifact of CI. In JSON, times are seconds since the Unix epoch, and the points of a series are the time, the number of executions, and the number of features.
 
+## Differences between versions of PHP
+
+Code that runs on several versions of PHP should behave in the same way on all of them. With `--php <binary>`, which can be repeated, rattle compares the outcomes of inputs on the versions of PHP of the given binaries:
+
+```
+rattle fuzz --php /usr/bin/php8.6 --php /usr/bin/php8.7 fuzz/csv-parser.php
+```
+
+The PHP that runs rattle fuzzes the target and learns from its coverage. Every input that it adds to the corpus, and every new finding, is run on the other versions as well, so that the cost grows with the corpus and not with the number of executions. The outcome of an input on a version is that it passes, also when the target throws a throwable that it expects, that it is rejected, or how it fails, as the failure signature of its failure describes it. An input whose outcome is not the same on every version is a finding of its own, which is minimized as long as the difference persists:
+
+```
+Finding: Difference between PHP versions: PHP 8.5: passes; PHP 8.6: LengthException at src/Ratio.php:31
+```
+
+A finding is identified by the outcome on every version. Versions are named after their major and minor versions, so that a new patch release of PHP does not make a known difference a new finding, and when two binaries run the same one, after the name of the second binary. A failure on the version that fuzzes is a finding as well, as without `--php`. Because issues are failures, a warning, notice, or deprecation that only one version triggers is a difference, a deprecation unless `--ignore-deprecations` is given.
+
+`rattle run --php <binary>` shows the outcome of an input on every version, which the `README.txt` of a finding shows. `rattle regress --php <binary>` replays the corpus and the findings on every version, and fails when an input fails on one of them or when its outcome differs between them, which is what CI should run. This works for the properties of a PHPUnit test suite, too.
+
+Every binary must meet rattle's requirements, because the worker processes run rattle's own code. For the properties of a PHPUnit test suite, every version needs a version of PHPUnit that has its API for running the examples of properties.
+
 ## Commands
 
 ```
@@ -165,6 +185,8 @@ With `--phpunit`, these commands work on the properties of a PHPUnit test suite 
 
 `rattle status --phpunit` shows what the runs found out about the properties of a PHPUnit test suite, see [Continuous fuzzing](#continuous-fuzzing).
 
+With `--php <binary>`, `rattle fuzz`, `rattle run`, and `rattle regress` compare the outcomes of inputs on other versions of PHP, see [Differences between versions of PHP](#differences-between-versions-of-php).
+
 Only the code in your source directories is instrumented: the directories given with `--source`, otherwise the `<directory>` and `<file>` entries in `<source><include>` of the PHPUnit configuration file, otherwise `src/`. The configuration file is the one given with `--configuration`, otherwise `phpunit.xml`, `phpunit.dist.xml`, or `phpunit.xml.dist` in the working directory, as for PHPUnit. Code in `vendor/` is never instrumented.
 
 Run `rattle --help` for all options. The exit code is 0 when there is no new finding, 1 when there is at least one new finding, and 2 when the usage or the configuration is invalid.
@@ -179,6 +201,7 @@ Run `rattle --help` for all options. The exit code is 0 when there is no new fin
 | a fatal error, for instance because the memory limit was exceeded | yes, identified by where it happened |
 | the process ended, because the code called `exit()` or was killed by a signal | yes, identified by the exit status or the signal |
 | the input controls a dangerous sink (see [Detecting vulnerabilities](#detecting-vulnerabilities)) | yes, identified by the kind of vulnerability and where it was detected |
+| the input has another outcome on another version of PHP (see [Differences between versions of PHP](#differences-between-versions-of-php)) | yes, identified by the outcome on every version |
 | `reject()` was called, or the input needs too many choices | no |
 
 Two findings are the same when their failure signatures, as defined by `sebastian/choice-sequence`, are the same. A finding that is the same as one that is known is counted, but not stored again.
@@ -295,7 +318,7 @@ With `--sarif <file>`, `rattle regress` writes the inputs that still fail, and `
 rattle regress --sarif rattle.sarif fuzz/csv-parser.php
 ```
 
-Every kind of finding is a rule. The vulnerabilities that the detectors find are errors, with a security severity and the tag of their CWE: path traversal (CWE-22), code injection (CWE-94), command injection (CWE-78), and unsafe deserialization (CWE-502). Uncaught throwables, issues, fatal errors, timeouts, and processes that ended are warnings. A result is reported at the location of its finding, relative to the working directory, with its stack trace, and is identified by the ID of its finding, so that code scanning recognizes it in later reports.
+Every kind of finding is a rule. The vulnerabilities that the detectors find are errors, with a security severity and the tag of their CWE: path traversal (CWE-22), code injection (CWE-94), command injection (CWE-78), and unsafe deserialization (CWE-502). Uncaught throwables, issues, fatal errors, timeouts, processes that ended, and differences between versions of PHP are warnings. A result is reported at the location of its finding, relative to the working directory, with its stack trace, and is identified by the ID of its finding, so that code scanning recognizes it in later reports.
 
 For code scanning, report what `rattle regress` replays: a finding that is fixed is no longer in the report, so its alert is closed. A run of `rattle fuzz` does not necessarily find every known finding again.
 

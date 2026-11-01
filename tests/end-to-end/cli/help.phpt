@@ -47,6 +47,8 @@ Options for "rattle fuzz":
   --findings-directory <dir>  Directory for the findings (default: fuzz/findings)
   --stop-on-finding           Stop after the first new finding
   --sarif <file>              Write the findings of the run to this file in SARIF
+  --php <binary>              Run the corpus and the findings on the PHP of this binary as well,
+                              and report the inputs whose outcomes differ; can be repeated
   --phpunit                   Fuzz the properties of the PHPUnit test suite together instead
                               of a target: they share the time of --max-time, and
                               --max-executions applies to every property
@@ -56,6 +58,7 @@ Options for "rattle fuzz":
 Options for "rattle run":
 
   --raw                       The input is a raw file instead of a choice sequence (bytes targets only)
+  --php <binary>              Run the input on the PHP of this binary as well; can be repeated
   --phpunit                   Run an input of the property with the test ID <test-id>
   --configuration <file>      PHPUnit configuration file (default: as PHPUnit looks for one)
 
@@ -71,6 +74,8 @@ Options for "rattle regress":
   --cache-directory <dir>     Directory for the corpus (default: .rattle.cache)
   --findings-directory <dir>  Directory for the findings (default: fuzz/findings)
   --sarif <file>              Write the inputs that still fail to this file in SARIF
+  --php <binary>              Replay the inputs on the PHP of this binary as well, and report the
+                              inputs that fail on it or whose outcomes differ; can be repeated
   --phpunit                   Replay the inputs of every property of the PHPUnit test suite
   --configuration <file>      PHPUnit configuration file (default: as PHPUnit looks for one)
   --filter <pattern>          Only replay the inputs of the properties that match the pattern

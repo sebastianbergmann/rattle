@@ -69,6 +69,7 @@ final class SarifReport
         'fatal-error'            => ['FatalError', 'An input makes the code under test cause a fatal error, for instance by exceeding the memory limit.', 'warning', null, null],
         'timeout'                => ['Timeout', 'An input makes the code under test exceed the time limit.', 'warning', null, null],
         'process-ended'          => ['ProcessEnded', 'An input makes the process that runs the code under test end, for instance because it calls exit().', 'warning', null, null],
+        'version-difference'     => ['VersionDifference', 'An input has another outcome on another version of PHP.', 'warning', null, null],
     ];
 
     /**
@@ -308,6 +309,10 @@ final class SarifReport
         }
 
         $description = $failure->describe();
+
+        if (str_starts_with($description, 'Difference between PHP versions: ')) {
+            return 'version-difference';
+        }
 
         if (str_starts_with($description, 'Fatal error at ')) {
             return 'fatal-error';

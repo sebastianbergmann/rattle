@@ -80,6 +80,12 @@ final class SarifReportTest extends TestCase
                 Failure::timeout('Execution exceeded the time limit of 1 second', 'src/Loop.php:21 Loop->run()'),
                 ['src/Loop.php', '%SRCROOT%', 21],
             ],
+            'a difference between versions of PHP, at the location of the failure' => [
+                'version-difference',
+                'warning',
+                Failure::description('Difference between PHP versions: PHP 8.5: passes; PHP 8.6: LogicException at src/Ratio.php:31', 'PHP 8.6: message', ''),
+                ['src/Ratio.php', '%SRCROOT%', 31],
+            ],
             'the end of the process, without a location' => [
                 'process-ended',
                 'warning',
@@ -118,7 +124,7 @@ final class SarifReportTest extends TestCase
     {
         $rules = SarifResults::rules((new SarifReport('/project'))->asJson());
 
-        $this->assertCount(9, $rules);
+        $this->assertCount(10, $rules);
         $this->assertSame(['level' => 'error', 'securitySeverity' => '7.5', 'tags' => ['security', 'external/cwe/cwe-22']], $rules['path-traversal'] ?? null);
         $this->assertSame(['level' => 'error', 'securitySeverity' => '9.3', 'tags' => ['security', 'external/cwe/cwe-94']], $rules['code-injection'] ?? null);
         $this->assertSame(['level' => 'error', 'securitySeverity' => '9.8', 'tags' => ['security', 'external/cwe/cwe-78']], $rules['command-injection'] ?? null);
