@@ -201,7 +201,7 @@ final class InstrumentorTest extends TestCase
 
     public function testCollectsTheConstantOperandsOfComparisonsWithoutChangingTheInstrumentedCode(): void
     {
-        $code     = '<?php function f($a) { if ($a === "a") { return str_starts_with($a, "b"); } }';
+        $code     = '<?php function f($a) { if ($a === "aaa") { return str_starts_with($a, "bbb"); } }';
         $operands = new ComparisonOperands;
 
         $this->assertSame(
@@ -209,9 +209,9 @@ final class InstrumentorTest extends TestCase
             (new Instrumentor($operands))->instrument($code, 'a.php'),
         );
 
-        (new Instrumentor($operands))->instrument('<?php $a === "c";', 'b.php');
+        (new Instrumentor($operands))->instrument('<?php $a === "ccc";', 'b.php');
 
-        $this->assertSame(['a', 'b', 'c'], $operands->takeUnreported());
+        $this->assertSame(['aaa', 'bbb', 'ccc'], $operands->takeUnreported());
     }
 
     public function testCannotInstrumentCodeThatCannotBeParsed(): void

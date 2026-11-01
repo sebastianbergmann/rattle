@@ -191,9 +191,9 @@ final class ProcessExecutorTest extends TestCase
         $first  = $executor->execute(Job::replay(0, [Behaviour::PASS, 0]));
         $second = $executor->execute(Job::replay(1, [Behaviour::PASS, 0]));
 
-        // the switch of Behaviour::run() compares with the constants of its
-        // class, of which only 10 and 11 have more than one digit
-        $this->assertSame(['10', '11'], $first->tokens());
+        // Behaviour::passed() compares with 'pass'; the switch of
+        // Behaviour::run() compares with integers that are too short
+        $this->assertSame(['pass'], $first->tokens());
         $this->assertSame([], $second->tokens());
     }
 

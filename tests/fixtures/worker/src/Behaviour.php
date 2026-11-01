@@ -102,4 +102,13 @@ final class Behaviour
 
         return 'other';
     }
+
+    /**
+     * Compares a result with a constant, which the worker reports as a token
+     * once it has instrumented this file.
+     */
+    public function passed(string $result): bool
+    {
+        return $result === 'pass';
+    }
 }

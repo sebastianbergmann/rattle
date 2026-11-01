@@ -43,9 +43,10 @@ use PhpParser\NodeVisitorAbstract;
  * self, static, or the name of its class, of which only the last part is
  * compared.
  *
- * An integer becomes its decimal representation, unless that is a single
- * digit, which is generated easily. Strings that are longer than 64 bytes are
- * left out.
+ * An integer becomes its decimal representation. Operands that are shorter
+ * than three bytes are left out: they are generated easily, and inserting
+ * them gets in the way more often than it helps. Operands that are longer
+ * than 64 bytes are left out, too.
  *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
@@ -53,7 +54,8 @@ use PhpParser\NodeVisitorAbstract;
  */
 final class ComparisonOperandFinder extends NodeVisitorAbstract
 {
-    private const int LONGEST_TOKEN = 64;
+    private const int SHORTEST_TOKEN = 3;
+    private const int LONGEST_TOKEN  = 64;
 
     /**
      * The functions that compare strings or look for them, in lowercase.
@@ -251,13 +253,13 @@ final class ComparisonOperandFinder extends NodeVisitorAbstract
         }
 
         if ($expression instanceof Scalar\Int_) {
-            $this->add((string) $expression->value, 2);
+            $this->add((string) $expression->value);
 
             return;
         }
 
         if ($expression instanceof Expr\UnaryMinus && $expression->expr instanceof Scalar\Int_) {
-            $this->add('-' . $expression->expr->value, 2);
+            $this->add('-' . $expression->expr->value);
 
             return;
         }
@@ -273,12 +275,9 @@ final class ComparisonOperandFinder extends NodeVisitorAbstract
         }
     }
 
-    /**
-     * @param positive-int $shortest
-     */
-    private function add(string $operand, int $shortest = 1): void
+    private function add(string $operand): void
     {
-        if (strlen($operand) >= $shortest && strlen($operand) <= self::LONGEST_TOKEN) {
+        if (strlen($operand) >= self::SHORTEST_TOKEN && strlen($operand) <= self::LONGEST_TOKEN) {
             $this->operands[$operand] = true;
         }
     }
