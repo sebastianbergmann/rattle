@@ -322,6 +322,17 @@ Every kind of finding is a rule. The vulnerabilities that the detectors find are
 
 For code scanning, report what `rattle regress` replays: a finding that is fixed is no longer in the report, so its alert is closed. A run of `rattle fuzz` does not necessarily find every known finding again.
 
+## Backward compatibility
+
+rattle follows [Semantic Versioning](https://semver.org/). Within a major version, these do not change in a way that breaks what uses them:
+
+* The commands of `rattle`, their options, and their exit codes, see [Commands](#commands).
+* The API for fuzz targets: `Target::bytes()`, `Target::structured()`, and `expect()` of `SebastianBergmann\Rattle\Target`, the methods of `SebastianBergmann\Rattle\Input` that a target draws with, `bytes()`, `int()`, `bool()`, `pick()`, and `reject()`, and the interface `SebastianBergmann\Rattle\Exception` that rattle's exceptions implement.
+* What rattle stores: inputs in the format `choice-sequence v1`, the layout of the cache directory and of the findings directory, `finding.json`, and `dictionary.txt`, as well as how a finding is identified, so that the findings that you commit keep working.
+* The output that is meant for other tools: `status.json`, `statistics.json`, and the IDs of the rules of the SARIF reports.
+
+Minor versions can add commands, options, fields of JSON documents, and rules, so a tool that reads JSON that rattle writes should ignore what it does not know. Everything else can change in any release, and so can every class and method that is marked with `@internal`.
+
 ## Limitations
 
 * When rattle is installed with Composer, `nikic/php-parser` must be compatible with the version that your project uses. The PHAR does not have this constraint.
