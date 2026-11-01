@@ -15,7 +15,7 @@ The inputs of rattle are choice sequences of [`sebastian/choice-sequence`](https
 
 ### Fuzz testing
 
-Fuzz testing runs code with one generated input after another and watches for failures: uncaught exceptions, warnings, timeouts, and fatal errors. It does not compare results with expected values. Its oracle is implicit: the code must not fail, whatever its input. This makes it effective where code processes data that it cannot trust, in parsers, decoders, and validators, for instance.
+Fuzz testing runs code with one generated input after another and watches for failures: uncaught exceptions, warnings, timeouts, and fatal errors. It does not compare results with expected values. Its [oracle](https://phpunit.expert/articles/seeing-the-truth-test-oracles.html?ref=github) is implicit: the code must not fail, whatever its input. This makes it effective where code processes data that it cannot trust, in parsers, decoders, and validators, for instance.
 
 Coverage-guided fuzzing learns from the code that it runs. The code is instrumented, an input that reaches code that no input reached before is kept, and the inputs that are kept are mutated further. This way, the fuzzer works its way into the code instead of guessing. [Security through chaos](https://phpunit.expert/articles/security-through-chaos.html?ref=github) shows how a coverage-guided fuzzer found a defect in a CSV parser whose tests covered every line and every branch.
 
