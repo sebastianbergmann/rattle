@@ -354,6 +354,28 @@ final class FixturesTest extends TestCase
         // few digits on the other version
         $this->assertSame("\x00", file_get_contents($finding . '/input.bin'));
         $this->assertStringContainsString("rattle run --php '" . $other . "' ", (string) file_get_contents($finding . '/README.txt'));
+
+        // "rattle run --php" shows the outcome on every version
+        [$exit, $output] = $this->rattle(array_merge(['run', self::FIXTURES . '/versions/target.php', $finding . '/input', '--php', $other], $this->executionOptions('versions')));
+
+        $this->assertSame(1, $exit, $output);
+        $this->assertStringContainsString($first . "\nOutcome: passed", $output);
+        $this->assertStringContainsString($first . " (php-precision-5)\nOutcome: failed", $output);
+        $this->assertStringContainsString($description, $output);
+
+        // on one version, the input of the difference passes
+        $options = array_merge($this->executionOptions('versions'), ['--cache-directory', $this->directory . '/cache', '--findings-directory', $this->directory . '/findings']);
+
+        [$exit, $output] = $this->rattle(array_merge(['regress', self::FIXTURES . '/versions/target.php'], $options));
+
+        $this->assertSame(0, $exit, $output);
+
+        // ... while "rattle regress --php" replays it on both versions
+        [$exit, $output] = $this->rattle(array_merge(['regress', self::FIXTURES . '/versions/target.php', '--php', $other], $options));
+
+        $this->assertSame(1, $exit, $output);
+        $this->assertStringContainsString('Differs: ' . $finding . "/input\n       " . $description, $output);
+        $this->assertStringContainsString('Fails on ' . $first . ' (php-precision-5): ' . $finding . '/input', $output);
     }
 
     public function testWritesTheFindingsOfARunInSarif(): void

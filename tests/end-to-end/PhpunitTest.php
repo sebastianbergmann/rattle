@@ -302,6 +302,11 @@ final class PhpunitTest extends TestCase
         $this->assertSame(1, $exit, $output);
         $this->assertStringContainsString(sprintf('Versions: %s, %s (php-precision-5), which the corpus and the findings are compared on', $first, $first), $output);
         $this->assertStringContainsString(sprintf('Finding: Difference between PHP versions: %s: passes; %s (php-precision-5): LengthException at %s/src/Ratio.php:31', $first, $first, self::FIXTURE), $output);
+
+        [$exit, $output] = $this->rattle(['regress', '--phpunit', '--configuration', self::FIXTURE . '/versions.xml', '--php', self::FIXTURE . '/../php/php-precision-5', '--cache-directory', $this->directory . '/cache', '--findings-directory', $this->directory . '/findings']);
+
+        $this->assertSame(1, $exit, $output);
+        $this->assertStringContainsString(sprintf('Difference between PHP versions: %s: passes; %s (php-precision-5): LengthException at %s/src/Ratio.php:31', $first, $first, self::FIXTURE), $output);
     }
 
     public function testReportsATestSuiteWithoutProperties(): void

@@ -26,6 +26,9 @@ use SebastianBergmann\ChoiceSequence\InvalidChoiceSequenceException;
  * of a target once. An input that makes the target fail is reported, so that
  * CI can check that findings that were fixed stay fixed.
  *
+ * With --php, the inputs are replayed on other versions of PHP as well, and an
+ * input whose outcome differs between the versions is reported, too.
+ *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
  * @internal This class is not covered by the backward compatibility promise for sebastian/rattle
@@ -46,11 +49,19 @@ final readonly class RegressCommand implements Command
             return 2;
         }
 
+        try {
+            $phpBinaries = $setup->phpBinaries($arguments);
+        } catch (ConfigurationException $e) {
+            print $e->getMessage() . PHP_EOL;
+
+            return 2;
+        }
+
         $phpunit = $configuration->phpunit();
         $report  = $arguments->sarifFile() === null ? null : new SarifReport((string) getcwd());
 
         if ($phpunit === null) {
-            $outcome = $this->regress($arguments, $configuration, null, $report);
+            $outcome = $this->regress($arguments, $configuration, null, $report, $phpBinaries);
 
             if ($outcome === null) {
                 return 2;
@@ -76,7 +87,7 @@ final readonly class RegressCommand implements Command
         $total = ['replayed' => 0, 'failed' => 0, 'invalid' => 0];
 
         foreach ($properties as $property) {
-            $outcome = $this->regress($arguments, $configuration->withTarget($property), $property, $report);
+            $outcome = $this->regress($arguments, $configuration->withTarget($property), $property, $report, $phpBinaries);
 
             if ($outcome === null) {
                 return 2;
@@ -116,11 +127,16 @@ final readonly class RegressCommand implements Command
      * worker reports, and the ones of a property after its test ID; workers
      * are not started for a property without inputs.
      *
-     * @param ?non-empty-string $property the test ID of the property, null for a fuzz target, whose worker reports the name of its directories
+     * With the binaries of --php, the inputs are replayed on their versions of
+     * PHP as well, and an input fails when it fails on one of the versions, or
+     * when its outcome differs between them (see DifferentialExecutor).
+     *
+     * @param ?non-empty-string $property    the test ID of the property, null for a fuzz target, whose worker reports the name of its directories
+     * @param list<PhpBinary>   $phpBinaries
      *
      * @return ?array{replayed: non-negative-int, failed: non-negative-int, invalid: non-negative-int} null when the inputs could not be replayed
      */
-    private function regress(Arguments $arguments, WorkerConfiguration $configuration, ?string $property, ?SarifReport $report): ?array
+    private function regress(Arguments $arguments, WorkerConfiguration $configuration, ?string $property, ?SarifReport $report, array $phpBinaries): ?array
     {
         $directory = $property === null ? null : PropertyDirectory::nameOf($property);
 
@@ -132,7 +148,8 @@ final readonly class RegressCommand implements Command
             }
         }
 
-        $executor = new ProcessExecutor($configuration, $arguments->jobs() ?? 1, (new Setup)->stderr($arguments));
+        $stderr   = (new Setup)->stderr($arguments);
+        $executor = new ProcessExecutor($configuration, $arguments->jobs() ?? 1, $stderr);
 
         try {
             $target = $executor->start();
@@ -146,10 +163,9 @@ final readonly class RegressCommand implements Command
 
         $paths ??= $this->inputsIn($arguments, $target->name());
 
-        $jobs     = [];
-        $files    = [];
-        $invalid  = 0;
-        $failures = 0;
+        $jobs    = [];
+        $files   = [];
+        $invalid = 0;
 
         foreach ($paths as $path) {
             try {
@@ -165,30 +181,21 @@ final readonly class RegressCommand implements Command
             $files[count($jobs) - 1] = $path;
         }
 
+        $labels  = DifferentialExecutor::labelsOf([$executor->php(), ...$phpBinaries]);
+        $results = [];
+
         try {
-            $pending     = $jobs;
-            $outstanding = 0;
+            $results[$labels[0]] = $this->replay($executor, $jobs);
 
-            while ($pending !== [] || $outstanding > 0) {
-                while ($pending !== [] && $executor->capacity() > 0) {
-                    $batch = array_slice($pending, 0, self::BATCH_SIZE);
+            foreach ($phpBinaries as $index => $php) {
+                $other = new ProcessExecutor($configuration, $arguments->jobs() ?? 1, $stderr, $php);
 
-                    $executor->submit($batch);
+                try {
+                    $other->start();
 
-                    $outstanding += count($batch);
-                    $pending = array_slice($pending, self::BATCH_SIZE);
-                }
-
-                foreach ($executor->collect() as $result) {
-                    $outstanding--;
-
-                    if ($result->isFinding()) {
-                        printf('Fails: %s' . PHP_EOL . '       %s' . PHP_EOL, $files[$result->id()] ?? '', $result->failure()->describe());
-
-                        $report?->add($result->failure(), $property);
-
-                        $failures++;
-                    }
+                    $results[$labels[$index + 1] ?? $php->path()] = $this->replay($other, $jobs);
+                } finally {
+                    $other->shutdown();
                 }
             }
         } catch (ProtocolException|WorkerException $e) {
@@ -199,7 +206,92 @@ final readonly class RegressCommand implements Command
             $executor->shutdown();
         }
 
+        $failures = 0;
+
+        foreach ($jobs as $job) {
+            $failed   = false;
+            $versions = [];
+
+            foreach ($results as $label => $resultsOfVersion) {
+                $result = $resultsOfVersion[$job->id()] ?? null;
+
+                if ($result === null) {
+                    // @codeCoverageIgnoreStart
+                    continue;
+                    // @codeCoverageIgnoreEnd
+                }
+
+                $versions[$label] = $result;
+
+                if ($result->isFinding()) {
+                    printf(
+                        'Fails%s: %s' . PHP_EOL . '       %s' . PHP_EOL,
+                        $phpBinaries === [] ? '' : ' on ' . $label,
+                        $files[$job->id()] ?? '',
+                        $result->failure()->describe(),
+                    );
+
+                    $report?->add($result->failure(), $property);
+
+                    $failed = true;
+                }
+            }
+
+            if ($phpBinaries !== [] && $versions !== []) {
+                $difference = DifferentialExecutor::differenceOf($job->id(), $versions);
+
+                if ($difference->isFinding()) {
+                    printf('Differs: %s' . PHP_EOL . '       %s' . PHP_EOL, $files[$job->id()] ?? '', $difference->failure()->describe());
+
+                    $report?->add($difference->failure(), $property);
+
+                    $failed = true;
+                }
+            }
+
+            if ($failed) {
+                $failures++;
+            }
+        }
+
         return ['replayed' => count($jobs), 'failed' => $failures, 'invalid' => $invalid];
+    }
+
+    /**
+     * Executes the inputs with the executor, and returns their results by the
+     * IDs of the inputs.
+     *
+     * @param list<Job> $jobs
+     *
+     * @throws ProtocolException
+     * @throws WorkerException
+     *
+     * @return array<non-negative-int, Result>
+     */
+    private function replay(Executor $executor, array $jobs): array
+    {
+        $results     = [];
+        $pending     = $jobs;
+        $outstanding = 0;
+
+        while ($pending !== [] || $outstanding > 0) {
+            while ($pending !== [] && $executor->capacity() > 0) {
+                $batch = array_slice($pending, 0, self::BATCH_SIZE);
+
+                $executor->submit($batch);
+
+                $outstanding += count($batch);
+                $pending = array_slice($pending, self::BATCH_SIZE);
+            }
+
+            foreach ($executor->collect() as $result) {
+                $outstanding--;
+
+                $results[$result->id()] = $result;
+            }
+        }
+
+        return $results;
     }
 
     /**

@@ -13,6 +13,7 @@ use const PHP_EOL;
 use function file_get_contents;
 use function is_file;
 use function printf;
+use function reset;
 use function sprintf;
 use function str_replace;
 use SebastianBergmann\ChoiceSequence\Decoder;
@@ -99,24 +100,65 @@ final readonly class RunCommand implements Command
 
     public function run(Arguments $arguments): int
     {
-        $setup    = new Setup;
-        $executor = null;
+        $setup     = new Setup;
+        $executors = [];
 
         try {
-            $executor = new ProcessExecutor($setup->workerConfiguration($arguments), 1, $setup->stderr($arguments));
-            $target   = $executor->start();
-            $choices  = self::choicesIn((string) $arguments->input(), $arguments->raw(), $target);
-            $result   = $executor->execute(Job::replay(0, $choices, true));
+            $configuration = $setup->workerConfiguration($arguments);
+            $phpBinaries   = $setup->phpBinaries($arguments);
+            $executors[]   = $first = new ProcessExecutor($configuration, 1, $setup->stderr($arguments));
+            $target        = $first->start();
+            $choices       = self::choicesIn((string) $arguments->input(), $arguments->raw(), $target);
+            $labels        = DifferentialExecutor::labelsOf([$first->php(), ...$phpBinaries]);
+            $versions      = [$labels[0] => $first];
+
+            foreach ($phpBinaries as $index => $php) {
+                $executors[] = $versions[$labels[$index + 1] ?? $php->path()] = new ProcessExecutor($configuration, 1, $setup->stderr($arguments), $php);
+            }
+
+            $results = (new DifferentialExecutor($versions))->executeOnEach(Job::replay(0, $choices, true));
         } catch (ConfigurationException|ProtocolException|WorkerException $e) {
             print $e->getMessage() . PHP_EOL;
 
             return 2;
         } finally {
-            $executor?->shutdown();
+            foreach ($executors as $executor) {
+                $executor->shutdown();
+            }
         }
 
-        self::printResult($result, $arguments->phpunit());
+        if ($phpBinaries === []) {
+            $result = reset($results);
 
-        return $result->isFinding() ? 1 : 0;
+            self::printResult($result, $arguments->phpunit());
+
+            return $result->isFinding() ? 1 : 0;
+        }
+
+        // the input is run on every version of PHP, and its outcomes are
+        // compared
+        $failed = false;
+
+        foreach ($results as $label => $result) {
+            print $label . PHP_EOL;
+
+            self::printResult($result, $arguments->phpunit());
+
+            print PHP_EOL;
+
+            $failed = $failed || $result->isFinding();
+        }
+
+        $difference = DifferentialExecutor::differenceOf(0, $results);
+
+        if ($difference->isFinding()) {
+            print $difference->failure()->describe() . PHP_EOL;
+
+            return 1;
+        }
+
+        print 'The outcome is the same on all versions of PHP.' . PHP_EOL;
+
+        return $failed ? 1 : 0;
     }
 }

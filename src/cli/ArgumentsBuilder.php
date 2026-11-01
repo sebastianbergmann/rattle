@@ -65,6 +65,7 @@ final readonly class ArgumentsBuilder
         'run' => [
             'longOptions' => [
                 'raw',
+                'php=',
                 'phpunit',
                 'configuration=',
             ],
@@ -93,6 +94,7 @@ final readonly class ArgumentsBuilder
                 'cache-directory=',
                 'findings-directory=',
                 'sarif=',
+                'php=',
                 'phpunit',
                 'configuration=',
                 'filter=',

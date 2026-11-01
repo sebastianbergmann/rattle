@@ -88,6 +88,66 @@ final class DifferentialExecutor implements Executor
     }
 
     /**
+     * The result of an input from its results on the versions, by the names
+     * of the versions, the one of the version that fuzzes first: it passes
+     * when it has the same outcome on all versions, and it fails with the
+     * difference otherwise.
+     *
+     * @param non-negative-int                          $id
+     * @param non-empty-array<non-empty-string, Result> $results
+     */
+    public static function differenceOf(int $id, array $results): Result
+    {
+        $first    = null;
+        $outcomes = [];
+
+        foreach ($results as $label => $result) {
+            $first ??= $result;
+            $outcomes[$label] = self::outcomeOf($result);
+        }
+
+        assert($first !== null);
+
+        if (count(array_unique($outcomes)) === 1) {
+            return new Result($id, Outcome::Passed, null, $first->sequence(), [], $first->drawnValues());
+        }
+
+        $versions = [];
+        $messages = [];
+        $traces   = [];
+
+        foreach ($results as $label => $result) {
+            $versions[] = sprintf('%s: %s', $label, $outcomes[$label] ?? '');
+            $failure    = $result->failure();
+
+            if ($failure === null) {
+                continue;
+            }
+
+            if ($failure->message() !== '') {
+                $messages[] = sprintf('%s: %s', $label, $failure->message());
+            }
+
+            if ($failure->trace() !== '') {
+                $traces[] = sprintf("%s:\n%s", $label, $failure->trace());
+            }
+        }
+
+        return new Result(
+            $id,
+            Outcome::Failed,
+            Failure::description(
+                'Difference between PHP versions: ' . implode('; ', $versions),
+                implode("\n", $messages),
+                implode("\n", $traces),
+            ),
+            $first->sequence(),
+            [],
+            $first->drawnValues(),
+        );
+    }
+
+    /**
      * @param non-empty-array<non-empty-string, Executor> $executors the executors by the names of their versions, the one of the version that fuzzes first
      * @param ?non-empty-string                           $target    the property that every input is executed for
      */
@@ -150,61 +210,28 @@ final class DifferentialExecutor implements Executor
 
     public function execute(Job $job): Result
     {
+        return self::differenceOf($job->id(), $this->executeOnEach($job));
+    }
+
+    /**
+     * Executes the input on every version, and returns the results by the
+     * names of the versions.
+     *
+     * @return non-empty-array<non-empty-string, Result>
+     */
+    public function executeOnEach(Job $job): array
+    {
         if ($this->target !== null) {
             $job = $job->withTarget($this->target);
         }
 
-        $first    = null;
-        $results  = [];
-        $outcomes = [];
+        $results = [];
 
         foreach ($this->executors as $label => $executor) {
-            $result = $executor->execute($job);
-
-            $first ??= $result;
-            $results[$label]  = $result;
-            $outcomes[$label] = self::outcomeOf($result);
+            $results[$label] = $executor->execute($job);
         }
 
-        assert($first !== null);
-
-        if (count(array_unique($outcomes)) === 1) {
-            return new Result($job->id(), Outcome::Passed, null, $first->sequence(), [], $first->drawnValues());
-        }
-
-        $versions = [];
-        $messages = [];
-        $traces   = [];
-
-        foreach ($results as $label => $result) {
-            $versions[] = sprintf('%s: %s', $label, $outcomes[$label] ?? '');
-            $failure    = $result->failure();
-
-            if ($failure === null) {
-                continue;
-            }
-
-            if ($failure->message() !== '') {
-                $messages[] = sprintf('%s: %s', $label, $failure->message());
-            }
-
-            if ($failure->trace() !== '') {
-                $traces[] = sprintf("%s:\n%s", $label, $failure->trace());
-            }
-        }
-
-        return new Result(
-            $job->id(),
-            Outcome::Failed,
-            Failure::description(
-                'Difference between PHP versions: ' . implode('; ', $versions),
-                implode("\n", $messages),
-                implode("\n", $traces),
-            ),
-            $first->sequence(),
-            [],
-            $first->drawnValues(),
-        );
+        return $results;
     }
 
     public function shutdown(): void

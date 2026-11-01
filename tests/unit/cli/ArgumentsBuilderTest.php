@@ -141,9 +141,10 @@ final class ArgumentsBuilderTest extends TestCase
 
     public function testParsesTheArgumentsOfTheRunCommand(): void
     {
-        $arguments = (new ArgumentsBuilder)->build(['rattle', 'run', '--raw', 'target.php', 'input']);
+        $arguments = (new ArgumentsBuilder)->build(['rattle', 'run', '--raw', 'target.php', 'input', '--php', '/usr/bin/php8.6']);
 
         $this->assertSame('run', $arguments->command());
+        $this->assertSame(['/usr/bin/php8.6'], $arguments->phpBinaries());
         $this->assertSame('target.php', $arguments->target());
         $this->assertSame('input', $arguments->input());
         $this->assertTrue($arguments->raw());
@@ -171,9 +172,10 @@ final class ArgumentsBuilderTest extends TestCase
 
     public function testParsesTheOptionsForReplayingTheInputsOfThePropertiesOfAPhpunitTestSuite(): void
     {
-        $arguments = (new ArgumentsBuilder)->build(['rattle', 'regress', '--phpunit', '--configuration', 'phpunit.xml', '--filter', 'Parser', '--sarif', 'findings.sarif']);
+        $arguments = (new ArgumentsBuilder)->build(['rattle', 'regress', '--phpunit', '--configuration', 'phpunit.xml', '--filter', 'Parser', '--sarif', 'findings.sarif', '--php', '/usr/bin/php8.6']);
 
         $this->assertSame('regress', $arguments->command());
+        $this->assertSame(['/usr/bin/php8.6'], $arguments->phpBinaries());
         $this->assertSame('findings.sarif', $arguments->sarifFile());
         $this->assertNull($arguments->target());
         $this->assertTrue($arguments->phpunit());
