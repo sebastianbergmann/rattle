@@ -29,18 +29,19 @@ final class DictionaryTest extends TestCase
 
         $this->assertFalse($dictionary->isEmpty());
         $this->assertSame(3, $dictionary->numberOfTokens());
-        $this->assertSame(0, $dictionary->numberOfFoundTokens());
+        $this->assertSame([], $dictionary->foundTokens());
     }
 
-    public function testAddsTheTokensThatWereFoundAndThatItDoesNotHaveYet(): void
+    public function testAddsTheTokensThatWereFoundOnce(): void
     {
         $dictionary = new Dictionary(['a']);
 
         $dictionary->addFoundTokens(['a', 'b', 'c']);
         $dictionary->addFoundTokens(['c', 'd']);
 
+        // the token of the dictionary file is found, but not inserted twice
         $this->assertSame(4, $dictionary->numberOfTokens());
-        $this->assertSame(3, $dictionary->numberOfFoundTokens());
+        $this->assertSame(['a', 'b', 'c', 'd'], $dictionary->foundTokens());
     }
 
     public function testAddsAtMost4096TokensThatWereFound(): void
@@ -51,7 +52,7 @@ final class DictionaryTest extends TestCase
             $dictionary->addFoundTokens(['token ' . $number]);
         }
 
-        $this->assertSame(4096, $dictionary->numberOfFoundTokens());
+        $this->assertCount(4096, $dictionary->foundTokens());
         $this->assertSame(4096, $dictionary->numberOfTokens());
     }
 

@@ -19,9 +19,9 @@ use Random\Randomizer;
  * operands of comparisons that the workers found in the code that they
  * instrumented, which are added while the target is fuzzed.
  *
- * A token that was found is added only when the dictionary does not have it
- * yet, and at most 4096 tokens are added, so that the code of a large
- * project does not dilute the tokens of the dictionary file.
+ * At most 4096 tokens are found, so that the code of a large project does
+ * not dilute the tokens of the dictionary file, and a token that was found
+ * is only inserted when the dictionary file does not have it.
  *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
@@ -37,14 +37,23 @@ final class Dictionary
     private array $tokens;
 
     /**
+     * The tokens that are inserted, as keys.
+     *
      * @var array<string, true>
      */
     private array $known = [];
 
     /**
-     * @var non-negative-int
+     * @var list<non-empty-string>
      */
-    private int $numberOfFoundTokens = 0;
+    private array $foundTokens = [];
+
+    /**
+     * The tokens that were found, as keys.
+     *
+     * @var array<string, true>
+     */
+    private array $found = [];
 
     /**
      * @param list<non-empty-string> $tokens the tokens of the dictionary file
@@ -59,25 +68,30 @@ final class Dictionary
     }
 
     /**
-     * Adds tokens that were found in the code that was instrumented.
+     * Adds tokens that were found in the code that was instrumented. A token
+     * that the dictionary file has is found as well, but not inserted twice
+     * as often as the other tokens.
      *
      * @param list<non-empty-string> $tokens
      */
     public function addFoundTokens(array $tokens): void
     {
         foreach ($tokens as $token) {
-            if ($this->numberOfFoundTokens === self::LARGEST_NUMBER_OF_FOUND_TOKENS) {
+            if (count($this->foundTokens) === self::LARGEST_NUMBER_OF_FOUND_TOKENS) {
                 return;
             }
 
-            if (isset($this->known[$token])) {
+            if (isset($this->found[$token])) {
                 continue;
             }
 
-            $this->tokens[]      = $token;
-            $this->known[$token] = true;
+            $this->foundTokens[] = $token;
+            $this->found[$token] = true;
 
-            $this->numberOfFoundTokens++;
+            if (!isset($this->known[$token])) {
+                $this->tokens[]      = $token;
+                $this->known[$token] = true;
+            }
         }
     }
 
@@ -108,13 +122,13 @@ final class Dictionary
     }
 
     /**
-     * The number of tokens that were found in the code that was instrumented
-     * and added.
+     * The tokens that were found in the code that was instrumented and added,
+     * in the order in which they were added.
      *
-     * @return non-negative-int
+     * @return list<non-empty-string>
      */
-    public function numberOfFoundTokens(): int
+    public function foundTokens(): array
     {
-        return $this->numberOfFoundTokens;
+        return $this->foundTokens;
     }
 }
