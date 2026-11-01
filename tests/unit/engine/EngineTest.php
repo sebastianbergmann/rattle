@@ -84,6 +84,7 @@ final class EngineTest extends TestCase
 
         $this->assertSame(1, $statistics->findings);
         $this->assertLessThan(1000, $statistics->executions);
+        $this->assertSame(1, $statistics->tokens);
     }
 
     public function testFindsAMagicHeaderWithoutADictionary(): void

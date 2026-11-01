@@ -31,7 +31,7 @@ final class StatusLineTest extends TestCase
         $statistics = $this->statistics();
 
         $this->assertSame(
-            'executions: 12,345 (1,235/s), features: 67, corpus: 8, findings: 2, rejected: 9, time: 10s',
+            'executions: 12,345 (1,235/s), features: 67, corpus: 8, tokens: 3, findings: 2, rejected: 9, time: 10s',
             StatusLine::format($statistics, 10.0),
         );
         $this->assertStringEndsWith('time: 2m05s', StatusLine::format($statistics, 125.0));
@@ -56,10 +56,10 @@ final class StatusLineTest extends TestCase
 
         $this->assertSame(
             [
-                'executions: 12,345 (1,235/s), features: 67, corpus: 8, findings: 2, rejected: 9, time: 10s',
+                'executions: 12,345 (1,235/s), features: 67, corpus: 8, tokens: 3, findings: 2, rejected: 9, time: 10s',
                 'Finding: something',
-                'executions: 12,345 (617/s), features: 67, corpus: 8, findings: 2, rejected: 9, time: 20s',
-                'executions: 12,345 (617/s), features: 67, corpus: 8, findings: 2, rejected: 9, time: 20s',
+                'executions: 12,345 (617/s), features: 67, corpus: 8, tokens: 3, findings: 2, rejected: 9, time: 20s',
+                'executions: 12,345 (617/s), features: 67, corpus: 8, tokens: 3, findings: 2, rejected: 9, time: 20s',
                 '',
             ],
             explode("\n", $this->contents($stream)),
@@ -98,6 +98,7 @@ final class StatusLineTest extends TestCase
         $statistics->executions    = 12345;
         $statistics->features      = 67;
         $statistics->corpusEntries = 8;
+        $statistics->tokens        = 3;
         $statistics->findings      = 2;
         $statistics->rejected      = 9;
 

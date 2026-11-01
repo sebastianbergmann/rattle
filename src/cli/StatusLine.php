@@ -45,11 +45,12 @@ final class StatusLine
     public static function format(Statistics $statistics, float $now): string
     {
         return sprintf(
-            'executions: %s (%s/s), features: %s, corpus: %s, findings: %s, rejected: %s, time: %s',
+            'executions: %s (%s/s), features: %s, corpus: %s, tokens: %s, findings: %s, rejected: %s, time: %s',
             number_format($statistics->executions),
             number_format($statistics->executionsPerSecond($now)),
             number_format($statistics->features),
             number_format($statistics->corpusEntries),
+            number_format($statistics->tokens),
             number_format($statistics->findings),
             number_format($statistics->rejected),
             self::duration($statistics->elapsed($now)),

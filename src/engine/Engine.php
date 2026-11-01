@@ -238,6 +238,7 @@ final class Engine
 
         $this->statistics->features      = $this->corpus->numberOfFeatures();
         $this->statistics->corpusEntries = $this->corpus->numberOfEntries();
+        $this->statistics->tokens        = $this->dictionary->numberOfTokens();
 
         if ($this->progress !== null) {
             ($this->progress)($this->statistics);

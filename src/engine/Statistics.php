@@ -49,6 +49,14 @@ final class Statistics
      * @var non-negative-int
      */
     public int $corpusEntries = 0;
+
+    /**
+     * The number of tokens in the dictionary: the tokens of the dictionary
+     * file and the ones that were found in comparisons.
+     *
+     * @var non-negative-int
+     */
+    public int $tokens = 0;
     private readonly float $start;
 
     public function __construct(?float $start = null)
