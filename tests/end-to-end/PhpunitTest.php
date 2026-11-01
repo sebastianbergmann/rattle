@@ -121,6 +121,28 @@ final class PhpunitTest extends TestCase
         $this->assertSame(2000, $history->executions());
         $this->assertFileExists($this->directory . '/cache/status.json');
         $this->assertSame([self::OTHER], array_map(static fn (TargetHistory $history): string => $history->target(), SuiteStatus::fromCacheDirectory($this->directory . '/cache')->histories()));
+
+        // "rattle status" shows what the runs found out without fuzzing
+        [$exit, $output] = $this->rattle(['status', '--phpunit', '--cache-directory', $this->directory . '/cache']);
+
+        $this->assertSame(0, $exit, $output);
+        $this->assertMatchesRegularExpression('/^Property +Runs +Executions +Time +Features +Findings +Last new feature$/m', $output);
+        $this->assertMatchesRegularExpression('/^' . preg_quote(self::OTHER, '/') . ' +2 +2,000 +[0-9hms]+ +0 +0 +never$/m', $output);
+
+        // ... also in JSON, without anything else
+        [$exit, $output] = $this->rattle(['status', '--phpunit', '--cache-directory', $this->directory . '/cache', '--json']);
+
+        $this->assertSame(0, $exit, $output);
+        $this->assertSame(self::OTHER, JsonValue::of($output, 'properties', 0, 'property'));
+        $this->assertSame(2, JsonValue::of($output, 'properties', 0, 'runs'));
+    }
+
+    public function testStatusTellsWhenNoPropertyWasFuzzedWithTheCacheDirectory(): void
+    {
+        [$exit, $output] = $this->rattle(['status', '--phpunit', '--cache-directory', $this->directory . '/cache']);
+
+        $this->assertSame(2, $exit, $output);
+        $this->assertStringContainsString('No property of a PHPUnit test suite was fuzzed with the cache directory ' . $this->directory . '/cache', $output);
     }
 
     public function testInterleavesThePropertiesUntilTheTimeOfMaxTimeIsUp(): void

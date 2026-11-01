@@ -12,6 +12,7 @@ namespace SebastianBergmann\Rattle;
 use const PHP_EOL;
 use function array_slice;
 use function dirname;
+use function in_array;
 use function printf;
 use SebastianBergmann\Version;
 
@@ -51,7 +52,13 @@ final readonly class Application
             return (new WorkerCommand)->run(array_slice($argv, 2));
         }
 
-        $this->printVersion();
+        // the status in JSON is printed on its own, so that other tools can
+        // read it
+        $json = ($argv[1] ?? null) === 'status' && in_array('--json', $argv, true);
+
+        if (!$json) {
+            $this->printVersion();
+        }
 
         try {
             $arguments = (new ArgumentsBuilder)->build($argv);
@@ -65,7 +72,9 @@ final readonly class Application
             return 0;
         }
 
-        print PHP_EOL;
+        if (!$json) {
+            print PHP_EOL;
+        }
 
         if ($arguments->help()) {
             return (new HelpCommand)->run($arguments);
@@ -76,6 +85,7 @@ final readonly class Application
             'run'      => new RunCommand,
             'minimize' => new MinimizeCommand,
             'regress'  => new RegressCommand,
+            'status'   => new StatusCommand,
             default    => null,
         };
 

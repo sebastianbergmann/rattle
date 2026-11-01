@@ -93,6 +93,7 @@ final readonly class Arguments
      * @var ?non-empty-string
      */
     private ?string $sarifFile;
+    private bool $json;
 
     /**
      * @param ?non-empty-string $command
@@ -108,7 +109,7 @@ final readonly class Arguments
      * @param ?non-empty-string $phpunitFilter
      * @param ?non-empty-string $sarifFile
      */
-    public function __construct(?string $command, ?string $target, ?string $input, ?int $jobs, ?int $seed, int $timeout, ?string $memoryLimit, ?float $maximumTime, ?int $maximumNumberOfExecutions, int $maximumNumberOfChoices, int $maximumNumberOfShrinkingAttempts, int $numberOfExecutionsPerWorker, array $corpusDirectories, ?string $seedsDirectory, ?string $dictionary, string $cacheDirectory, string $findingsDirectory, ?string $bootstrap, array $sources, bool $ignoreDeprecations, bool $stopOnFinding, bool $verbose, bool $raw, ?string $inputLog, bool $help, bool $version, bool $phpunit = false, ?string $phpunitConfiguration = null, ?string $phpunitFilter = null, ?string $sarifFile = null)
+    public function __construct(?string $command, ?string $target, ?string $input, ?int $jobs, ?int $seed, int $timeout, ?string $memoryLimit, ?float $maximumTime, ?int $maximumNumberOfExecutions, int $maximumNumberOfChoices, int $maximumNumberOfShrinkingAttempts, int $numberOfExecutionsPerWorker, array $corpusDirectories, ?string $seedsDirectory, ?string $dictionary, string $cacheDirectory, string $findingsDirectory, ?string $bootstrap, array $sources, bool $ignoreDeprecations, bool $stopOnFinding, bool $verbose, bool $raw, ?string $inputLog, bool $help, bool $version, bool $phpunit = false, ?string $phpunitConfiguration = null, ?string $phpunitFilter = null, ?string $sarifFile = null, bool $json = false)
     {
         $this->command                          = $command;
         $this->target                           = $target;
@@ -140,6 +141,7 @@ final readonly class Arguments
         $this->phpunitConfiguration             = $phpunitConfiguration;
         $this->phpunitFilter                    = $phpunitFilter;
         $this->sarifFile                        = $sarifFile;
+        $this->json                             = $json;
     }
 
     /**
@@ -342,5 +344,13 @@ final readonly class Arguments
     public function sarifFile(): ?string
     {
         return $this->sarifFile;
+    }
+
+    /**
+     * Whether "rattle status" prints the status in JSON.
+     */
+    public function json(): bool
+    {
+        return $this->json;
     }
 }

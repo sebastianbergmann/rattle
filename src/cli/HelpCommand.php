@@ -30,6 +30,7 @@ Usage:
   rattle minimize [options] --phpunit <test-id> <input>
   rattle regress  [options] <target.php>
   rattle regress  [options] --phpunit
+  rattle status   [options] --phpunit
 
   rattle --help
   rattle --version
@@ -40,6 +41,7 @@ Commands:
   run                         Run one input once and show what happened
   minimize                    Minimize one input and write it to <input>.minimized
   regress                     Replay every input in the corpus and findings directories once
+  status                      Show what the runs found out about the properties of a test suite
 
 Options for "rattle fuzz":
 
@@ -83,6 +85,11 @@ Options for "rattle regress":
   --phpunit                   Replay the inputs of every property of the PHPUnit test suite
   --configuration <file>      PHPUnit configuration file (default: as PHPUnit looks for one)
   --filter <pattern>          Only replay the inputs of the properties that match the pattern
+
+Options for "rattle status":
+
+  --cache-directory <dir>     Directory for the corpus (default: .rattle.cache)
+  --json                      Show the status in JSON
 
 Options for all commands:
 

@@ -77,6 +77,14 @@ final readonly class ArgumentsBuilder
             ],
             'arguments' => ['target', 'input'],
         ],
+        'status' => [
+            'longOptions' => [
+                'cache-directory=',
+                'phpunit',
+                'json',
+            ],
+            'arguments' => [],
+        ],
         'regress' => [
             'longOptions' => [
                 'jobs=',
@@ -165,6 +173,7 @@ final readonly class ArgumentsBuilder
         $raw                              = false;
         $inputLog                         = null;
         $sarifFile                        = null;
+        $json                             = false;
         $help                             = false;
         $version                          = false;
         $phpunitConfiguration             = null;
@@ -284,6 +293,11 @@ final readonly class ArgumentsBuilder
 
                     break;
 
+                case '--json':
+                    $json = true;
+
+                    break;
+
                 case '--configuration':
                     $phpunitConfiguration = $this->nonEmptyString($option, $value);
 
@@ -310,6 +324,10 @@ final readonly class ArgumentsBuilder
 
         if (!$phpunit && ($phpunitConfiguration !== null || $phpunitFilter !== null)) {
             throw new ArgumentsBuilderException('The options --configuration and --filter can only be used with --phpunit');
+        }
+
+        if ($command === 'status' && !$phpunit) {
+            throw new ArgumentsBuilderException('The "status" command shows the properties of a PHPUnit test suite and needs --phpunit');
         }
 
         if ($phpunit && $seedsDirectory !== null) {
@@ -347,6 +365,7 @@ final readonly class ArgumentsBuilder
             $phpunitConfiguration,
             $phpunitFilter,
             $sarifFile,
+            $json,
         );
     }
 

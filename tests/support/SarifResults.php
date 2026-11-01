@@ -9,13 +9,10 @@
  */
 namespace SebastianBergmann\Rattle;
 
-use const JSON_THROW_ON_ERROR;
-use function array_key_exists;
 use function file_get_contents;
 use function is_array;
 use function is_int;
 use function is_string;
-use function json_decode;
 
 /**
  * Reads what a SARIF report that rattle wrote says, for assertions.
@@ -90,20 +87,12 @@ final readonly class SarifResults
      */
     public static function value(string $json, int|string ...$keys): mixed
     {
-        return self::at(json_decode($json, true, 512, JSON_THROW_ON_ERROR), ...$keys);
+        return JsonValue::of($json, ...$keys);
     }
 
     private static function at(mixed $data, int|string ...$keys): mixed
     {
-        foreach ($keys as $key) {
-            if (!is_array($data) || !array_key_exists($key, $data)) {
-                return null;
-            }
-
-            $data = $data[$key];
-        }
-
-        return $data;
+        return JsonValue::at($data, ...$keys);
     }
 
     private static function stringAt(mixed $data, int|string ...$keys): ?string
