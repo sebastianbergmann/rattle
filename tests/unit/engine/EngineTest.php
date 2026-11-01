@@ -22,6 +22,7 @@ use function rmdir;
 use function scandir;
 use function str_contains;
 use function str_repeat;
+use function strlen;
 use function sys_get_temp_dir;
 use function uniqid;
 use function unlink;
@@ -357,6 +358,49 @@ final class EngineTest extends TestCase
         $this->assertGreaterThan(0.0, $statistics->elapsed());
         $this->assertGreaterThan(0.0, $statistics->executionsPerSecond());
         $this->assertSame(1, $executor->capacity());
+    }
+
+    public function testChecksTheInputsThatEnterTheCorpusAndTheNewFindingsFurtherAndCountsWhatTheCheckFinds(): void
+    {
+        $checked = [];
+        $engine  = new Engine(
+            $this->executor(static function (string $bytes): void
+            {
+                Edges::through(1 + strlen($bytes) % 4, null);
+
+                if (strlen($bytes) === 6) {
+                    throw new LogicException;
+                }
+            }),
+            $corpus     = new Corpus,
+            $dictionary = new Dictionary,
+            Mutator::create($corpus, $dictionary, 8192),
+            $this->findings(),
+            new EngineConfiguration(1, 300),
+            null,
+            null,
+            null,
+            null,
+            static function (Result $result, Job $job) use (&$checked): ?bool
+            {
+                $checked[] = $result->outcome();
+
+                // the second check finds something new, the third something
+                // known, the others nothing
+                return match (count($checked)) {
+                    2       => true,
+                    3       => false,
+                    default => null,
+                };
+            },
+        );
+
+        $statistics = $engine->run();
+
+        $this->assertSame($corpus->numberOfEntries() + $statistics->findings - 1, count($checked));
+        $this->assertContains(Outcome::Failed, $checked);
+        $this->assertSame(2, $statistics->findings);
+        $this->assertGreaterThanOrEqual(1, $statistics->duplicateFindings);
     }
 
     public function testStopsWhenInterrupted(): void

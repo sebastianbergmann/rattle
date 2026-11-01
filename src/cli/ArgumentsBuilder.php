@@ -55,6 +55,7 @@ final readonly class ArgumentsBuilder
                 'stop-on-finding',
                 'log-inputs=',
                 'sarif=',
+                'php=',
                 'phpunit',
                 'configuration=',
                 'filter=',
@@ -174,6 +175,7 @@ final readonly class ArgumentsBuilder
         $raw                              = false;
         $inputLog                         = null;
         $sarifFile                        = null;
+        $phpBinaries                      = [];
         $json                             = false;
         $htmlFile                         = null;
         $help                             = false;
@@ -295,6 +297,11 @@ final readonly class ArgumentsBuilder
 
                     break;
 
+                case '--php':
+                    $phpBinaries[] = $this->nonEmptyString($option, $value);
+
+                    break;
+
                 case '--json':
                     $json = true;
 
@@ -341,6 +348,10 @@ final readonly class ArgumentsBuilder
             throw new ArgumentsBuilderException('The options --json and --html cannot be used together');
         }
 
+        if ($phpunit && $phpBinaries !== []) {
+            throw new ArgumentsBuilderException('The option --php cannot be used with --phpunit yet');
+        }
+
         if ($phpunit && $seedsDirectory !== null) {
             throw new ArgumentsBuilderException('The option --seeds cannot be used with --phpunit, because properties are not bytes targets');
         }
@@ -378,6 +389,7 @@ final readonly class ArgumentsBuilder
             $sarifFile,
             $json,
             $htmlFile,
+            $phpBinaries,
         );
     }
 

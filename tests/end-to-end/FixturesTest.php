@@ -330,6 +330,32 @@ final class FixturesTest extends TestCase
         $this->assertSame([], SarifResults::inFile($this->directory . '/regress.sarif'));
     }
 
+    public function testFindsAnInputWhoseOutcomeDiffersBetweenVersionsOfPhpAndMinimizesIt(): void
+    {
+        $other = self::ROOT . '/tests/fixtures/php/php-precision-5';
+
+        [$exit, $output] = $this->fuzz('versions', ['--seed', '1', '--max-executions', '500', '--stop-on-finding', '--php', $other]);
+
+        $first       = PhpBinary::current()->label();
+        $description = sprintf('Difference between PHP versions: %s: passes; %s (php-precision-5): LengthException at tests/fixtures/targets/versions/src/Ratio.php:32', $first, $first);
+
+        $this->assertSame(1, $exit, $output);
+        $this->assertStringContainsString(sprintf('Versions: %s, %s (php-precision-5), which the corpus and the findings are compared on', $first, $first), $output);
+        $this->assertStringContainsString('Finding: ' . $description, $output);
+
+        $findings = glob($this->directory . '/findings/ratio/*', GLOB_ONLYDIR);
+
+        $this->assertIsArray($findings);
+        $this->assertCount(1, $findings);
+
+        $finding = $findings[0] ?? '';
+
+        // a string of one character is the smallest that is shown with too
+        // few digits on the other version
+        $this->assertSame("\x00", file_get_contents($finding . '/input.bin'));
+        $this->assertStringContainsString("rattle run --php '" . $other . "' ", (string) file_get_contents($finding . '/README.txt'));
+    }
+
     public function testWritesTheFindingsOfARunInSarif(): void
     {
         [$exit, $output] = $this->fuzz('traversal', ['--seed', '6', '--max-executions', '1200', '--stop-on-finding', '--sarif', $this->directory . '/fuzz.sarif']);

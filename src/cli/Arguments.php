@@ -101,21 +101,27 @@ final readonly class Arguments
     private ?string $htmlFile;
 
     /**
-     * @param ?non-empty-string $command
-     * @param ?positive-int     $jobs
-     * @param positive-int      $timeout
-     * @param ?positive-int     $maximumNumberOfExecutions
-     * @param positive-int      $maximumNumberOfChoices
-     * @param non-negative-int  $maximumNumberOfShrinkingAttempts
-     * @param positive-int      $numberOfExecutionsPerWorker
-     * @param list<string>      $corpusDirectories
-     * @param list<string>      $sources
-     * @param ?non-empty-string $phpunitConfiguration
-     * @param ?non-empty-string $phpunitFilter
-     * @param ?non-empty-string $sarifFile
-     * @param ?non-empty-string $htmlFile
+     * @var list<non-empty-string>
      */
-    public function __construct(?string $command, ?string $target, ?string $input, ?int $jobs, ?int $seed, int $timeout, ?string $memoryLimit, ?float $maximumTime, ?int $maximumNumberOfExecutions, int $maximumNumberOfChoices, int $maximumNumberOfShrinkingAttempts, int $numberOfExecutionsPerWorker, array $corpusDirectories, ?string $seedsDirectory, ?string $dictionary, string $cacheDirectory, string $findingsDirectory, ?string $bootstrap, array $sources, bool $ignoreDeprecations, bool $stopOnFinding, bool $verbose, bool $raw, ?string $inputLog, bool $help, bool $version, bool $phpunit = false, ?string $phpunitConfiguration = null, ?string $phpunitFilter = null, ?string $sarifFile = null, bool $json = false, ?string $htmlFile = null)
+    private array $phpBinaries;
+
+    /**
+     * @param ?non-empty-string      $command
+     * @param ?positive-int          $jobs
+     * @param positive-int           $timeout
+     * @param ?positive-int          $maximumNumberOfExecutions
+     * @param positive-int           $maximumNumberOfChoices
+     * @param non-negative-int       $maximumNumberOfShrinkingAttempts
+     * @param positive-int           $numberOfExecutionsPerWorker
+     * @param list<string>           $corpusDirectories
+     * @param list<string>           $sources
+     * @param ?non-empty-string      $phpunitConfiguration
+     * @param ?non-empty-string      $phpunitFilter
+     * @param ?non-empty-string      $sarifFile
+     * @param ?non-empty-string      $htmlFile
+     * @param list<non-empty-string> $phpBinaries
+     */
+    public function __construct(?string $command, ?string $target, ?string $input, ?int $jobs, ?int $seed, int $timeout, ?string $memoryLimit, ?float $maximumTime, ?int $maximumNumberOfExecutions, int $maximumNumberOfChoices, int $maximumNumberOfShrinkingAttempts, int $numberOfExecutionsPerWorker, array $corpusDirectories, ?string $seedsDirectory, ?string $dictionary, string $cacheDirectory, string $findingsDirectory, ?string $bootstrap, array $sources, bool $ignoreDeprecations, bool $stopOnFinding, bool $verbose, bool $raw, ?string $inputLog, bool $help, bool $version, bool $phpunit = false, ?string $phpunitConfiguration = null, ?string $phpunitFilter = null, ?string $sarifFile = null, bool $json = false, ?string $htmlFile = null, array $phpBinaries = [])
     {
         $this->command                          = $command;
         $this->target                           = $target;
@@ -149,6 +155,7 @@ final readonly class Arguments
         $this->sarifFile                        = $sarifFile;
         $this->json                             = $json;
         $this->htmlFile                         = $htmlFile;
+        $this->phpBinaries                      = $phpBinaries;
     }
 
     /**
@@ -369,5 +376,16 @@ final readonly class Arguments
     public function htmlFile(): ?string
     {
         return $this->htmlFile;
+    }
+
+    /**
+     * The PHP binaries of the versions of PHP that inputs are compared on, in
+     * addition to the one that runs rattle.
+     *
+     * @return list<non-empty-string>
+     */
+    public function phpBinaries(): array
+    {
+        return $this->phpBinaries;
     }
 }

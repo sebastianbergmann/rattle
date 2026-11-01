@@ -60,6 +60,7 @@ final readonly class FuzzCommand implements Command
 
         try {
             $configuration = $setup->workerConfiguration($arguments);
+            $phpBinaries   = $setup->phpBinaries($arguments);
             $dictionary    = [];
 
             if ($arguments->dictionary() !== null) {
@@ -86,7 +87,7 @@ final readonly class FuzzCommand implements Command
         $phpunit       = $configuration->phpunit();
 
         if ($phpunit === null) {
-            return $this->fuzz($arguments, $configuration, $this->executionOptions($arguments) . $arguments->target(), $arguments->maximumTime(), $stderr, $jobs, $seed, $dictionary, $isInterrupted);
+            return $this->fuzz($arguments, $configuration, $this->executionOptions($arguments) . $arguments->target(), $arguments->maximumTime(), $stderr, $jobs, $seed, $dictionary, $isInterrupted, $phpBinaries);
         }
 
         return $this->fuzzTestSuite($arguments, $configuration, $phpunit, $stderr, $jobs, $seed, $dictionary, $isInterrupted);
@@ -99,10 +100,11 @@ final readonly class FuzzCommand implements Command
      * @param positive-int                $jobs
      * @param list<non-empty-string>      $tokens        the tokens of the dictionary file
      * @param Closure(): bool             $isInterrupted
+     * @param list<PhpBinary>             $phpBinaries   the versions of PHP that the corpus and the findings are compared on
      *
      * @return 0|1|2
      */
-    private function fuzz(Arguments $arguments, WorkerConfiguration $configuration, string $reproduction, ?float $maximumTime, ?Closure $stderr, int $jobs, int $seed, array $tokens, Closure $isInterrupted): int
+    private function fuzz(Arguments $arguments, WorkerConfiguration $configuration, string $reproduction, ?float $maximumTime, ?Closure $stderr, int $jobs, int $seed, array $tokens, Closure $isInterrupted, array $phpBinaries): int
     {
         $executor = new ProcessExecutor($configuration, $jobs, $stderr);
 
@@ -167,14 +169,31 @@ final readonly class FuzzCommand implements Command
             $this->findingListener($status, null),
         );
 
-        $this->printHeader($target, $seed, $jobs, $configuration, $corpusDirectory, $numberOfStored, $findingsDirectory, $findings->numberOfKnownFindings(), $arguments->maximumNumberOfChoices());
+        $report       = $arguments->sarifFile() === null ? null : new SarifReport((string) getcwd());
+        $differential = null;
+        $differences  = null;
+
+        if ($phpBinaries !== []) {
+            $differential = $this->differentialExecutor($minimizationExecutor, $phpBinaries, $configuration, $stderr, null);
+            $handler      = new FindingProcessor(
+                new Minimizer($differential, $arguments->maximumNumberOfShrinkingAttempts(), $isInterrupted),
+                $store,
+                $target,
+                $this->phpOptions($phpBinaries) . $reproduction,
+                $seed,
+                $this->findingListener($status, null),
+            );
+
+            $differences = new DifferenceFinder($differential, $report === null ? $handler : new FindingRecorder($handler, $report, null));
+        }
+
+        $this->printHeader($target, $seed, $jobs, $configuration, $corpusDirectory, $numberOfStored, $findingsDirectory, $findings->numberOfKnownFindings(), $arguments->maximumNumberOfChoices(), $differential);
 
         foreach ($loader->warnings() as $warning) {
             print 'Warning: ' . $warning . PHP_EOL;
         }
 
-        $log    = null;
-        $report = $arguments->sarifFile() === null ? null : new SarifReport((string) getcwd());
+        $log = null;
 
         if ($arguments->inputLog() !== null) {
             $log = fopen($arguments->inputLog(), 'w');
@@ -190,6 +209,8 @@ final readonly class FuzzCommand implements Command
             $status->update(...),
             $this->inputLogger($log),
             $isInterrupted,
+            null,
+            $differences === null ? null : $differences->check(...),
         );
 
         try {
@@ -201,6 +222,7 @@ final readonly class FuzzCommand implements Command
         } finally {
             $executor->shutdown();
             $minimizationExecutor->shutdown();
+            $differential?->shutdown();
 
             if (is_resource($log)) {
                 fclose($log);
@@ -442,6 +464,44 @@ final readonly class FuzzCommand implements Command
         }
 
         return $totals->findings > 0 ? 1 : 0;
+    }
+
+    /**
+     * An executor that executes inputs on the version of PHP that fuzzes,
+     * with the given executor, and on the versions of the PHP binaries, with
+     * an executor of one worker each.
+     *
+     * @param non-empty-list<PhpBinary>   $phpBinaries
+     * @param ?Closure(int, string): void $stderr
+     * @param ?non-empty-string           $property    the property that every input is executed for
+     */
+    private function differentialExecutor(ProcessExecutor $first, array $phpBinaries, WorkerConfiguration $configuration, ?Closure $stderr, ?string $property): DifferentialExecutor
+    {
+        $labels    = DifferentialExecutor::labelsOf([$first->php(), ...$phpBinaries]);
+        $executors = [$labels[0] => $first];
+
+        foreach ($phpBinaries as $index => $php) {
+            $executors[$labels[$index + 1] ?? $php->path()] = new ProcessExecutor($configuration, 1, $stderr, $php);
+        }
+
+        return new DifferentialExecutor($executors, $property);
+    }
+
+    /**
+     * The options of "rattle run" that run an input on the versions of PHP
+     * of the PHP binaries as well.
+     *
+     * @param list<PhpBinary> $phpBinaries
+     */
+    private function phpOptions(array $phpBinaries): string
+    {
+        $options = '';
+
+        foreach ($phpBinaries as $php) {
+            $options .= '--php ' . escapeshellarg($php->path()) . ' ';
+        }
+
+        return $options;
     }
 
     /**
@@ -729,7 +789,7 @@ final readonly class FuzzCommand implements Command
         return $reproduction . ' ' . escapeshellarg($property);
     }
 
-    private function printHeader(TargetDescription $target, int $seed, int $jobs, WorkerConfiguration $configuration, string $corpusDirectory, int $numberOfStoredInputs, string $findingsDirectory, int $numberOfKnownFindings, int $maximumNumberOfChoices): void
+    private function printHeader(TargetDescription $target, int $seed, int $jobs, WorkerConfiguration $configuration, string $corpusDirectory, int $numberOfStoredInputs, string $findingsDirectory, int $numberOfKnownFindings, int $maximumNumberOfChoices, ?DifferentialExecutor $differential): void
     {
         printf(
             'Target:   %s (%s)' . PHP_EOL .
@@ -749,6 +809,10 @@ final readonly class FuzzCommand implements Command
             $findingsDirectory,
             $numberOfKnownFindings,
         );
+
+        if ($differential !== null) {
+            printf('Versions: %s, which the corpus and the findings are compared on' . PHP_EOL, implode(', ', $differential->labels()));
+        }
 
         if ($target->maximumNumberOfChoices() > $maximumNumberOfChoices) {
             printf(

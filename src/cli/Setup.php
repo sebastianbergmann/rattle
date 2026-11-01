@@ -88,6 +88,25 @@ final readonly class Setup
     }
 
     /**
+     * The PHP binaries of --php, after checking that they are PHP 8.5 or
+     * later.
+     *
+     * @throws ConfigurationException
+     *
+     * @return list<PhpBinary>
+     */
+    public function phpBinaries(Arguments $arguments): array
+    {
+        $binaries = [];
+
+        foreach ($arguments->phpBinaries() as $path) {
+            $binaries[] = PhpBinary::at($path);
+        }
+
+        return $binaries;
+    }
+
+    /**
      * With --verbose, what the workers write to their standard error streams
      * is shown, prefixed with the number of the worker.
      *

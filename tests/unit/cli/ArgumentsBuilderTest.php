@@ -61,6 +61,7 @@ final class ArgumentsBuilderTest extends TestCase
             'status without --phpunit'                      => [['rattle', 'status']],
             'status with an argument'                       => [['rattle', 'status', '--phpunit', 'target.php']],
             'status in JSON and HTML'                       => [['rattle', 'status', '--phpunit', '--json', '--html', 'status.html']],
+            'PHP binaries for properties'                   => [['rattle', 'fuzz', '--phpunit', '--php', '/usr/bin/php8.6']],
             'empty SARIF file'                              => [['rattle', 'regress', 'target.php', '--sarif', '']],
         ];
     }
@@ -94,6 +95,7 @@ final class ArgumentsBuilderTest extends TestCase
         $this->assertFalse($arguments->raw());
         $this->assertNull($arguments->inputLog());
         $this->assertNull($arguments->sarifFile());
+        $this->assertSame([], $arguments->phpBinaries());
         $this->assertFalse($arguments->help());
         $this->assertFalse($arguments->version());
     }
@@ -110,7 +112,7 @@ final class ArgumentsBuilderTest extends TestCase
                 '--cache-directory', 'cache', '--findings-directory', 'findings',
                 '--bootstrap', 'bootstrap.php', '--source', 'src', '--source', 'lib',
                 '--ignore-deprecations', '--stop-on-finding', '--verbose', '--log-inputs', 'inputs.log',
-                '--sarif', 'findings.sarif',
+                '--sarif', 'findings.sarif', '--php', '/usr/bin/php8.6', '--php', '/usr/bin/php8.7',
             ],
         );
 
@@ -135,6 +137,7 @@ final class ArgumentsBuilderTest extends TestCase
         $this->assertTrue($arguments->verbose());
         $this->assertSame('inputs.log', $arguments->inputLog());
         $this->assertSame('findings.sarif', $arguments->sarifFile());
+        $this->assertSame(['/usr/bin/php8.6', '/usr/bin/php8.7'], $arguments->phpBinaries());
     }
 
     public function testParsesTheArgumentsOfTheRunCommand(): void

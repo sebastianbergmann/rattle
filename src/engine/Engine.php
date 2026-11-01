@@ -48,6 +48,11 @@ use Random\Randomizer;
  * the inputs that its features need. A stored input that is a finding now is
  * kept.
  *
+ * An input that is added to the corpus and an input that is a new finding can
+ * be checked further, on other versions of PHP, for instance (see
+ * DifferentialExecutor). The check tells whether it found a new finding or a
+ * known one, which counts as one.
+ *
  * All decisions are made with one random number generator that is seeded
  * with the seed of the run. A new batch is only composed when an executor is
  * idle, after the results of the batches before were processed, so that with
@@ -84,6 +89,11 @@ final class Engine
      * @var ?Closure(): bool
      */
     private readonly ?Closure $interrupted;
+
+    /**
+     * @var ?Closure(Result, Job): ?bool
+     */
+    private readonly ?Closure $check;
 
     /**
      * The inputs that were submitted and whose results were not processed.
@@ -164,12 +174,13 @@ final class Engine
     }
 
     /**
-     * @param ?Closure(Statistics): void $progress    is called after results were processed
-     * @param ?Closure(Job): void        $submitted   is called for every input that is submitted
-     * @param ?Closure(): bool           $interrupted tells whether fuzzing was interrupted, by Ctrl+C for instance
-     * @param ?JobIds                    $ids         hands out the IDs of the inputs, which an engine shares with the other engines that use the same executor
+     * @param ?Closure(Statistics): void   $progress    is called after results were processed
+     * @param ?Closure(Job): void          $submitted   is called for every input that is submitted
+     * @param ?Closure(): bool             $interrupted tells whether fuzzing was interrupted, by Ctrl+C for instance
+     * @param ?JobIds                      $ids         hands out the IDs of the inputs, which an engine shares with the other engines that use the same executor
+     * @param ?Closure(Result, Job): ?bool $check       checks an input that is added to the corpus or is a new finding further, and tells whether it found a new finding (true), a known one (false), or none (null)
      */
-    public function __construct(Executor $executor, Corpus $corpus, Dictionary $dictionary, Mutator $mutator, FindingHandler $findings, EngineConfiguration $configuration, ?Closure $progress = null, ?Closure $submitted = null, ?Closure $interrupted = null, ?JobIds $ids = null)
+    public function __construct(Executor $executor, Corpus $corpus, Dictionary $dictionary, Mutator $mutator, FindingHandler $findings, EngineConfiguration $configuration, ?Closure $progress = null, ?Closure $submitted = null, ?Closure $interrupted = null, ?JobIds $ids = null, ?Closure $check = null)
     {
         $this->executor      = $executor;
         $this->corpus        = $corpus;
@@ -184,6 +195,7 @@ final class Engine
         $this->submitted     = $submitted;
         $this->interrupted   = $interrupted;
         $this->ids           = $ids ?? new JobIds;
+        $this->check         = $check;
     }
 
     /**
@@ -420,13 +432,10 @@ final class Engine
 
         if ($result->isFinding()) {
             if ($this->findings->handle($result, $job)) {
-                $this->statistics->findings++;
-
-                if ($this->configuration->stopOnFinding()) {
-                    $this->stopped = true;
-                }
+                $this->countFinding(true);
+                $this->check($result, $job);
             } else {
-                $this->statistics->duplicateFindings++;
+                $this->countFinding(false);
             }
 
             return;
@@ -444,6 +453,10 @@ final class Engine
 
         $entry = $this->corpus->add($result->sequence(), $result->features());
 
+        if ($entry !== null) {
+            $this->check($result, $job);
+        }
+
         // an input to start with that produced no feature that a smaller one
         // did not produce is removed from the directory of the corpus, and so
         // is one that consumed fewer choices than it has, because the choices
@@ -460,7 +473,38 @@ final class Engine
 
     /**
      * @throws CorpusException
+     * @throws FindingException
+     * @throws ProtocolException
+     * @throws WorkerException
      */
+    private function check(Result $result, Job $job): void
+    {
+        if ($this->check === null) {
+            return;
+        }
+
+        $new = ($this->check)($result, $job);
+
+        if ($new !== null) {
+            $this->countFinding($new);
+        }
+    }
+
+    private function countFinding(bool $new): void
+    {
+        if (!$new) {
+            $this->statistics->duplicateFindings++;
+
+            return;
+        }
+
+        $this->statistics->findings++;
+
+        if ($this->configuration->stopOnFinding()) {
+            $this->stopped = true;
+        }
+    }
+
     private function removeStoredInput(Job $job): void
     {
         $choices = $job->choices();
