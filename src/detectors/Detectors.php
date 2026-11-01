@@ -30,7 +30,10 @@ use SebastianBergmann\Rattle\Instrumentation\FileStreamWrapper;
  *   every operation on files, in the code under test as well as in the code
  *   that it uses
  * - code injection: an included file whose path leads to the sentinel of the
- *   file system
+ *   file system, or an object of the sentinel class that is created with new,
+ *   for instance in code that eval() evaluates (see Sentinel)
+ * - unsafe deserialization: an object of the sentinel class that unserialize()
+ *   creates
  *
  * A detection throws a Vulnerability into the code under test, at the frame
  * of the sink, and is recorded as the failure of the input that is executed.
@@ -182,7 +185,11 @@ final class Detectors
         $fallback = null;
 
         foreach ($frames as $frame) {
-            if (!isset($frame['file'], $frame['line']) || $frame['file'] === '' || Location::isRattle($frame['file'])) {
+            // the code that eval() evaluates has no file of its own
+            if (!isset($frame['file'], $frame['line']) ||
+                $frame['file'] === '' ||
+                Location::isRattle($frame['file']) ||
+                !is_file($frame['file'])) {
                 continue;
             }
 
@@ -190,10 +197,7 @@ final class Detectors
                 return [$frame['file'], $frame['line']];
             }
 
-            // the code that eval() evaluates has no file of its own
-            if ($fallback === null && is_file($frame['file'])) {
-                $fallback = [$frame['file'], $frame['line']];
-            }
+            $fallback ??= [$frame['file'], $frame['line']];
         }
 
         // @codeCoverageIgnoreStart

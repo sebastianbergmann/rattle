@@ -11,7 +11,9 @@ namespace SebastianBergmann\Rattle;
 
 /**
  * An input controls code that PHP compiles and runs: the path of a file that
- * is included leads to the sentinel of the file system.
+ * is included leads to the sentinel of the file system, or an object of the
+ * sentinel class is created with new, for instance by code that eval()
+ * evaluates.
  *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *

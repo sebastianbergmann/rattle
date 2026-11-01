@@ -17,10 +17,14 @@ use function fwrite;
 use function getmypid;
 use function pcntl_alarm;
 use function posix_kill;
+use function sprintf;
 use function str_repeat;
+use function strlen;
 use function trigger_error;
+use function unserialize;
 use DomainException;
 use LogicException;
+use SebastianBergmann\Rattle\Sentinel;
 use Throwable;
 
 /**
@@ -42,6 +46,8 @@ final class Behaviour
     public const int STDOUT             = 11;
     public const int TRAVERSAL          = 12;
     public const int INCLUSION          = 13;
+    public const int DESERIALIZATION    = 14;
+    public const int EVALUATION         = 15;
 
     public function run(int $behaviour, bool $flag): string
     {
@@ -118,6 +124,16 @@ final class Behaviour
 
             case self::INCLUSION:
                 return (string) include __DIR__ . '/' . str_repeat('../', 16) . 'rattle-sentinel.php';
+
+            case self::DESERIALIZATION:
+                unserialize(sprintf('O:%d:"%s":0:{}', strlen(Sentinel::class), Sentinel::class));
+
+                return 'unserialized';
+
+            case self::EVALUATION:
+                eval('new \SebastianBergmann\Rattle\Sentinel;');
+
+                return 'evaluated';
         }
 
         return 'other';

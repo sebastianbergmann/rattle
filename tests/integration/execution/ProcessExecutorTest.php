@@ -100,8 +100,8 @@ final class ProcessExecutorTest extends TestCase
         $this->assertSame(
             [
                 [0, 'passed', null],
-                [1, 'failed', sprintf('Warning at %s:%d', $source, 57)],
-                [2, 'failed', sprintf('Fatal error at %s:%d', $source, 62)],
+                [1, 'failed', sprintf('Warning at %s:%d', $source, 63)],
+                [2, 'failed', sprintf('Fatal error at %s:%d', $source, 68)],
                 [3, 'passed', null],
                 [4, 'failed', 'Process exited with status 3'],
                 [5, 'passed', null],
@@ -109,7 +109,7 @@ final class ProcessExecutorTest extends TestCase
                 [7, 'passed', null],
                 [8, 'failed', 'exceeding the time limit'],
                 [9, 'passed', null],
-                [10, 'failed', sprintf('%s at %s:%d', LogicException::class, $source, 80)],
+                [10, 'failed', sprintf('%s at %s:%d', LogicException::class, $source, 86)],
                 [11, 'rejected', null],
                 [12, 'expected', null],
                 [13, 'passed', null],
@@ -198,7 +198,9 @@ final class ProcessExecutorTest extends TestCase
                 Job::replay(0, [Behaviour::TRAVERSAL, 0]),
                 Job::replay(1, [Behaviour::TRAVERSAL, 1]),
                 Job::replay(2, [Behaviour::INCLUSION, 0]),
-                Job::replay(3, [Behaviour::PASS, 0]),
+                Job::replay(3, [Behaviour::DESERIALIZATION, 0]),
+                Job::replay(4, [Behaviour::EVALUATION, 0]),
+                Job::replay(5, [Behaviour::PASS, 0]),
             ],
         );
 
@@ -206,14 +208,16 @@ final class ProcessExecutorTest extends TestCase
 
         $this->assertSame(
             [
-                [0, 'failed', sprintf('%s at %s:%d', PathTraversal::class, $source, 110)],
-                [1, 'failed', sprintf('%s at %s:%d', PathTraversal::class, $source, 110)],
-                [2, 'failed', sprintf('%s at %s:%d', CodeInjection::class, $source, 120)],
-                [3, 'passed', null],
+                [0, 'failed', sprintf('%s at %s:%d', PathTraversal::class, $source, 116)],
+                [1, 'failed', sprintf('%s at %s:%d', PathTraversal::class, $source, 116)],
+                [2, 'failed', sprintf('%s at %s:%d', CodeInjection::class, $source, 126)],
+                [3, 'failed', sprintf('%s at %s:%d', UnsafeDeserialization::class, $source, 129)],
+                [4, 'failed', sprintf('%s at %s:%d', CodeInjection::class, $source, 134)],
+                [5, 'passed', null],
             ],
             array_map(
                 static fn (Result $result): array => [$result->id(), $result->outcome()->value, $result->failure()?->describe()],
-                $this->collect($executor, 4),
+                $this->collect($executor, 6),
             ),
         );
     }
