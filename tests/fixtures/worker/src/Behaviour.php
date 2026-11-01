@@ -12,6 +12,7 @@ namespace SebastianBergmann\Rattle\Fixture\Worker;
 use const E_USER_WARNING;
 use const SIGKILL;
 use const STDOUT;
+use function file_get_contents;
 use function fwrite;
 use function getmypid;
 use function pcntl_alarm;
@@ -20,6 +21,7 @@ use function str_repeat;
 use function trigger_error;
 use DomainException;
 use LogicException;
+use Throwable;
 
 /**
  * Behaves in one of several ways that a worker has to survive or report.
@@ -38,6 +40,8 @@ final class Behaviour
     public const int EXPECTED_EXCEPTION = 9;
     public const int OUTPUT             = 10;
     public const int STDOUT             = 11;
+    public const int TRAVERSAL          = 12;
+    public const int INCLUSION          = 13;
 
     public function run(int $behaviour, bool $flag): string
     {
@@ -98,6 +102,22 @@ final class Behaviour
                 fwrite(STDOUT, 'output that interferes with the protocol');
 
                 return 'stdout';
+
+            case self::TRAVERSAL:
+                // reads a file whose path climbs to the sentinel of the file
+                // system, and swallows what is thrown when the flag is set
+                try {
+                    return (string) file_get_contents(__DIR__ . '/' . str_repeat('../', 16) . 'rattle-sentinel');
+                } catch (Throwable $t) {
+                    if ($flag) {
+                        return 'swallowed';
+                    }
+
+                    throw $t;
+                }
+
+            case self::INCLUSION:
+                return (string) include __DIR__ . '/' . str_repeat('../', 16) . 'rattle-sentinel.php';
         }
 
         return 'other';

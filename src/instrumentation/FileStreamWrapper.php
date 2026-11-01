@@ -79,6 +79,11 @@ use LogicException;
  *
  * Only one transformation can be registered at a time.
  *
+ * An observer can be registered as well, which is passed the path of every
+ * operation on a file or a directory before the operation is performed, and
+ * whether the file is opened for inclusion. It can throw to prevent the
+ * operation.
+ *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
  * @internal This class is not covered by the backward compatibility promise for sebastian/rattle
@@ -96,6 +101,11 @@ final class FileStreamWrapper
      * @var ?Closure(non-empty-string): ?string
      */
     private static ?Closure $transformation = null;
+
+    /**
+     * @var ?Closure(string, bool): void
+     */
+    private static ?Closure $observer = null;
 
     /**
      * The context of the operation, which PHP sets.
@@ -149,12 +159,23 @@ final class FileStreamWrapper
         return self::$transformation !== null;
     }
 
+    /**
+     * @param ?Closure(string, bool): void $observer is passed the path of an operation, and whether the file is opened for inclusion, or null for no observer
+     */
+    public static function observe(?Closure $observer): void
+    {
+        self::$observer = $observer;
+    }
+
     public function stream_open(string $path, string $mode, int $options, ?string &$openedPath): bool
     {
         $usePath      = ($options & STREAM_USE_PATH) !== 0;
         $reportErrors = ($options & STREAM_REPORT_ERRORS) !== 0;
+        $include      = ($options & self::OPENED_FOR_INCLUDE) !== 0;
 
-        if (($options & self::OPENED_FOR_INCLUDE) !== 0 && self::$transformation !== null) {
+        self::notify($path, $include);
+
+        if ($include && self::$transformation !== null) {
             $realpath = self::native(static function () use ($path, $usePath): ?string
             {
                 $resolved = $usePath ? stream_resolve_include_path($path) : $path;
@@ -303,6 +324,8 @@ final class FileStreamWrapper
 
     public function stream_metadata(string $path, int $option, mixed $value): bool
     {
+        self::notify($path, false);
+
         return self::native(static function () use ($path, $option, $value): bool
         {
             if ($option === STREAM_META_TOUCH) {
@@ -334,6 +357,8 @@ final class FileStreamWrapper
      */
     public function url_stat(string $path, int $flags): array|false
     {
+        self::notify($path, false);
+
         return self::native(static function () use ($path, $flags): array|false
         {
             $link = ($flags & STREAM_URL_STAT_LINK) !== 0;
@@ -352,26 +377,37 @@ final class FileStreamWrapper
 
     public function unlink(string $path): bool
     {
+        self::notify($path, false);
+
         return self::native(fn (): bool => unlink($path, $this->context));
     }
 
     public function rename(string $from, string $to): bool
     {
+        self::notify($from, false);
+        self::notify($to, false);
+
         return self::native(fn (): bool => rename($from, $to, $this->context));
     }
 
     public function mkdir(string $path, int $mode, int $options): bool
     {
+        self::notify($path, false);
+
         return self::native(fn (): bool => mkdir($path, $mode, ($options & STREAM_MKDIR_RECURSIVE) !== 0, $this->context));
     }
 
     public function rmdir(string $path, int $options): bool
     {
+        self::notify($path, false);
+
         return self::native(fn (): bool => rmdir($path, $this->context));
     }
 
     public function dir_opendir(string $path, int $options): bool
     {
+        self::notify($path, false);
+
         $directory = self::native(fn (): mixed => opendir($path, $this->context));
 
         if (!is_resource($directory)) {
@@ -420,6 +456,13 @@ final class FileStreamWrapper
         }
 
         return $this->stream;
+    }
+
+    private static function notify(string $path, bool $include): void
+    {
+        if (self::$observer !== null) {
+            (self::$observer)($path, $include);
+        }
     }
 
     /**

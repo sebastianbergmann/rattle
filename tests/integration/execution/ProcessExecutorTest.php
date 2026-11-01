@@ -13,14 +13,18 @@ use function array_map;
 use function count;
 use function dirname;
 use function getcwd;
+use function ord;
 use function realpath;
 use function sprintf;
+use function str_repeat;
 use function str_replace;
+use function str_split;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Large;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use SebastianBergmann\ChoiceSequence\CodePoints;
 use SebastianBergmann\Rattle\Fixture\Worker\Behaviour;
 
 #[CoversClass(ProcessExecutor::class)]
@@ -96,8 +100,8 @@ final class ProcessExecutorTest extends TestCase
         $this->assertSame(
             [
                 [0, 'passed', null],
-                [1, 'failed', sprintf('Warning at %s:%d', $source, 53)],
-                [2, 'failed', sprintf('Fatal error at %s:%d', $source, 58)],
+                [1, 'failed', sprintf('Warning at %s:%d', $source, 57)],
+                [2, 'failed', sprintf('Fatal error at %s:%d', $source, 62)],
                 [3, 'passed', null],
                 [4, 'failed', 'Process exited with status 3'],
                 [5, 'passed', null],
@@ -105,7 +109,7 @@ final class ProcessExecutorTest extends TestCase
                 [7, 'passed', null],
                 [8, 'failed', 'exceeding the time limit'],
                 [9, 'passed', null],
-                [10, 'failed', sprintf('%s at %s:%d', LogicException::class, $source, 76)],
+                [10, 'failed', sprintf('%s at %s:%d', LogicException::class, $source, 80)],
                 [11, 'rejected', null],
                 [12, 'expected', null],
                 [13, 'passed', null],
@@ -184,6 +188,36 @@ final class ProcessExecutorTest extends TestCase
         $this->assertSame(3, $executor->numberOfRestarts());
     }
 
+    public function testReportsAnInputThatControlsADangerousSinkAtTheFrameInTheSourceDirectoriesEvenWhenTheTargetCatchesTheVulnerability(): void
+    {
+        $executor = $this->executor();
+        $executor->start();
+
+        $executor->submit(
+            [
+                Job::replay(0, [Behaviour::TRAVERSAL, 0]),
+                Job::replay(1, [Behaviour::TRAVERSAL, 1]),
+                Job::replay(2, [Behaviour::INCLUSION, 0]),
+                Job::replay(3, [Behaviour::PASS, 0]),
+            ],
+        );
+
+        $source = str_replace(realpath((string) getcwd()) . '/', '', (string) realpath(self::FIXTURES . '/src/Behaviour.php'));
+
+        $this->assertSame(
+            [
+                [0, 'failed', sprintf('%s at %s:%d', PathTraversal::class, $source, 110)],
+                [1, 'failed', sprintf('%s at %s:%d', PathTraversal::class, $source, 110)],
+                [2, 'failed', sprintf('%s at %s:%d', CodeInjection::class, $source, 120)],
+                [3, 'passed', null],
+            ],
+            array_map(
+                static fn (Result $result): array => [$result->id(), $result->outcome()->value, $result->failure()?->describe()],
+                $this->collect($executor, 4),
+            ),
+        );
+    }
+
     public function testReportsTheConstantOperandsOfComparisonsInTheCodeThatIsInstrumentedOnce(): void
     {
         $executor = $this->executor();
@@ -215,6 +249,31 @@ final class ProcessExecutorTest extends TestCase
         $this->assertNotSame([], $short->features());
         $this->assertSame(Outcome::Failed, $failed->outcome());
         $this->assertSame(Outcome::Passed, $passed->outcome());
+    }
+
+    public function testReportsAnExampleThatControlsADangerousSinkAtTheFrameInTheSourceDirectories(): void
+    {
+        $executor   = $this->testSuiteExecutor('detectors.xml');
+        $properties = $executor->properties() ?? [];
+        $choices    = [];
+
+        $this->assertCount(1, $properties);
+
+        // the characters of a string, each preceded by the choice that
+        // there is another one
+        foreach (str_split(str_repeat('../', 16) . 'rattle-sentinel') as $character) {
+            $choices[] = 1;
+            $choices[] = CodePoints::index(ord($character));
+        }
+
+        $choices[] = 0;
+
+        $result = $executor->execute(Job::replay(0, $choices)->withTarget($properties[0] ?? 'missing'));
+        $source = str_replace(realpath((string) getcwd()) . '/', '', (string) realpath(dirname(__DIR__, 2) . '/fixtures/phpunit/src/Templates.php'));
+
+        $this->assertSame(Outcome::Failed, $result->outcome());
+        $this->assertSame(sprintf('%s at %s:%d', PathTraversal::class, $source, 18), $result->failure()?->describe());
+        $this->assertSame($choices, $result->sequence()->choices());
     }
 
     public function testAWorkerThatServesAllThePropertiesOfATestSuiteRejectsAnInputThatNamesNoProperty(): void
@@ -292,7 +351,7 @@ final class ProcessExecutorTest extends TestCase
      * An executor whose workers serve all the properties of the PHPUnit test
      * suite of the fixture.
      */
-    private function testSuiteExecutor(): ProcessExecutor
+    private function testSuiteExecutor(string $configurationFile = 'phpunit.xml'): ProcessExecutor
     {
         $fixture = dirname(__DIR__, 2) . '/fixtures/phpunit';
 
@@ -306,7 +365,7 @@ final class ProcessExecutorTest extends TestCase
                 '64M',
                 false,
                 10000,
-                new PhpunitTestSuite($fixture . '/phpunit.xml', null),
+                new PhpunitTestSuite($fixture . '/' . $configurationFile, null),
             ),
             1,
         );

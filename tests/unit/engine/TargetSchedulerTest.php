@@ -32,6 +32,7 @@ use SebastianBergmann\Rattle\Instrumentation\Features;
 #[UsesClass(CrossOver::class)]
 #[UsesClass(DeleteChoices::class)]
 #[UsesClass(DeleteSpan::class)]
+#[UsesClass(Detectors::class)]
 #[UsesClass(Dictionary::class)]
 #[UsesClass(DuplicateSpan::class)]
 #[UsesClass(Edges::class)]

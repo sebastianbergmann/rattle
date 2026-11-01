@@ -24,6 +24,7 @@ use SebastianBergmann\Rattle\Instrumentation\Features;
 
 #[CoversClass(Minimizer::class)]
 #[CoversClass(Minimization::class)]
+#[UsesClass(Detectors::class)]
 #[UsesClass(NewFeatures::class)]
 #[UsesClass(BytesEncoding::class)]
 #[UsesClass(Edges::class)]

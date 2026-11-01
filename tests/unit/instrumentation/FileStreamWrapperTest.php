@@ -93,6 +93,7 @@ final class FileStreamWrapperTest extends TestCase
 
     protected function tearDown(): void
     {
+        FileStreamWrapper::observe(null);
         FileStreamWrapper::unregister();
 
         foreach ((array) scandir($this->directory) as $entry) {
@@ -219,6 +220,74 @@ final class FileStreamWrapperTest extends TestCase
 
         $this->assertSame(['.', '..', 'transformed.php', 'untouched.php'], $this->sorted($entries));
         $this->assertFalse(@opendir($this->directory . '/missing'));
+    }
+
+    public function testPassesThePathOfEveryOperationToTheObserverBeforeTheOperationIsPerformed(): void
+    {
+        $observed = [];
+
+        FileStreamWrapper::observe(
+            static function (string $path, bool $include) use (&$observed): void
+            {
+                $observed[] = [$path, $include];
+            },
+        );
+
+        $file = $this->directory . '/file.txt';
+
+        file_put_contents($file, 'x');
+
+        $this->assertFileExists($file);
+
+        touch($file);
+        rename($file, $file . '.renamed');
+        unlink($file . '.renamed');
+        mkdir($this->directory . '/directory');
+
+        $directory = opendir($this->directory . '/directory');
+
+        $this->assertIsResource($directory);
+
+        closedir($directory);
+        rmdir($this->directory . '/directory');
+
+        include $this->directory . '/untouched.php';
+
+        $this->assertSame(
+            [
+                [$file, false],
+                [$file, false],
+                [$file, false],
+                [$file, false],
+                [$file . '.renamed', false],
+                [$file . '.renamed', false],
+                [$this->directory . '/directory', false],
+                [$this->directory . '/directory', false],
+                [$this->directory . '/directory', false],
+                [$this->directory . '/untouched.php', true],
+            ],
+            $observed,
+        );
+    }
+
+    public function testAnObserverThatThrowsPreventsTheOperation(): void
+    {
+        FileStreamWrapper::observe(
+            static function (string $path, bool $include): void
+            {
+                throw new LogicException('prevented');
+            },
+        );
+
+        try {
+            file_put_contents($this->directory . '/prevented.txt', 'x');
+        } catch (LogicException) {
+            // the observer prevented the operation
+        }
+
+        FileStreamWrapper::observe(null);
+
+        $this->assertFileDoesNotExist($this->directory . '/prevented.txt');
     }
 
     public function testOnlyOneTransformationCanBeRegistered(): void

@@ -39,6 +39,7 @@ use SebastianBergmann\Rattle\Instrumentation\Features;
 #[CoversClass(FindingProcessor::class)]
 #[CoversClass(FindingStore::class)]
 #[CoversClass(FindingException::class)]
+#[UsesClass(Detectors::class)]
 #[UsesClass(NewFeatures::class)]
 #[UsesClass(Application::class)]
 #[UsesClass(BytesEncoding::class)]

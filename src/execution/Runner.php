@@ -49,9 +49,11 @@ use Throwable;
  *
  * An input fails when the target throws a throwable that is not expected,
  * when it triggers a warning, notice, deprecation, or user error that is not
- * suppressed, or when its execution exceeds the time limit. The first of
- * these that happens is how the input fails: a warning that is followed by an
- * exception, for instance, is reported as the warning.
+ * suppressed, when its execution exceeds the time limit, or when a detector
+ * finds that it controls a dangerous sink (see Detectors). The first of these
+ * that happens is how the input fails: a warning that is followed by an
+ * exception, for instance, is reported as the warning, and a detection is
+ * reported even when the target catches the vulnerability that is thrown.
  *
  * The features of an input that passes, or that ends with an expected
  * throwable, are reported when this runner has not seen them before. The
@@ -151,6 +153,8 @@ final class Runner implements InputRunner
 
         $this->armAlarm();
 
+        Detectors::start();
+
         try {
             $this->running = true;
 
@@ -162,6 +166,12 @@ final class Runner implements InputRunner
 
             $throwable = $t;
         } finally {
+            $detection = Detectors::stop();
+
+            // an issue or a timeout that happened before a detection is how
+            // the input fails
+            $this->failure ??= $detection;
+
             $this->disarmAlarm();
 
             restore_error_handler();
@@ -208,7 +218,7 @@ final class Runner implements InputRunner
             return null;
         }
 
-        $failure = $this->failure;
+        $failure = $this->failure ?? Detectors::detection();
 
         if ($failure === null) {
             $error = error_get_last();
@@ -288,7 +298,7 @@ final class Runner implements InputRunner
             return true;
         }
 
-        if (!$this->running || $this->failure !== null) {
+        if (!$this->running || $this->failure !== null || Detectors::detection() !== null) {
             return true;
         }
 
@@ -339,7 +349,7 @@ final class Runner implements InputRunner
 
         $message = sprintf('Execution exceeded the time limit of %d second%s', $this->timeout, $this->timeout === 1 ? '' : 's');
 
-        if ($this->failure === null) {
+        if ($this->failure === null && Detectors::detection() === null) {
             $this->failure = Failure::timeout($message, $this->location->render(debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS)));
         }
 

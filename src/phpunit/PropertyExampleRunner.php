@@ -22,7 +22,9 @@ use SebastianBergmann\Rattle\Instrumentation\Features;
 /**
  * Executes the examples of a PHPUnit property: PHPUnit generates the
  * arguments of the property from the choices of an input, or from a seed,
- * runs the property with its time limit, and determines how it failed.
+ * runs the property with its time limit, and determines how it failed. When
+ * a detector finds that an example controls a dangerous sink (see Detectors),
+ * the detection is how the example fails, whatever PHPUnit determined.
  *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
@@ -82,6 +84,8 @@ final class PropertyExampleRunner implements InputRunner
 
         $this->job = $job;
 
+        Detectors::start();
+
         try {
             $choices = $job->choices();
 
@@ -93,11 +97,17 @@ final class PropertyExampleRunner implements InputRunner
         } catch (ProtocolException $e) {
             throw new WorkerException(sprintf('PHPUnit returned an invalid result: %s', $e->getMessage()), 0, $e);
         } finally {
+            $detection = Detectors::stop();
+
             $this->job = null;
         }
 
         $edges   = Edges::$hits;
         $outcome = $example->outcome();
+
+        if ($detection !== null) {
+            return new Result($job->id(), Outcome::Failed, $detection, $example->sequence(), [], $example->values());
+        }
 
         if ($outcome->isFinding()) {
             return new Result($job->id(), $outcome, $example->failure(), $example->sequence(), [], $example->values());
@@ -124,16 +134,20 @@ final class PropertyExampleRunner implements InputRunner
             return null;
         }
 
-        $error = error_get_last();
+        $failure = Detectors::detection();
 
-        if ($error !== null && in_array($error['type'], self::FATAL_ERRORS, true)) {
-            $failure = Failure::description(
-                'Fatal error at ' . $this->location->ofIssue($error['file'], $error['line']),
-                $error['message'],
-                '',
-            );
-        } else {
-            $failure = Failure::exit();
+        if ($failure === null) {
+            $error = error_get_last();
+
+            if ($error !== null && in_array($error['type'], self::FATAL_ERRORS, true)) {
+                $failure = Failure::description(
+                    'Fatal error at ' . $this->location->ofIssue($error['file'], $error['line']),
+                    $error['message'],
+                    '',
+                );
+            } else {
+                $failure = Failure::exit();
+            }
         }
 
         return new Result($this->job->id(), Outcome::Failed, $failure, $this->job->sequence(), [], null);

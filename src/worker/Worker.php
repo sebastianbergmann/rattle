@@ -42,10 +42,11 @@ use Throwable;
  * it and reports one result per input as soon as it is available.
  *
  * At startup, a worker installs its shutdown function, registers the include
- * hook that instruments the code under test, loads the bootstrap file and the
- * target file, and tells the supervisor that it is ready. When the process
- * ends while an input is executed, because of a fatal error or because the
- * target calls exit(), the shutdown function reports a result for that input.
+ * hook that instruments the code under test, installs the detectors of
+ * dangerous sinks (see Detectors), loads the bootstrap file and the target
+ * file, and tells the supervisor that it is ready. When the process ends
+ * while an input is executed, because of a fatal error or because the target
+ * calls exit(), the shutdown function reports a result for that input.
  *
  * A worker exits after a batch of inputs once it has executed the configured
  * number of inputs or uses more memory than a threshold, to limit state that
@@ -89,6 +90,10 @@ final class Worker
 
         try {
             $hook->register();
+
+            // a detection is reported at the innermost frame in the code that
+            // is instrumented
+            Detectors::install(new Location($workingDirectory), $hook->shouldInstrument(...));
 
             $this->loadBootstrap();
 

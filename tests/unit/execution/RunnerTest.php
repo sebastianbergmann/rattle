@@ -19,6 +19,7 @@ use function sprintf;
 use function trigger_error;
 use function usleep;
 use Closure;
+use Error;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Medium;
@@ -33,6 +34,7 @@ use Throwable;
 #[CoversClass(Runner::class)]
 #[CoversClass(Outcome::class)]
 #[CoversClass(TimeoutError::class)]
+#[UsesClass(Detectors::class)]
 #[UsesClass(Failure::class)]
 #[UsesClass(Job::class)]
 #[UsesClass(Location::class)]
@@ -45,6 +47,8 @@ use Throwable;
 #[UsesClass(ValueExporter::class)]
 #[UsesClass(Edges::class)]
 #[UsesClass(Features::class)]
+#[UsesClass(PathTraversal::class)]
+#[UsesClass(Vulnerability::class)]
 #[Medium]
 final class RunnerTest extends TestCase
 {
@@ -322,6 +326,58 @@ final class RunnerTest extends TestCase
         $this->assertSame('first', $result->failure()?->message());
     }
 
+    public function testAnInputThatControlsADangerousSinkIsAFindingEvenWhenTheTargetCatchesOrExpectsTheVulnerability(): void
+    {
+        $line   = __LINE__ + 5;
+        $runner = $this->runner(
+            static function (Input $input): void
+            {
+                try {
+                    throw Detectors::detect(PathTraversal::class, 'a detection');
+                } catch (Throwable) {
+                    // the target swallows the vulnerability
+                }
+
+                throw new Error('an expected error');
+            },
+            Error::class,
+        );
+
+        $result = $runner->run(Job::replay(1, []));
+
+        $this->assertSame(Outcome::Failed, $result->outcome());
+        $this->assertSame(sprintf('%s at %s:%d', PathTraversal::class, self::FILE, $line), $result->failure()?->describe());
+        $this->assertSame('a detection', $result->failure()->message());
+    }
+
+    public function testAnIssueThatHappensBeforeADetectionIsReported(): void
+    {
+        $result = $this->runner(static function (Input $input): void
+        {
+            trigger_error('first', E_USER_WARNING);
+
+            throw Detectors::detect(PathTraversal::class, 'second');
+        })->run(Job::replay(1, []));
+
+        $this->assertSame('first', $result->failure()?->message());
+    }
+
+    public function testADetectionThatHappensBeforeAnIssueIsReported(): void
+    {
+        $result = $this->runner(static function (Input $input): void
+        {
+            try {
+                throw Detectors::detect(PathTraversal::class, 'first');
+            } catch (Throwable) {
+                // the target swallows the vulnerability
+            }
+
+            trigger_error('second', E_USER_WARNING);
+        })->run(Job::replay(1, []));
+
+        $this->assertSame('first', $result->failure()?->message());
+    }
+
     public function testAnInputThatExceedsTheTimeLimitIsAFindingEvenWhenTheTargetCatchesTheTimeoutError(): void
     {
         $runner = new Runner(
@@ -373,6 +429,29 @@ final class RunnerTest extends TestCase
         $this->assertSame(['true'], $interrupted->drawnValues());
         $this->assertNull($runner->resultOfInterruptedExecution());
         $this->assertSame(1, $runner->numberOfExecutions());
+    }
+
+    public function testReportsTheDetectionOfTheInputThatWasExecutedWhenTheProcessEnded(): void
+    {
+        $interrupted = null;
+        $runner      = null;
+
+        $runner = $this->runner(static function (Input $input) use (&$runner, &$interrupted): void
+        {
+            try {
+                throw Detectors::detect(PathTraversal::class, 'a detection');
+            } catch (Throwable) {
+                // the target swallows the vulnerability, and then exits
+            }
+
+            /** @var Runner $runner */
+            $interrupted = $runner->resultOfInterruptedExecution();
+        });
+
+        $runner->run(Job::replay(1, []));
+
+        $this->assertInstanceOf(Result::class, $interrupted);
+        $this->assertSame('a detection', $interrupted->failure()?->message());
     }
 
     /**
