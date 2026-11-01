@@ -184,6 +184,39 @@ final class FixturesTest extends TestCase
         $this->assertStringContainsString('Failure: ' . $description, $output);
     }
 
+    public function testWritesTheTokensThatWereFoundInComparisonsToADictionaryFile(): void
+    {
+        $dictionary = $this->directory . '/cache/magic-header/dictionary.txt';
+
+        [$exit, $output] = $this->fuzz('magic', ['--seed', '2', '--max-executions', '10']);
+
+        $this->assertSame(0, $exit, $output);
+        $this->assertStringContainsString('1 token that was found in comparisons was written to ' . $dictionary, $output);
+        $this->assertStringEqualsFile($dictionary, "# the constant operands of comparisons that rattle found in the code that it instrumented\n\"RATL\"\n");
+
+        // the dictionary file can be passed with --dictionary, and is written
+        // again with the token that it has
+        [$exit, $output] = $this->fuzz('magic', ['--seed', '2', '--max-executions', '10', '--dictionary', $dictionary]);
+
+        $this->assertSame(0, $exit, $output);
+        $this->assertStringContainsString('tokens: 1,', $output);
+        $this->assertFileExists($dictionary);
+    }
+
+    public function testRemovesTheDictionaryFileOfAnEarlierRunWhenNoTokensWereFound(): void
+    {
+        $dictionary = $this->directory . '/cache/csv/dictionary.txt';
+
+        mkdir(dirname($dictionary), 0o777, true);
+        file_put_contents($dictionary, "\"stale\"\n");
+
+        [$exit, $output] = $this->fuzz('csv', ['--seed', '2', '--max-executions', '10']);
+
+        $this->assertSame(0, $exit, $output);
+        $this->assertStringNotContainsString('found in comparisons', $output);
+        $this->assertFileDoesNotExist($dictionary);
+    }
+
     public function testTwoRunsWithTheSameSeedAndOneJobExecuteTheSameInputs(): void
     {
         $this->fuzz('csv', ['--seed', '42', '--max-executions', '3000', '--log-inputs', $this->directory . '/first.log', '--cache-directory', $this->directory . '/first-cache', '--findings-directory', $this->directory . '/first-findings']);

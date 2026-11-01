@@ -16,13 +16,16 @@ use const STDOUT;
 use function count;
 use function escapeshellarg;
 use function fclose;
+use function file_put_contents;
 use function fopen;
 use function fwrite;
 use function implode;
 use function is_dir;
+use function is_file;
 use function is_resource;
 use function max;
 use function microtime;
+use function mkdir;
 use function pcntl_async_signals;
 use function pcntl_signal;
 use function printf;
@@ -30,6 +33,7 @@ use function random_int;
 use function round;
 use function sprintf;
 use function stream_isatty;
+use function unlink;
 use Closure;
 use SebastianBergmann\ChoiceSequence\ChoiceSource;
 
@@ -300,7 +304,47 @@ final readonly class FuzzCommand implements Command
             $statistics->duplicateFindings === 1 ? ' was' : 's were',
         );
 
+        $this->writeFoundTokens($arguments->cacheDirectory() . '/' . $name, $dictionary);
+
         return $statistics->findings > 0 ? 1 : 0;
+    }
+
+    /**
+     * Writes the tokens that were found in the comparisons of the code that
+     * was instrumented to a dictionary file next to the corpus, where they
+     * can be looked at and passed with --dictionary. The dictionary file of an
+     * earlier run is removed when no tokens were found, so that it does not
+     * outlive the comparisons it was found in.
+     */
+    private function writeFoundTokens(string $directory, Dictionary $dictionary): void
+    {
+        $path   = $directory . '/dictionary.txt';
+        $tokens = $dictionary->foundTokens();
+
+        if ($tokens === []) {
+            if (is_file($path)) {
+                @unlink($path);
+            }
+
+            return;
+        }
+
+        $contents = (new DictionaryWriter)->write('the constant operands of comparisons that rattle found in the code that it instrumented', $tokens);
+
+        if ((!is_dir($directory) && !@mkdir($directory, 0o777, true) && !is_dir($directory)) ||
+            @file_put_contents($path, $contents) === false) {
+            printf('Warning: Cannot write the tokens that were found in comparisons to "%s"' . PHP_EOL, $path);
+
+            return;
+        }
+
+        printf(
+            '%d token%s found in comparisons %s written to %s' . PHP_EOL,
+            count($tokens),
+            count($tokens) === 1 ? ' that was' : 's that were',
+            count($tokens) === 1 ? 'was' : 'were',
+            $path,
+        );
     }
 
     /**

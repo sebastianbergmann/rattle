@@ -202,15 +202,17 @@ The constant operands are taken from:
 * the conditions of the arms of a `match` and the values of the cases of a `switch`
 * the arguments of functions that compare strings or look for them, such as `str_starts_with()`, `strcmp()`, `in_array()`, and `explode()`
 
-A constant operand is a string, an integer, which becomes its decimal representation, an array whose keys and values are, or a class constant whose value is one of these. A class constant is only resolved when it is declared in the same file and fetched through `self`, `static`, or the name of its class. Operands that are shorter than three bytes, which are generated easily, and operands that are longer than 64 bytes are left out, and at most 4,096 tokens are added to the tokens of the dictionary file. Every comparison in a file that is instrumented counts, whether an input reached it or not.
+A constant operand is a string, an integer, which becomes its decimal representation, an array whose keys and values are, or a class constant whose value is one of these. A class constant is only resolved when it is declared in the same file and fetched through `self`, `static`, or the name of its class. Operands that are shorter than three bytes, which are generated easily, and operands that are longer than 64 bytes are left out, and at most 4,096 tokens are found. Every comparison in a file that is instrumented counts, whether an input reached it or not.
 
-The status line shows how many tokens the dictionary has (`tokens`).
+The status line shows how many tokens the dictionary has (`tokens`). When fuzzing ends, the tokens that were found in comparisons are written to `dictionary.txt` next to the corpus of the target, in the format of `--dictionary`, so that you can look at them and pass them to another fuzzer. When no tokens were found, the `dictionary.txt` of an earlier run is removed.
 
 ## Directory layout
 
 ```
 .rattle.cache/                    --cache-directory
-└── <target>/corpus/<sha256>      the corpus: inputs that reached code that no input before them reached
+└── <target>/
+    ├── corpus/<sha256>           the corpus: inputs that reached code that no input before them reached
+    └── dictionary.txt            the tokens that were found in comparisons, in the format of --dictionary
 
 fuzz/findings/                    --findings-directory
 └── <target>/<id>/
