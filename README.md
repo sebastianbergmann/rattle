@@ -116,13 +116,32 @@ rattle fuzz --phpunit [--configuration phpunit.xml] [--filter <pattern>]
 
 This needs a version of PHPUnit that provides its API for running the examples of properties, `PHPUnit\Runner\PropertyBased\PropertyRunner`. The worker processes load it with the bootstrap file, `vendor/autoload.php` by default, and PHPUnit loads its configuration file and the bootstrap script of the configuration as for a test run. PHPUnit generates the arguments of a property from the choices of an input with the generators of the property, runs the property with its full lifecycle, from `setUpBeforeClass()` to `tearDown()`, and enforces the time limit of `--timeout`, which covers generating the arguments as well as running the property. rattle instruments the code in the source directories and keeps the inputs that reach code that no input reached before, as for a fuzz target.
 
-Every property is a target of its own, with a corpus and findings of its own. The properties are fuzzed together: the workers run the examples of all properties, and whenever a worker is idle, rattle chooses the property whose inputs it executes next. A property is chosen more often the more new features it found recently, relative to how often its inputs were executed, so that the time goes to the properties that are still making progress. A property whose discoveries dried up is still chosen now and then. What a property found recently counts more than what it found long ago, over about its last 10,000 executions. Until a property was executed that often, rattle knows little about it: early in a run, a property that reaches much new code quickly gets most of the time, and a short run, with fewer than about 100,000 executions per property, can find less than fuzzing the properties equally would. The status line shows how many properties are still fuzzed, and a table shows the executions, features, corpus entries, and findings of every property when fuzzing ends.
+Every property is a target of its own, with a corpus and findings of its own. The properties are fuzzed together: the workers run the examples of all properties, and whenever a worker is idle, rattle chooses the property whose inputs it executes next. A property is chosen more often the more new features it found recently, relative to how often its inputs were executed, so that the time goes to the properties that are still making progress. A property whose discoveries dried up is still chosen now and then. What a property found recently counts more than what it found long ago, over about its last 10,000 executions. Until a property was executed that often, rattle knows little about it: early in a run, a property that reaches much new code quickly gets most of the time, and a short run, with fewer than about 100,000 executions per property, can find less than fuzzing the properties equally would. This is why rattle keeps what it learned about the properties for the next run, see [Continuous fuzzing](#continuous-fuzzing). The status line shows how many properties are still fuzzed, and a table shows the executions, features, corpus entries, and findings of every property in the run when fuzzing ends, as well as its executions in all runs and how long ago it last found a new feature.
 
 `--max-time` is the time for all properties together, and without it, the properties are fuzzed until Ctrl+C. `--max-executions` applies to every property, and so does `--stop-on-finding`: a property that found a defect is no longer fuzzed, while the others go on. `--corpus` and `--log-inputs` belong to one target, so they can only be used when `--filter` selects one property. The directories of the corpus and of the findings of a property are named after its test class and its test method, followed by a hash of its test ID, for instance `fuzz/findings/parsertest-testroundtrip-1a2b3c4d/`. A finding is identified as PHPUnit identifies the way in which an example falsifies a property, so a finding of rattle and a counterexample of PHPUnit that fail in the same way have the same failure signature.
 
 `rattle run --phpunit <test-id> <input>` runs an input of the property with the given test ID again, which the `README.txt` of a finding shows, and `rattle minimize --phpunit <test-id> <input>` minimizes one. `rattle regress --phpunit` replays the inputs in the corpus and findings directories of every property, so the findings of the properties become regression tests as those of a fuzz target do. It shows the arguments of the example, the values that it drew with `draw()`, and the steps of its state machine as PHPUnit prints them for a counterexample, and the `finding.json` of a finding has them as well.
 
 Unlike for a fuzz target, a warning, notice, or deprecation that a property triggers is handled by PHPUnit and is not a finding, and an example that is skipped or marked as incomplete counts as rejected. An example that PHPUnit aborts because it fails or errors without checking the property, in `setUp()` or `setUpBeforeClass()`, for instance, because a generator raises an exception while the arguments are generated, or because its state machine cannot be run, is not a finding either: as for PHPUnit, it is an error of the property, and rattle stops with exit code 2.
+
+## Continuous fuzzing
+
+A run of `rattle fuzz --phpunit` continues where the runs before it with the same cache directory stopped. Next to its corpus, rattle keeps what it learned about every property in `statistics.json`:
+
+* how many new features the property found recently, relative to how often its inputs were executed, so that the next run chooses the properties with the weights that the runs before it arrived at, instead of with the same weight for every property
+* the number of its features at the end of the last run
+* totals over all runs: runs, executions, time, findings, and when it last found a new feature
+* the number of its features over its executions and over time: a point at the start and at the end of every run and whenever it found new features, thinned out to at most 1,000 points
+
+A run starts by replaying the corpora of all properties, which reaches the features that they had again. Only features beyond the number that a property had at the end of the last run count as new, so a property whose code or test changed, and that reaches more features than before, is chosen more often again. The time of a property is its share of the time of a run, in proportion to its executions.
+
+This needs no configuration. To fuzz continuously in CI, run `rattle fuzz --phpunit --max-time <duration>` regularly, for instance every night, and keep the cache directory from one run to the next, with the cache of your CI system, for instance. At the end of every run, rattle writes the status of all properties that were fuzzed with the cache directory to `status.json` in it. A property that is no longer in the test suite is shown until you remove its directory from the cache directory.
+
+```
+rattle status --phpunit [--cache-directory <dir>] [--json | --html <file>]
+```
+
+shows the status without running the test suite: as a table, in JSON with `--json`, which is what `status.json` has, or with `--html <file>` as a dashboard in one HTML file that needs nothing else, with a chart of the features of every property over its executions, which you can keep as an artifact of CI. In JSON, times are seconds since the Unix epoch, and the points of a series are the time, the number of executions, and the number of features.
 
 ## Commands
 
@@ -131,6 +150,7 @@ rattle fuzz     [options] <target.php>
 rattle run      [options] <target.php> <input>
 rattle minimize [options] <target.php> <input>
 rattle regress  [options] <target.php>
+rattle status   [options] --phpunit
 ```
 
 With `--phpunit`, these commands work on the properties of a PHPUnit test suite instead of a fuzz target, see [Properties of a PHPUnit test suite](#properties-of-a-phpunit-test-suite).
@@ -142,6 +162,8 @@ With `--phpunit`, these commands work on the properties of a PHPUnit test suite 
 `rattle minimize` minimizes an input that makes the target fail and writes the minimal input to `<input>.minimized`.
 
 `rattle regress` replays every input in the corpus and findings directories of the target once. Its exit code is 1 when any of them fails.
+
+`rattle status --phpunit` shows what the runs found out about the properties of a PHPUnit test suite, see [Continuous fuzzing](#continuous-fuzzing).
 
 Only the code in your source directories is instrumented: the directories given with `--source`, otherwise the `<directory>` and `<file>` entries in `<source><include>` of the PHPUnit configuration file, otherwise `src/`. The configuration file is the one given with `--configuration`, otherwise `phpunit.xml`, `phpunit.dist.xml`, or `phpunit.xml.dist` in the working directory, as for PHPUnit. Code in `vendor/` is never instrumented.
 
@@ -236,9 +258,11 @@ The detectors run in rattle's worker processes, so `rattle run` and `rattle regr
 
 ```
 .rattle.cache/                    --cache-directory
-└── <target>/
-    ├── corpus/<sha256>           the corpus: inputs that reached code that no input before them reached
-    └── dictionary.txt            the tokens that were found in comparisons, in the format of --dictionary
+├── <target>/
+│   ├── corpus/<sha256>           the corpus: inputs that reached code that no input before them reached
+│   ├── dictionary.txt            the tokens that were found in comparisons, in the format of --dictionary
+│   └── statistics.json           what the runs learned about a property of a PHPUnit test suite
+└── status.json                   the status of the properties of a PHPUnit test suite
 
 fuzz/findings/                    --findings-directory
 └── <target>/<id>/
