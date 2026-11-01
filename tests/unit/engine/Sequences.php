@@ -14,6 +14,8 @@ use function count;
 use function mb_ord;
 use function mb_str_split;
 use function min;
+use function ord;
+use function strlen;
 use Closure;
 use SebastianBergmann\ChoiceSequence\ChoiceSequence;
 use SebastianBergmann\ChoiceSequence\ChoiceSource;
@@ -76,6 +78,56 @@ final readonly class Sequences
         $source->startSpan('element', SpanKind::Element);
         $source->draw(1, new UniformDistribution);
         $source->endSpan();
+        $source->endSpan();
+
+        return $source->sequence();
+    }
+
+    /**
+     * Creates the choice sequence of a binary string with a minimum length as
+     * PHPUnit's generators draw it: the string is a span of the kind Bytes,
+     * the bytes that the minimum length requires are spans of the kind
+     * Element that hold only their value, every other byte is a span of the
+     * kind Element that consists of the choice 1 followed by its value, and
+     * the choice 0 that ends the string is a span of the kind Element as
+     * well, unless the string has the maximum length.
+     *
+     * @param non-negative-int  $minimumLength
+     * @param ?non-negative-int $maximumLength
+     */
+    public static function ofBytesWithMinimumLength(string $bytes, int $minimumLength, ?int $maximumLength = null): ChoiceSequence
+    {
+        $choices = [];
+
+        for ($i = 0; $i < strlen($bytes); $i++) {
+            if ($i >= $minimumLength) {
+                $choices[] = 1;
+            }
+
+            $choices[] = ord($bytes[$i]);
+        }
+
+        if ($maximumLength === null || strlen($bytes) < $maximumLength) {
+            $choices[] = 0;
+        }
+
+        $source = ChoiceSource::replay(new ChoiceSequence($choices));
+
+        $source->startSpan('bytes', SpanKind::Bytes);
+
+        for ($size = 0; $maximumLength === null || $size < $maximumLength; $size++) {
+            $source->startSpan('byte', SpanKind::Element);
+
+            if ($size >= $minimumLength && $source->draw(1, new UniformDistribution) === 0) {
+                $source->endSpan();
+
+                break;
+            }
+
+            $source->draw(0xFF, new UniformDistribution);
+            $source->endSpan();
+        }
+
         $source->endSpan();
 
         return $source->sequence();

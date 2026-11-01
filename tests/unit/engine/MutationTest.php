@@ -380,6 +380,44 @@ final class MutationTest extends TestCase
         $this->assertSame([1, CodePoints::index(0x61), 0], $candidate->choices());
     }
 
+    public function testInsertsATokenOnlyAfterTheBytesThatTheMinimumLengthOfAStringRequires(): void
+    {
+        $randomizer = $this->randomizer();
+        $seen       = [];
+
+        for ($i = 0; $i < self::ROUNDS; $i++) {
+            $candidate = Candidate::from(Sequences::ofBytesWithMinimumLength('ab', 1));
+
+            $this->assertTrue((new InsertToken(new Dictionary(['XY'])))->apply($candidate, $randomizer));
+
+            $seen[implode(',', $candidate->choices())] = true;
+        }
+
+        // before the byte that a choice added, and before the span that ends
+        // the string, but never before the byte that the minimum length
+        // requires
+        $this->assertEqualsCanonicalizing(
+            ['97,1,88,1,89,1,98,0', '97,1,98,1,88,1,89,0'],
+            array_keys($seen),
+        );
+    }
+
+    public function testInsertsNoBytesBetweenTheBytesThatTheMinimumLengthOfAStringRequires(): void
+    {
+        $randomizer = $this->randomizer();
+
+        for ($i = 0; $i < self::ROUNDS; $i++) {
+            $candidate = Candidate::from(Sequences::ofBytesWithMinimumLength('ab', 2, 2));
+
+            (new InsertChoices)->apply($candidate, $randomizer);
+
+            // bytes that are inserted begin with the choice 1, whose maximum is 1
+            for ($position = 0; $position < $candidate->length(); $position++) {
+                $this->assertNotSame(1, $candidate->maximumAt($position));
+            }
+        }
+    }
+
     public function testInsertsNoTokenWhileTheDictionaryIsEmpty(): void
     {
         $dictionary = new Dictionary;

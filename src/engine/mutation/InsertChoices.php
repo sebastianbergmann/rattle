@@ -9,6 +9,8 @@
  */
 namespace SebastianBergmann\Rattle;
 
+use function array_filter;
+use function array_values;
 use Random\Randomizer;
 use SebastianBergmann\ChoiceSequence\SpanKind;
 
@@ -19,7 +21,11 @@ use SebastianBergmann\ChoiceSequence\SpanKind;
  * At the start or the end of a span that holds one byte of a binary string,
  * a few bytes are inserted as spans of the same kind, [1, b]. At the start or
  * the end of an element of another collection (see SpanKind::Element), a copy
- * of one of its elements is inserted.
+ * of one of its elements is inserted. Bytes and elements are only inserted
+ * where a choice decides whether there is another element, not between the
+ * elements that the minimum size of a collection requires (see
+ * Candidate::isDecided()), and only elements that were decided by a choice
+ * are copied.
  *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
@@ -44,7 +50,7 @@ final readonly class InsertChoices implements Mutation
         $position = $randomizer->getInt(0, 1) === 0 ? $span['start'] : $span['end'];
 
         // at the boundary between bytes of a string, bytes are inserted
-        if ($candidate->isByteOfString($span)) {
+        if ($candidate->isByteOfString($span) && $candidate->isDecided($span)) {
             $byte = BytesEncoding::byte();
 
             // bytes after the span that ends the string would not be drawn
@@ -62,8 +68,8 @@ final readonly class InsertChoices implements Mutation
         // at the boundary between elements of another collection, a copy of
         // one of its elements is inserted, which makes the collection grow
         // by an element that its generator can generate
-        if ($span['kind'] === SpanKind::Element) {
-            $elements = $candidate->elementsBesides($span);
+        if ($candidate->isDecided($span)) {
+            $elements = array_values(array_filter($candidate->elementsBesides($span), $candidate->isDecided(...)));
 
             if ($elements !== []) {
                 if ($candidate->endsCollection($span)) {

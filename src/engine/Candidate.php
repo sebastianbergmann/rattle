@@ -183,6 +183,27 @@ final class Candidate
     }
 
     /**
+     * Whether the span is an element of a collection whose first choice
+     * decided whether there is another element: the choice 1 that adds the
+     * element, or the choice 0 that ends the collection, whose maximum is 1.
+     * The elements that the minimum size of a collection requires come first
+     * and are not decided by a choice, and no element can be inserted before
+     * them. For the bytes and characters of a string, this is exact; for an
+     * element of another collection whose first choice has the maximum 1
+     * itself, a boolean, for instance, an element that the minimum size
+     * requires is taken to be decided by a choice.
+     *
+     * @param array{start: non-negative-int, end: non-negative-int, label: non-empty-string, parent: ?non-negative-int, kind: ?SpanKind} $span
+     */
+    public function isDecided(array $span): bool
+    {
+        return $span['kind'] === SpanKind::Element &&
+               $span['end'] > $span['start'] &&
+               $this->choiceAt($span['start']) <= 1 &&
+               $this->maximumAt($span['start']) === 1;
+    }
+
+    /**
      * Whether the span holds an element of a collection, a span of the kind
      * SpanKind::Element that does not end the collection. The generators of
      * PHPUnit mark the elements of lists, arrays, strings, and binary strings

@@ -21,8 +21,11 @@ use SebastianBergmann\ChoiceSequence\SpanKind;
 
 /**
  * Inserts a token of the dictionary into a string, at the boundary between
- * two of its elements: before a span that holds one element, or before the
- * span that ends the string, [0].
+ * two of its elements where a choice decides whether there is another
+ * element: before a span that holds one element, [1, …], or before the span
+ * that ends the string, [0]. The elements that the minimum length of the
+ * string requires come first and hold only their value, and no token is
+ * inserted before them.
  *
  * Into a binary string, the token is inserted as the choices of its bytes,
  * [1, b0, 1, b1, …]. Into a string of Unicode characters, a token that is
@@ -57,7 +60,7 @@ final readonly class InsertToken implements Mutation
         $positions = [];
 
         foreach ($candidate->spans() as $span) {
-            if ($candidate->isByteOfString($span) || $candidate->isCharacterOfString($span)) {
+            if (($candidate->isByteOfString($span) || $candidate->isCharacterOfString($span)) && $candidate->isDecided($span)) {
                 $positions[] = $span;
             }
         }

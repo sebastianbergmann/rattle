@@ -69,12 +69,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/sebastianbergmann/choice-sequence.git",
-                "reference": "5172f0b1f5cb12238d2d539db3e701d7385dc96f"
+                "reference": "31de1bea2f831699a19a1a686923fedf36fb90ec"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sebastianbergmann/choice-sequence/zipball/5172f0b1f5cb12238d2d539db3e701d7385dc96f",
-                "reference": "5172f0b1f5cb12238d2d539db3e701d7385dc96f",
+                "url": "https://api.github.com/repos/sebastianbergmann/choice-sequence/zipball/31de1bea2f831699a19a1a686923fedf36fb90ec",
+                "reference": "31de1bea2f831699a19a1a686923fedf36fb90ec",
                 "shasum": ""
             },
             "require": {
@@ -131,7 +131,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-11-01T07:11:03+00:00"
+            "time": "2026-11-01T09:00:05+00:00"
         },
         {
             "name": "sebastian/cli-parser",
@@ -718,12 +718,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/sebastianbergmann/phpunit.git",
-                "reference": "6b1ff6af5e9dfb29b503220d93efb6446e2ba52c"
+                "reference": "8e2dac1d25b5cbeb265566d1e99a0f5cd0210e66"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/6b1ff6af5e9dfb29b503220d93efb6446e2ba52c",
-                "reference": "6b1ff6af5e9dfb29b503220d93efb6446e2ba52c",
+                "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/8e2dac1d25b5cbeb265566d1e99a0f5cd0210e66",
+                "reference": "8e2dac1d25b5cbeb265566d1e99a0f5cd0210e66",
                 "shasum": ""
             },
             "require": {
@@ -803,7 +803,7 @@
                     "type": "other"
                 }
             ],
-            "time": "2026-11-01T07:14:37+00:00"
+            "time": "2026-11-01T09:00:55+00:00"
         },
         {
             "name": "sebastian/comparator",

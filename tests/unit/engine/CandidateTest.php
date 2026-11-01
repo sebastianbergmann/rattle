@@ -68,6 +68,24 @@ final class CandidateTest extends TestCase
         );
     }
 
+    public function testKnowsWhichElementsOfAStringAreDecidedByAChoice(): void
+    {
+        $candidate = Candidate::from(Sequences::ofBytesWithMinimumLength('ab', 1));
+        $spans     = array_values($candidate->spans());
+
+        $this->assertSame([0x61, 1, 0x62, 0], $candidate->choices());
+        // the string, the byte that the minimum length requires, the byte
+        // that a choice added, and the span that ends the string
+        $this->assertSame(
+            [false, false, true, true],
+            array_map(static fn (array $span): bool => $candidate->isDecided($span), $spans),
+        );
+        $this->assertSame(
+            [false, true, true, true],
+            array_map(static fn (array $span): bool => $candidate->isByteOfString($span), $spans),
+        );
+    }
+
     public function testKnowsTheElementsOfCollectionsAndTheSpansThatEndThem(): void
     {
         $candidate = Candidate::from(Sequences::ofList([3, 5]));
