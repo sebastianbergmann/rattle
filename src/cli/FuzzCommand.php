@@ -39,6 +39,7 @@ use function stream_isatty;
 use function strlen;
 use function unlink;
 use Closure;
+use JsonException;
 use SebastianBergmann\ChoiceSequence\ChoiceSource;
 
 /**
@@ -414,9 +415,11 @@ final readonly class FuzzCommand implements Command
             }
         }
 
+        $this->writeSuiteStatus($arguments->cacheDirectory());
+
         print PHP_EOL;
 
-        $this->printTable($engines);
+        $this->printTable($engines, $scheduler->histories());
         $this->printSummary($totals, $isInterrupted());
 
         $written = null;
@@ -489,24 +492,28 @@ final readonly class FuzzCommand implements Command
     }
 
     /**
-     * Shows how fuzzing went for every property.
+     * Shows how fuzzing went for every property in the run, how often it was
+     * executed in all runs, and how long ago it last discovered features.
      *
      * @param non-empty-array<non-empty-string, Engine> $engines
+     * @param array<non-empty-string, TargetHistory>    $histories
      */
-    private function printTable(array $engines): void
+    private function printTable(array $engines, array $histories): void
     {
         $width = strlen('Property');
+        $now   = microtime(true);
 
         foreach (array_keys($engines) as $property) {
             $width = max($width, strlen($property));
         }
 
-        $format = '%-' . $width . 's  %10s  %8s  %6s  %8s' . PHP_EOL;
+        $format = '%-' . $width . 's  %10s  %8s  %6s  %8s  %10s  %s' . PHP_EOL;
 
-        printf($format, 'Property', 'Executions', 'Features', 'Corpus', 'Findings');
+        printf($format, 'Property', 'Executions', 'Features', 'Corpus', 'Findings', 'All runs', 'Last new feature');
 
         foreach ($engines as $property => $engine) {
             $statistics = $engine->statistics();
+            $history    = $histories[$property] ?? new TargetHistory($property);
 
             printf(
                 $format,
@@ -515,10 +522,33 @@ final readonly class FuzzCommand implements Command
                 number_format($statistics->features),
                 number_format($statistics->corpusEntries),
                 number_format($statistics->findings),
+                number_format($history->executions()),
+                SuiteStatus::lastNewFeature($history, $now),
             );
         }
 
         print PHP_EOL;
+    }
+
+    /**
+     * Writes the status of the properties that were fuzzed with the cache
+     * directory to status.json in it.
+     */
+    private function writeSuiteStatus(string $cacheDirectory): void
+    {
+        $file = $cacheDirectory . '/status.json';
+
+        try {
+            $json = SuiteStatus::fromCacheDirectory($cacheDirectory)->asJson(microtime(true));
+        } catch (JsonException) {
+            // @codeCoverageIgnoreStart
+            $json = null;
+            // @codeCoverageIgnoreEnd
+        }
+
+        if ($json === null || @file_put_contents($file, $json) === false) {
+            printf('Warning: Cannot write "%s"' . PHP_EOL, $file);
+        }
     }
 
     /**

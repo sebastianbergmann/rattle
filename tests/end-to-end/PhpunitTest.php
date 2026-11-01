@@ -11,6 +11,7 @@ namespace SebastianBergmann\Rattle;
 
 use const GLOB_ONLYDIR;
 use const PHP_BINARY;
+use function array_map;
 use function dirname;
 use function escapeshellarg;
 use function file_get_contents;
@@ -69,8 +70,8 @@ final class PhpunitTest extends TestCase
         $this->assertStringContainsString('Finding: LogicException at ' . self::FIXTURE . '/src/Classifier.php:38' . "\n         " . self::PROPERTY . "\n", $output);
 
         // the table at the end has a row for every property
-        $this->assertMatchesRegularExpression('/^' . preg_quote(self::PROPERTY, '/') . ' +[0-9,]+ +[0-9,]+ +[0-9,]+ +1$/m', $output);
-        $this->assertMatchesRegularExpression('/^' . preg_quote(self::OTHER, '/') . ' +1,000 +0 +0 +0$/m', $output);
+        $this->assertMatchesRegularExpression('/^' . preg_quote(self::PROPERTY, '/') . ' +[0-9,]+ +[0-9,]+ +[0-9,]+ +1 +[0-9,]+ +[0-9hms]+ ago$/m', $output);
+        $this->assertMatchesRegularExpression('/^' . preg_quote(self::OTHER, '/') . ' +1,000 +0 +0 +0 +1,000 +never$/m', $output);
 
         $findings = glob($this->directory . '/findings/classifiertest-testclassifieseverylist-*/*', GLOB_ONLYDIR);
 
@@ -100,6 +101,26 @@ final class PhpunitTest extends TestCase
         $this->assertStringContainsString('Target:   PHPUnit test suite (1 property)', $output);
         $this->assertStringNotContainsString(self::PROPERTY, $output);
         $this->assertMatchesRegularExpression('/^' . preg_quote(self::OTHER, '/') . ' +1,000 /m', $output);
+    }
+
+    public function testKeepsWhatTheRunsLearnedAboutAPropertyForTheNextRun(): void
+    {
+        $this->fuzz(['--filter', 'Counts']);
+
+        [$exit, $output] = $this->fuzz(['--filter', 'Counts']);
+
+        $this->assertSame(0, $exit, $output);
+
+        // the table shows the executions of both runs
+        $this->assertMatchesRegularExpression('/^' . preg_quote(self::OTHER, '/') . ' +1,000 +0 +0 +0 +2,000 +never$/m', $output);
+
+        $history = TargetHistory::read($this->directory . '/cache/' . PropertyDirectory::nameOf(self::OTHER) . '/statistics.json');
+
+        $this->assertNotNull($history);
+        $this->assertSame(2, $history->runs());
+        $this->assertSame(2000, $history->executions());
+        $this->assertFileExists($this->directory . '/cache/status.json');
+        $this->assertSame([self::OTHER], array_map(static fn (TargetHistory $history): string => $history->target(), SuiteStatus::fromCacheDirectory($this->directory . '/cache')->histories()));
     }
 
     public function testInterleavesThePropertiesUntilTheTimeOfMaxTimeIsUp(): void

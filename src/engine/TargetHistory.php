@@ -100,23 +100,32 @@ final class TargetHistory
      */
     public static function fromFile(string $file, string $target): self
     {
-        if (!is_file($file)) {
-            return new self($target);
-        }
-
-        try {
-            $data = json_decode((string) file_get_contents($file), true, 512, JSON_THROW_ON_ERROR);
-        } catch (JsonException) {
-            return new self($target);
-        }
-
-        $history = is_array($data) ? self::fromArray($data) : null;
+        $history = self::read($file);
 
         if ($history === null || $history->target !== $target) {
             return new self($target);
         }
 
         return $history;
+    }
+
+    /**
+     * Reads the history of a target from a file, or returns null when the
+     * file does not exist or cannot be read.
+     */
+    public static function read(string $file): ?self
+    {
+        if (!is_file($file)) {
+            return null;
+        }
+
+        try {
+            $data = json_decode((string) file_get_contents($file), true, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException) {
+            return null;
+        }
+
+        return is_array($data) ? self::fromArray($data) : null;
     }
 
     /**
