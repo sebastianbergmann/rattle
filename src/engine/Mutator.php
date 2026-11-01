@@ -56,7 +56,7 @@ final readonly class Mutator
                 new CrossOver($corpus),
                 new InsertChoices,
                 new DeleteChoices,
-                new InsertToken($dictionary),
+                new AddToken($dictionary),
             ],
             $maximumNumberOfChoices,
         );

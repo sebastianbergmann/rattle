@@ -36,7 +36,7 @@ use SebastianBergmann\ChoiceSequence\ChoiceSequence;
 #[UsesClass(CrossOver::class)]
 #[UsesClass(InsertChoices::class)]
 #[UsesClass(DeleteChoices::class)]
-#[UsesClass(InsertToken::class)]
+#[UsesClass(AddToken::class)]
 #[UsesClass(Dictionary::class)]
 #[Small]
 final class MutatorTest extends TestCase

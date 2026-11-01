@@ -19,4 +19,13 @@ final class CommandParserTest extends TestCase
     {
         $this->assertSame($command, new CommandParser()->parse($command));
     }
+
+    /**
+     * @param non-empty-string $command
+     */
+    #[Property]
+    public function testParsesEveryNonEmptyCommand(string $command): void
+    {
+        $this->assertSame($command, new CommandParser()->parse($command));
+    }
 }

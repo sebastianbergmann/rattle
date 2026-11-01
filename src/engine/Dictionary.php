@@ -14,7 +14,7 @@ use function count;
 use Random\Randomizer;
 
 /**
- * The tokens that are inserted into the strings of inputs (see InsertToken):
+ * The tokens that are added to the strings of inputs (see AddToken):
  * the tokens of the dictionary file of --dictionary, and the constant
  * operands of comparisons that the workers found in the code that they
  * instrumented, which are added while the target is fuzzed.
@@ -37,7 +37,7 @@ final class Dictionary
     private array $tokens;
 
     /**
-     * The tokens that are inserted, as keys.
+     * The tokens that are added to strings, as keys.
      *
      * @var array<string, true>
      */

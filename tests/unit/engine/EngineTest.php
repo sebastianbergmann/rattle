@@ -57,7 +57,7 @@ use SebastianBergmann\Rattle\Instrumentation\Features;
 #[UsesClass(Input::class)]
 #[UsesClass(InputRejectedException::class)]
 #[UsesClass(InsertChoices::class)]
-#[UsesClass(InsertToken::class)]
+#[UsesClass(AddToken::class)]
 #[UsesClass(Job::class)]
 #[UsesClass(Location::class)]
 #[UsesClass(Mutator::class)]

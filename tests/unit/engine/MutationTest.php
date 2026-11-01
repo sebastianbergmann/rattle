@@ -36,7 +36,7 @@ use SebastianBergmann\ChoiceSequence\Span;
 #[CoversClass(CrossOver::class)]
 #[CoversClass(InsertChoices::class)]
 #[CoversClass(DeleteChoices::class)]
-#[CoversClass(InsertToken::class)]
+#[CoversClass(AddToken::class)]
 #[UsesClass(Candidate::class)]
 #[UsesClass(RandomElement::class)]
 #[UsesClass(Corpus::class)]
@@ -53,7 +53,7 @@ final class MutationTest extends TestCase
     {
         $randomizer = $this->randomizer();
 
-        foreach ([new RandomChoice, new BoundaryChoice, new ArithmeticChoice, new DeleteSpan, new DuplicateSpan, new SwapSpans, new CrossOver(new Corpus), new DeleteChoices, new InsertToken(new Dictionary(['token']))] as $mutation) {
+        foreach ([new RandomChoice, new BoundaryChoice, new ArithmeticChoice, new DeleteSpan, new DuplicateSpan, new SwapSpans, new CrossOver(new Corpus), new DeleteChoices, new AddToken(new Dictionary(['token']))] as $mutation) {
             $this->assertFalse($mutation->apply(Candidate::from(new ChoiceSequence([])), $randomizer), $mutation::class);
         }
 
@@ -313,7 +313,7 @@ final class MutationTest extends TestCase
         }
     }
 
-    public function testInsertsATokenAtTheBoundaryBetweenBytes(): void
+    public function testAddsATokenToABinaryStringByInsertingItOrByOverwritingBytes(): void
     {
         $randomizer = $this->randomizer();
         $seen       = [];
@@ -321,7 +321,7 @@ final class MutationTest extends TestCase
         for ($i = 0; $i < self::ROUNDS; $i++) {
             $candidate = Candidate::from(Sequences::ofBytes('ab'));
 
-            $this->assertTrue((new InsertToken(new Dictionary(['XY'])))->apply($candidate, $randomizer));
+            $this->assertTrue((new AddToken(new Dictionary(['XY'])))->apply($candidate, $randomizer));
 
             $bytes = BytesEncoding::bytesFor($candidate->choices(), 100);
 
@@ -330,7 +330,9 @@ final class MutationTest extends TestCase
             $seen[$bytes] = true;
         }
 
-        $this->assertEqualsCanonicalizing(['XYab', 'aXYb', 'abXY'], array_keys($seen));
+        // inserted at the boundaries between the bytes, or overwriting the
+        // bytes from the first or the second one on
+        $this->assertEqualsCanonicalizing(['XYab', 'aXYb', 'abXY', 'XY', 'aXY'], array_keys($seen));
     }
 
     public function testInsertsATokenIntoAnEmptyString(): void
@@ -344,7 +346,7 @@ final class MutationTest extends TestCase
 
         $candidate = Candidate::from(Sequences::drawn([1, 0, 3], $draw));
 
-        $this->assertTrue((new InsertToken(new Dictionary(['XY'])))->apply($candidate, $this->randomizer()));
+        $this->assertTrue((new AddToken(new Dictionary(['XY'])))->apply($candidate, $this->randomizer()));
         $this->assertSame([1, 1, 0x58, 1, 0x59, 0, 3], $candidate->choices());
 
         $candidate = Candidate::from(Sequences::drawn([1], static function (Input $input): void
@@ -353,34 +355,46 @@ final class MutationTest extends TestCase
             $input->int(0, 1);
         }));
 
-        $this->assertFalse((new InsertToken(new Dictionary(['XY'])))->apply($candidate, $this->randomizer()));
+        $this->assertFalse((new AddToken(new Dictionary(['XY'])))->apply($candidate, $this->randomizer()));
     }
 
-    public function testInsertsATokenIntoAStringOfUnicodeCharactersAsCharacters(): void
+    public function testAddsATokenToAStringOfUnicodeCharactersAsCharacters(): void
     {
-        $candidate = Candidate::from(Sequences::ofCharacters('a'));
+        $randomizer = $this->randomizer();
+        $seen       = [];
 
-        $this->assertTrue((new InsertToken(new Dictionary(['X€'])))->apply($candidate, $this->randomizer()));
+        for ($i = 0; $i < self::ROUNDS; $i++) {
+            $candidate = Candidate::from(Sequences::ofCharacters('a'));
 
-        $this->assertContains(
-            $candidate->choices(),
+            $this->assertTrue((new AddToken(new Dictionary(['X€'])))->apply($candidate, $randomizer));
+
+            $seen[implode(',', $candidate->choices())] = true;
+        }
+
+        $x    = CodePoints::index(0x58);
+        $euro = CodePoints::index(0x20AC);
+        $a    = CodePoints::index(0x61);
+
+        // inserted before or after the character, or overwriting it
+        $this->assertEqualsCanonicalizing(
             [
-                [1, CodePoints::index(0x58), 1, CodePoints::index(0x20AC), 1, CodePoints::index(0x61), 0],
-                [1, CodePoints::index(0x61), 1, CodePoints::index(0x58), 1, CodePoints::index(0x20AC), 0],
+                implode(',', [1, $x, 1, $euro, 1, $a, 0]),
+                implode(',', [1, $a, 1, $x, 1, $euro, 0]),
+                implode(',', [1, $x, 1, $euro, 0]),
             ],
+            array_keys($seen),
         );
-        $this->assertSame(CodePoints::LARGEST_INDEX, $candidate->maximumAt(3));
     }
 
     public function testInsertsNoTokenThatIsNotValidUtf8IntoAStringOfUnicodeCharacters(): void
     {
         $candidate = Candidate::from(Sequences::ofCharacters('a'));
 
-        $this->assertFalse((new InsertToken(new Dictionary(["\x89PNG"])))->apply($candidate, $this->randomizer()));
+        $this->assertFalse((new AddToken(new Dictionary(["\x89PNG"])))->apply($candidate, $this->randomizer()));
         $this->assertSame([1, CodePoints::index(0x61), 0], $candidate->choices());
     }
 
-    public function testInsertsATokenOnlyAfterTheBytesThatTheMinimumLengthOfAStringRequires(): void
+    public function testAddsATokenToAStringWithAMinimumLengthByInsertingItAfterTheBytesThatItRequiresOrByOverwritingThem(): void
     {
         $randomizer = $this->randomizer();
         $seen       = [];
@@ -388,16 +402,16 @@ final class MutationTest extends TestCase
         for ($i = 0; $i < self::ROUNDS; $i++) {
             $candidate = Candidate::from(Sequences::ofBytesWithMinimumLength('ab', 1));
 
-            $this->assertTrue((new InsertToken(new Dictionary(['XY'])))->apply($candidate, $randomizer));
+            $this->assertTrue((new AddToken(new Dictionary(['XY'])))->apply($candidate, $randomizer));
 
             $seen[implode(',', $candidate->choices())] = true;
         }
 
-        // before the byte that a choice added, and before the span that ends
-        // the string, but never before the byte that the minimum length
-        // requires
+        // inserted before the byte that a choice added or before the span
+        // that ends the string, but never before the byte that the minimum
+        // length requires, which is overwritten instead
         $this->assertEqualsCanonicalizing(
-            ['97,1,88,1,89,1,98,0', '97,1,98,1,88,1,89,0'],
+            ['97,1,88,1,89,1,98,0', '97,1,98,1,88,1,89,0', '88,1,89,0', '97,1,88,1,89,0'],
             array_keys($seen),
         );
     }
@@ -421,7 +435,7 @@ final class MutationTest extends TestCase
     public function testInsertsNoTokenWhileTheDictionaryIsEmpty(): void
     {
         $dictionary = new Dictionary;
-        $mutation   = new InsertToken($dictionary);
+        $mutation   = new AddToken($dictionary);
 
         $this->assertFalse($mutation->apply(Candidate::from(Sequences::ofBytes('ab')), $this->randomizer()));
 
