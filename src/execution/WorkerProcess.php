@@ -118,6 +118,10 @@ final class WorkerProcess
         // recursion, which would hide the limit of PHP's call stack
         $environment['XDEBUG_MODE'] = 'off';
 
+        foreach (SentinelCommand::environmentOfWorkers() as $name => $value) {
+            $environment[$name] = $value;
+        }
+
         $executable = dirname(__DIR__, 2) . '/rattle';
 
         if (defined('__RATTLE_PHAR__') && is_string(__RATTLE_PHAR__)) {

@@ -25,6 +25,7 @@ use SebastianBergmann\Rattle\Instrumentation\FileStreamWrapper;
 #[UsesClass(Failure::class)]
 #[UsesClass(FileStreamWrapper::class)]
 #[UsesClass(Location::class)]
+#[UsesClass(SentinelCommand::class)]
 #[UsesClass(Vulnerability::class)]
 #[Small]
 final class SentinelTest extends TestCase

@@ -17,6 +17,7 @@ use function mkdir;
 use function opendir;
 use function realpath;
 use function rename;
+use function shell_exec;
 use function sprintf;
 use function str_repeat;
 use function touch;
@@ -36,6 +37,7 @@ use SebastianBergmann\Rattle\Instrumentation\FileStreamWrapper;
 #[UsesClass(Failure::class)]
 #[UsesClass(FileStreamWrapper::class)]
 #[UsesClass(Location::class)]
+#[UsesClass(SentinelCommand::class)]
 #[UsesClass(Sentinels::class)]
 #[Small]
 final class DetectorsTest extends TestCase
@@ -156,6 +158,33 @@ final class DetectorsTest extends TestCase
 
         $this->assertInstanceOf($expected, $vulnerability ?? null);
         $this->assertStringStartsWith($expected . ' at ', (string) $failure?->describe());
+    }
+
+    public function testDetectsARunOfTheSentinelCommand(): void
+    {
+        $this->install(static fn (string $file): bool => false);
+
+        Detectors::start();
+
+        try {
+            $line = __LINE__ + 1;
+            shell_exec('echo $(rattle-sentinel)');
+        } catch (CommandInjection $vulnerability) {
+            // the vulnerability is thrown into the code that ran the command
+        } finally {
+            $failure = Detectors::stop();
+        }
+
+        $this->assertInstanceOf(CommandInjection::class, $vulnerability ?? null);
+        $this->assertSame(sprintf('%s at %s:%d', CommandInjection::class, self::FILE, $line), $failure?->describe());
+    }
+
+    public function testDoesNotDetectARunOfTheSentinelCommandWhileNoInputIsExecuted(): void
+    {
+        $this->install(static fn (string $file): bool => false);
+
+        // the command produces no output
+        $this->assertNull(shell_exec('rattle-sentinel'));
     }
 
     public function testDoesNotDetectAPathThatDoesNotLeadToTheSentinelOfTheFileSystem(): void

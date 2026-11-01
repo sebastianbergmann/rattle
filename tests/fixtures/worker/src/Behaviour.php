@@ -17,6 +17,7 @@ use function fwrite;
 use function getmypid;
 use function pcntl_alarm;
 use function posix_kill;
+use function shell_exec;
 use function sprintf;
 use function str_repeat;
 use function strlen;
@@ -48,6 +49,7 @@ final class Behaviour
     public const int INCLUSION          = 13;
     public const int DESERIALIZATION    = 14;
     public const int EVALUATION         = 15;
+    public const int COMMAND            = 16;
 
     public function run(int $behaviour, bool $flag): string
     {
@@ -134,6 +136,9 @@ final class Behaviour
                 eval('new \SebastianBergmann\Rattle\Sentinel;');
 
                 return 'evaluated';
+
+            case self::COMMAND:
+                return (string) shell_exec('echo $(rattle-sentinel)');
         }
 
         return 'other';

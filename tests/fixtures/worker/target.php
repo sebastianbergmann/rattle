@@ -15,7 +15,7 @@ return Target::structured(
     'worker',
     static function (Input $input): void
     {
-        $behaviour = $input->int(0, 15);
+        $behaviour = $input->int(0, 16);
         $flag      = $input->bool();
 
         if ($behaviour === Behaviour::REJECT) {

@@ -17,7 +17,8 @@ use function substr;
 /**
  * The sentinels of the detectors (see Detectors): values that the code under
  * test only uses when an input put them there: the sentinel of the file
- * system, and the sentinel class (see Sentinel).
+ * system, the sentinel class (see Sentinel), and the sentinel command (see
+ * SentinelCommand).
  *
  * The sentinel of the file system is /rattle-sentinel, a path at the root of
  * the file system that no project uses, which a relative path reaches with

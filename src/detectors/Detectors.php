@@ -34,6 +34,8 @@ use SebastianBergmann\Rattle\Instrumentation\FileStreamWrapper;
  *   for instance in code that eval() evaluates (see Sentinel)
  * - unsafe deserialization: an object of the sentinel class that unserialize()
  *   creates
+ * - command injection: a run of the sentinel command, as a command or in a
+ *   command line that a shell interprets (see SentinelCommand)
  *
  * A detection throws a Vulnerability into the code under test, at the frame
  * of the sink, and is recorded as the failure of the input that is executed.
@@ -80,11 +82,13 @@ final class Detectors
         }
 
         FileStreamWrapper::observe(self::checkPath(...));
+        SentinelCommand::install(self::detectCommand(...));
     }
 
     public static function uninstall(): void
     {
         FileStreamWrapper::observe(null);
+        SentinelCommand::uninstall();
 
         self::$location  = null;
         self::$isSource  = null;
@@ -172,6 +176,23 @@ final class Detectors
         throw self::detect(
             PathTraversal::class,
             sprintf('The path "%s" of a file operation leads to the sentinel /%s', $path, Sentinels::NAME),
+        );
+    }
+
+    /**
+     * Is called when the sentinel command ran.
+     *
+     * @throws CommandInjection
+     */
+    private static function detectCommand(): void
+    {
+        if (!self::$active) {
+            return;
+        }
+
+        throw self::detect(
+            CommandInjection::class,
+            sprintf('A command from the input ran the sentinel command %s', Sentinels::NAME),
         );
     }
 
