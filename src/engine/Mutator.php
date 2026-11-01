@@ -77,7 +77,7 @@ final readonly class Mutator
      */
     public function mutate(CorpusEntry $entry, Randomizer $randomizer): array
     {
-        $candidate = Candidate::from($entry->sequence());
+        $candidate = $entry->candidate();
 
         for ($i = $randomizer->getInt(1, self::LARGEST_NUMBER_OF_MUTATIONS); $i > 0; $i--) {
             for ($attempt = 0; $attempt < self::ATTEMPTS_PER_MUTATION; $attempt++) {

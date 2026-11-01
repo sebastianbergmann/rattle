@@ -38,7 +38,7 @@ final readonly class CrossOver implements Mutation
         }
 
         $span   = RandomElement::of($randomizer, $spans);
-        $other  = Candidate::from(RandomElement::of($randomizer, $entries)->sequence());
+        $other  = RandomElement::of($randomizer, $entries)->candidate();
         $donors = [];
 
         foreach ($other->spans() as $donor) {

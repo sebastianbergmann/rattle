@@ -17,23 +17,27 @@ use SebastianBergmann\ChoiceSequence\ChoiceSequence;
  * maxima, the features it produced that were new when it was added, and when
  * it was added.
  *
+ * The candidate for mutating the input is created the first time it is
+ * needed, and a copy of it is used for each mutation.
+ *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
  * @internal This class is not covered by the backward compatibility promise for sebastian/rattle
  */
-final readonly class CorpusEntry
+final class CorpusEntry
 {
-    private ChoiceSequence $sequence;
+    private readonly ChoiceSequence $sequence;
 
     /**
      * @var list<int>
      */
-    private array $newFeatures;
+    private readonly array $newFeatures;
 
     /**
      * @var non-negative-int
      */
-    private int $index;
+    private readonly int $index;
+    private ?Candidate $candidate = null;
 
     /**
      * @param list<int>        $newFeatures
@@ -49,6 +53,13 @@ final readonly class CorpusEntry
     public function sequence(): ChoiceSequence
     {
         return $this->sequence;
+    }
+
+    public function candidate(): Candidate
+    {
+        $this->candidate ??= Candidate::from($this->sequence);
+
+        return clone $this->candidate;
     }
 
     /**

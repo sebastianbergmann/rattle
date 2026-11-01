@@ -26,6 +26,7 @@ use SebastianBergmann\ChoiceSequence\ChoiceSequence;
 
 #[CoversClass(Corpus::class)]
 #[CoversClass(CorpusEntry::class)]
+#[UsesClass(Candidate::class)]
 #[UsesClass(CorpusException::class)]
 #[Small]
 final class CorpusTest extends TestCase
@@ -72,6 +73,23 @@ final class CorpusTest extends TestCase
         $this->assertSame(2, $corpus->numberOfEntries());
         $this->assertSame(3, $corpus->numberOfFeatures());
         $this->assertSame([$first, $second], $corpus->entries());
+    }
+
+    public function testAnEntryHasACopyOfItsCandidateForEachMutation(): void
+    {
+        $entry = (new Corpus)->add(new ChoiceSequence([1, 2], [], [3, 4]), [10]);
+
+        $this->assertNotNull($entry);
+
+        $candidate = $entry->candidate();
+
+        $candidate->set(0, 3);
+        $candidate->delete(1, 1);
+
+        $this->assertSame([3], $candidate->choices());
+        $this->assertSame([1, 2], $entry->candidate()->choices());
+        $this->assertSame(4, $entry->candidate()->maximumAt(1));
+        $this->assertNotSame($entry->candidate(), $entry->candidate());
     }
 
     public function testStoresEntriesInTheFormatOfChoiceSequencesNamedAfterTheirHash(): void
