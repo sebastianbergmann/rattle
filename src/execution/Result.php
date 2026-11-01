@@ -34,6 +34,9 @@ use SebastianBergmann\ChoiceSequence\SpanKind;
  * When the input required features, the result tells whether it produced
  * them all.
  *
+ * The result of a terse input (see Job) has its choice sequence only when it
+ * failed, produced features, or produced the features that it required.
+ *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
  * @internal This class is not covered by the backward compatibility promise for sebastian/rattle
@@ -46,7 +49,7 @@ final readonly class Result
     private int $id;
     private Outcome $outcome;
     private ?Failure $failure;
-    private ChoiceSequence $sequence;
+    private ?ChoiceSequence $sequence;
 
     /**
      * @var list<int>
@@ -121,7 +124,7 @@ final readonly class Result
             $id,
             $outcome,
             $failure,
-            self::sequenceFromArray(ProtocolData::array($data['sequence'] ?? null)),
+            isset($data['sequence']) ? self::sequenceFromArray(ProtocolData::array($data['sequence'])) : null,
             ProtocolData::listOfIntegers($data['features'] ?? null),
             $drawnValues,
             $tokens,
@@ -136,7 +139,7 @@ final readonly class Result
      * @param list<non-empty-string> $tokens
      * @param bool                   $producedRequiredFeatures whether the input produced all the features that it required
      */
-    public function __construct(int $id, Outcome $outcome, ?Failure $failure, ChoiceSequence $sequence, array $features, ?array $drawnValues, array $tokens = [], bool $producedRequiredFeatures = false)
+    public function __construct(int $id, Outcome $outcome, ?Failure $failure, ?ChoiceSequence $sequence, array $features, ?array $drawnValues, array $tokens = [], bool $producedRequiredFeatures = false)
     {
         assert(($failure !== null) === $outcome->isFinding());
 
@@ -177,9 +180,20 @@ final readonly class Result
         return $this->failure;
     }
 
+    /**
+     * The choice sequence that the input consumed, which the result of a
+     * terse input only has when it is needed.
+     */
     public function sequence(): ChoiceSequence
     {
+        assert($this->sequence !== null);
+
         return $this->sequence;
+    }
+
+    public function hasSequence(): bool
+    {
+        return $this->sequence !== null;
     }
 
     /**
@@ -235,27 +249,30 @@ final readonly class Result
      */
     public function asArray(): array
     {
-        $spans  = [];
-        $maxima = [];
-
-        foreach ($this->sequence->spans() as $span) {
-            $spans[] = [$span->start(), $span->end(), $span->label(), $span->parent(), $span->kind()?->name];
-        }
-
-        foreach ($this->sequence->choices() as $index => $choice) {
-            $maxima[] = $this->sequence->maximumAt($index);
-        }
-
         $data = [
             'id'       => $this->id,
             'outcome'  => $this->outcome->value,
-            'sequence' => [
+            'features' => $this->features,
+        ];
+
+        if ($this->sequence !== null) {
+            $spans  = [];
+            $maxima = [];
+
+            foreach ($this->sequence->spans() as $span) {
+                $spans[] = [$span->start(), $span->end(), $span->label(), $span->parent(), $span->kind()?->name];
+            }
+
+            foreach ($this->sequence->choices() as $index => $choice) {
+                $maxima[] = $this->sequence->maximumAt($index);
+            }
+
+            $data['sequence'] = [
                 'choices' => $this->sequence->choices(),
                 'spans'   => $spans,
                 'maxima'  => $maxima,
-            ],
-            'features' => $this->features,
-        ];
+            ];
+        }
 
         if ($this->failure !== null) {
             $data['failure'] = $this->failure->asArray();

@@ -357,6 +357,9 @@ final class Engine
                 $job = $job->withTarget($this->configuration->target());
             }
 
+            // most results are of no interest, and their sequences are not needed
+            $job = $job->terse();
+
             $this->pending[$id] = $job;
             $batch[]            = $job;
 
@@ -451,7 +454,9 @@ final class Engine
             return;
         }
 
-        $entry = $this->corpus->add($result->sequence(), $result->features());
+        // an input that produced no feature that is new to the worker is not
+        // added to the corpus, and its result has no sequence
+        $entry = $result->features() === [] ? null : $this->corpus->add($result->sequence(), $result->features());
 
         if ($entry !== null) {
             $this->check($result, $job);

@@ -35,7 +35,6 @@ final class ResultTest extends TestCase
         return [
             'id missing'                       => [['outcome' => 'passed', 'sequence' => ['choices' => [], 'spans' => [], 'maxima' => []], 'features' => []]],
             'unknown outcome'                  => [['id' => 1, 'outcome' => 'other', 'sequence' => ['choices' => [], 'spans' => [], 'maxima' => []], 'features' => []]],
-            'sequence missing'                 => [['id' => 1, 'outcome' => 'passed', 'features' => []]],
             'empty span'                       => [['id' => 1, 'outcome' => 'passed', 'sequence' => ['choices' => [1], 'spans' => [[0, 0, 'a', null]], 'maxima' => []], 'features' => []]],
             'span without a label'             => [['id' => 1, 'outcome' => 'passed', 'sequence' => ['choices' => [1], 'spans' => [[0, 1, '', null]], 'maxima' => []], 'features' => []]],
             'negative parent of a span'        => [['id' => 1, 'outcome' => 'passed', 'sequence' => ['choices' => [1], 'spans' => [[0, 1, 'a', -1]], 'maxima' => []], 'features' => []]],
@@ -89,6 +88,15 @@ final class ResultTest extends TestCase
         $this->assertTrue(Result::fromArray($produced->asArray())->producedRequiredFeatures());
         $this->assertArrayNotHasKey('producedRequiredFeatures', $other->asArray());
         $this->assertTrue($produced->withTokens(['GET'])->producedRequiredFeatures());
+    }
+
+    public function testTheResultOfATerseInputCanBeWithoutItsSequence(): void
+    {
+        $result = Result::fromArray((new Result(1, Outcome::Passed, null, null, [], null))->asArray());
+
+        $this->assertFalse($result->hasSequence());
+        $this->assertArrayNotHasKey('sequence', $result->asArray());
+        $this->assertTrue((new Result(1, Outcome::Passed, null, new ChoiceSequence([1]), [], null))->hasSequence());
     }
 
     public function testTheInputThatWasSentStandsInForTheConsumedSequenceWhenTheProcessEnded(): void

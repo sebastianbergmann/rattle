@@ -203,7 +203,10 @@ final class Runner implements InputRunner
             $producedRequiredFeatures = $job->requiredFeatures() !== [] && Features::produces($edges, $job->requiredFeatures());
         }
 
-        return new Result($job->id(), $outcome, null, $source->sequence(), $features, $drawnValues, [], $producedRequiredFeatures);
+        // the sequence of a terse input is only reported when it is needed
+        $sequence = $job->isTerse() && $features === [] && !$producedRequiredFeatures ? null : $source->sequence();
+
+        return new Result($job->id(), $outcome, null, $sequence, $features, $drawnValues, [], $producedRequiredFeatures);
     }
 
     /**

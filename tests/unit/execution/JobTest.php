@@ -37,6 +37,7 @@ final class JobTest extends TestCase
             'allFeatures that is not a bool'          => [['id' => 1, 'drawnValues' => false, 'allFeatures' => 1, 'choices' => []]],
             'required feature that is not an integer' => [['id' => 1, 'drawnValues' => false, 'requiredFeatures' => ['a'], 'choices' => []]],
             'empty target'                            => [['id' => 1, 'drawnValues' => false, 'target' => '', 'choices' => []]],
+            'terse that is not a bool'                => [['id' => 1, 'drawnValues' => false, 'terse' => 1, 'choices' => []]],
         ];
     }
 
@@ -102,6 +103,17 @@ final class JobTest extends TestCase
         $this->assertTrue($job->withTarget('Vendor\\ParserTest::testRoundTrip')->reportAllFeatures());
         $this->assertEquals($job->withTarget('Vendor\\ParserTest::testRoundTrip'), Job::fromArray($job->withTarget('Vendor\\ParserTest::testRoundTrip')->asArray()));
         $this->assertArrayNotHasKey('target', $job->asArray());
+    }
+
+    public function testCanBeTerse(): void
+    {
+        $job = Job::replay(3, [1, 2])->withRequiredFeatures([5])->withAllFeatures()->withTarget('Vendor\\ParserTest::testRoundTrip');
+
+        $this->assertFalse($job->isTerse());
+        $this->assertArrayNotHasKey('terse', $job->asArray());
+        $this->assertTrue($job->terse()->isTerse());
+        $this->assertTrue($job->terse()->withAllFeatures()->withRequiredFeatures([6])->withTarget('Vendor\\ParserTest::testOther')->isTerse());
+        $this->assertEquals($job->terse(), Job::fromArray($job->terse()->asArray()));
     }
 
     public function testCanRequireFeatures(): void

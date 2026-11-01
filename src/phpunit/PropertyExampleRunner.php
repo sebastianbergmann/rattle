@@ -121,7 +121,10 @@ final class PropertyExampleRunner implements InputRunner
             $producedRequiredFeatures = $job->requiredFeatures() !== [] && Features::produces($edges, $job->requiredFeatures());
         }
 
-        return new Result($job->id(), $outcome, null, $example->sequence(), $features, $example->values(), [], $producedRequiredFeatures);
+        // the sequence of a terse input is only reported when it is needed
+        $sequence = $job->isTerse() && $features === [] && !$producedRequiredFeatures ? null : $example->sequence();
+
+        return new Result($job->id(), $outcome, null, $sequence, $features, $example->values(), [], $producedRequiredFeatures);
     }
 
     /**

@@ -75,6 +75,29 @@ final class RunnerTest extends TestCase
         $this->assertNull($result->drawnValues());
     }
 
+    public function testTheResultOfATerseInputHasItsSequenceOnlyWhenItIsNeeded(): void
+    {
+        $runner = $this->runner(static function (Input $input): void
+        {
+            Edges::through(1, null);
+
+            if ($input->bool()) {
+                throw new LogicException;
+            }
+        });
+
+        $new      = $runner->run(Job::replay(1, [0])->terse());
+        $seen     = $runner->run(Job::replay(2, [0])->terse());
+        $failed   = $runner->run(Job::replay(3, [1])->terse());
+        $required = $runner->run(Job::replay(4, [0])->withRequiredFeatures($new->features())->terse());
+
+        $this->assertTrue($new->hasSequence());
+        $this->assertFalse($seen->hasSequence());
+        $this->assertTrue($failed->hasSequence());
+        $this->assertTrue($required->hasSequence());
+        $this->assertTrue($runner->run(Job::replay(5, [0]))->hasSequence());
+    }
+
     public function testGeneratesInputsFromASeed(): void
     {
         $runner = $this->runner(static function (Input $input): void

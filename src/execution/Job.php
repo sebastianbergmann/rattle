@@ -28,6 +28,12 @@ use SebastianBergmann\ChoiceSequence\ChoiceSource;
  * An input for a worker that serves all the properties of a PHPUnit test
  * suite names the property whose example it is.
  *
+ * The result of a terse input has the choice sequence that the input
+ * consumed, with its spans and maxima, only when it is needed: when the input
+ * failed, produced features, or produced the features that it required. The
+ * engine sends terse inputs, as most of their results are of no interest, and
+ * encoding, sending, and decoding their sequences takes time.
+ *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
  * @internal This class is not covered by the backward compatibility promise for sebastian/rattle
@@ -56,6 +62,7 @@ final readonly class Job
      * @var ?non-empty-string
      */
     private ?string $target;
+    private bool $terse;
 
     /**
      * @param non-negative-int       $id
@@ -86,16 +93,17 @@ final readonly class Job
         $reportAllFeatures = $data['allFeatures'] ?? false;
         $requiredFeatures  = ProtocolData::listOfIntegers($data['requiredFeatures'] ?? []);
         $target            = isset($data['target']) ? ProtocolData::nonEmptyString($data['target']) : null;
+        $terse             = $data['terse'] ?? false;
 
-        if (!is_int($id) || $id < 0 || !is_bool($reportDrawnValues) || !is_bool($reportAllFeatures)) {
+        if (!is_int($id) || $id < 0 || !is_bool($reportDrawnValues) || !is_bool($reportAllFeatures) || !is_bool($terse)) {
             throw new ProtocolException('Invalid input');
         }
 
         if (isset($data['seed']) && is_int($data['seed'])) {
-            return new self($id, null, $data['seed'], $reportDrawnValues, $reportAllFeatures, $requiredFeatures, $target);
+            return new self($id, null, $data['seed'], $reportDrawnValues, $reportAllFeatures, $requiredFeatures, $target, $terse);
         }
 
-        return new self($id, ProtocolData::listOfNonNegativeIntegers($data['choices'] ?? null), null, $reportDrawnValues, $reportAllFeatures, $requiredFeatures, $target);
+        return new self($id, ProtocolData::listOfNonNegativeIntegers($data['choices'] ?? null), null, $reportDrawnValues, $reportAllFeatures, $requiredFeatures, $target, $terse);
     }
 
     /**
@@ -104,7 +112,7 @@ final readonly class Job
      * @param list<int>               $requiredFeatures
      * @param ?non-empty-string       $target
      */
-    private function __construct(int $id, ?array $choices, ?int $seed, bool $reportDrawnValues, bool $reportAllFeatures = false, array $requiredFeatures = [], ?string $target = null)
+    private function __construct(int $id, ?array $choices, ?int $seed, bool $reportDrawnValues, bool $reportAllFeatures = false, array $requiredFeatures = [], ?string $target = null, bool $terse = false)
     {
         $this->id                = $id;
         $this->choices           = $choices;
@@ -113,6 +121,7 @@ final readonly class Job
         $this->reportAllFeatures = $reportAllFeatures;
         $this->requiredFeatures  = $requiredFeatures;
         $this->target            = $target;
+        $this->terse             = $terse;
     }
 
     /**
@@ -120,7 +129,7 @@ final readonly class Job
      */
     public function withAllFeatures(): self
     {
-        return new self($this->id, $this->choices, $this->seed, $this->reportDrawnValues, true, $this->requiredFeatures, $this->target);
+        return new self($this->id, $this->choices, $this->seed, $this->reportDrawnValues, true, $this->requiredFeatures, $this->target, $this->terse);
     }
 
     /**
@@ -131,7 +140,7 @@ final readonly class Job
      */
     public function withRequiredFeatures(array $features): self
     {
-        return new self($this->id, $this->choices, $this->seed, $this->reportDrawnValues, $this->reportAllFeatures, $features, $this->target);
+        return new self($this->id, $this->choices, $this->seed, $this->reportDrawnValues, $this->reportAllFeatures, $features, $this->target, $this->terse);
     }
 
     /**
@@ -141,7 +150,15 @@ final readonly class Job
      */
     public function withTarget(string $target): self
     {
-        return new self($this->id, $this->choices, $this->seed, $this->reportDrawnValues, $this->reportAllFeatures, $this->requiredFeatures, $target);
+        return new self($this->id, $this->choices, $this->seed, $this->reportDrawnValues, $this->reportAllFeatures, $this->requiredFeatures, $target, $this->terse);
+    }
+
+    /**
+     * The input, whose result has its choice sequence only when it is needed.
+     */
+    public function terse(): self
+    {
+        return new self($this->id, $this->choices, $this->seed, $this->reportDrawnValues, $this->reportAllFeatures, $this->requiredFeatures, $this->target, true);
     }
 
     /**
@@ -203,6 +220,11 @@ final readonly class Job
         return $this->target;
     }
 
+    public function isTerse(): bool
+    {
+        return $this->terse;
+    }
+
     /**
      * The choice sequence that is replayed, or an empty one for an input that
      * is generated.
@@ -225,7 +247,7 @@ final readonly class Job
     }
 
     /**
-     * @return array{id: non-negative-int, drawnValues: bool, target?: non-empty-string, allFeatures?: true, requiredFeatures?: non-empty-list<int>, choices?: list<non-negative-int>, seed?: int}
+     * @return array{id: non-negative-int, drawnValues: bool, target?: non-empty-string, allFeatures?: true, requiredFeatures?: non-empty-list<int>, terse?: true, choices?: list<non-negative-int>, seed?: int}
      */
     public function asArray(): array
     {
@@ -241,6 +263,10 @@ final readonly class Job
 
         if ($this->requiredFeatures !== []) {
             $data['requiredFeatures'] = $this->requiredFeatures;
+        }
+
+        if ($this->terse) {
+            $data['terse'] = true;
         }
 
         if ($this->choices !== null) {
