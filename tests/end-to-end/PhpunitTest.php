@@ -135,6 +135,13 @@ final class PhpunitTest extends TestCase
         $this->assertSame(0, $exit, $output);
         $this->assertSame(self::OTHER, JsonValue::of($output, 'properties', 0, 'property'));
         $this->assertSame(2, JsonValue::of($output, 'properties', 0, 'runs'));
+
+        // ... and as a dashboard
+        [$exit, $output] = $this->rattle(['status', '--phpunit', '--cache-directory', $this->directory . '/cache', '--html', $this->directory . '/status.html']);
+
+        $this->assertSame(0, $exit, $output);
+        $this->assertStringContainsString('The dashboard was written to ' . $this->directory . '/status.html.', $output);
+        $this->assertStringContainsString('<h2>' . self::OTHER . '</h2>', (string) file_get_contents($this->directory . '/status.html'));
     }
 
     public function testStatusTellsWhenNoPropertyWasFuzzedWithTheCacheDirectory(): void

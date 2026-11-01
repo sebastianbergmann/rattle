@@ -82,6 +82,7 @@ final readonly class ArgumentsBuilder
                 'cache-directory=',
                 'phpunit',
                 'json',
+                'html=',
             ],
             'arguments' => [],
         ],
@@ -174,6 +175,7 @@ final readonly class ArgumentsBuilder
         $inputLog                         = null;
         $sarifFile                        = null;
         $json                             = false;
+        $htmlFile                         = null;
         $help                             = false;
         $version                          = false;
         $phpunitConfiguration             = null;
@@ -298,6 +300,11 @@ final readonly class ArgumentsBuilder
 
                     break;
 
+                case '--html':
+                    $htmlFile = $this->nonEmptyString($option, $value);
+
+                    break;
+
                 case '--configuration':
                     $phpunitConfiguration = $this->nonEmptyString($option, $value);
 
@@ -328,6 +335,10 @@ final readonly class ArgumentsBuilder
 
         if ($command === 'status' && !$phpunit) {
             throw new ArgumentsBuilderException('The "status" command shows the properties of a PHPUnit test suite and needs --phpunit');
+        }
+
+        if ($json && $htmlFile !== null) {
+            throw new ArgumentsBuilderException('The options --json and --html cannot be used together');
         }
 
         if ($phpunit && $seedsDirectory !== null) {
@@ -366,6 +377,7 @@ final readonly class ArgumentsBuilder
             $phpunitFilter,
             $sarifFile,
             $json,
+            $htmlFile,
         );
     }
 

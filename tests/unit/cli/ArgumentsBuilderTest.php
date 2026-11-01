@@ -60,6 +60,7 @@ final class ArgumentsBuilderTest extends TestCase
             'SARIF with run'                                => [['rattle', 'run', 'target.php', 'input', '--sarif', 'findings.sarif']],
             'status without --phpunit'                      => [['rattle', 'status']],
             'status with an argument'                       => [['rattle', 'status', '--phpunit', 'target.php']],
+            'status in JSON and HTML'                       => [['rattle', 'status', '--phpunit', '--json', '--html', 'status.html']],
             'empty SARIF file'                              => [['rattle', 'regress', 'target.php', '--sarif', '']],
         ];
     }
@@ -186,7 +187,9 @@ final class ArgumentsBuilderTest extends TestCase
         $this->assertTrue($arguments->phpunit());
         $this->assertSame('cache', $arguments->cacheDirectory());
         $this->assertTrue($arguments->json());
+        $this->assertNull($arguments->htmlFile());
         $this->assertFalse((new ArgumentsBuilder)->build(['rattle', 'status', '--phpunit'])->json());
+        $this->assertSame('status.html', (new ArgumentsBuilder)->build(['rattle', 'status', '--phpunit', '--html', 'status.html'])->htmlFile());
     }
 
     public function testParsesTheArgumentsOfTheMinimizeCommandForAProperty(): void

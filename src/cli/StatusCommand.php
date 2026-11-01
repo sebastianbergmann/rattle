@@ -10,14 +10,16 @@
 namespace SebastianBergmann\Rattle;
 
 use const PHP_EOL;
+use function file_put_contents;
 use function microtime;
 use function printf;
 use JsonException;
 
 /**
  * Shows the status of the properties of a PHPUnit test suite that were
- * fuzzed with the cache directory (see SuiteStatus), as a table, or in JSON.
- * It reads the cache directory only, without booting the test suite.
+ * fuzzed with the cache directory (see SuiteStatus), as a table, in JSON, or
+ * as a dashboard in HTML that is written to a file (see StatusDashboard). It
+ * reads the cache directory only, without booting the test suite.
  *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
@@ -47,6 +49,20 @@ final readonly class StatusCommand implements Command
                 return 2;
                 // @codeCoverageIgnoreEnd
             }
+
+            return 0;
+        }
+
+        $htmlFile = $arguments->htmlFile();
+
+        if ($htmlFile !== null) {
+            if (@file_put_contents($htmlFile, (new StatusDashboard)->render($status, $now)) === false) {
+                printf('Cannot write the dashboard to "%s"' . PHP_EOL, $htmlFile);
+
+                return 2;
+            }
+
+            printf('The dashboard was written to %s.' . PHP_EOL, $htmlFile);
 
             return 0;
         }

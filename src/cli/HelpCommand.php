@@ -90,6 +90,7 @@ Options for "rattle status":
 
   --cache-directory <dir>     Directory for the corpus (default: .rattle.cache)
   --json                      Show the status in JSON
+  --html <file>               Write the status to this file as a dashboard in HTML
 
 Options for all commands:
 
