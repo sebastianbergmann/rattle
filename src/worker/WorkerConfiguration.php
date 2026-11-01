@@ -19,8 +19,9 @@ use function sprintf;
  * is passed to the worker as command-line arguments.
  *
  * When the properties of a PHPUnit test suite are fuzzed, the target is the
- * test ID of a property. A worker without a target then lists the test IDs of
- * the properties instead of executing inputs.
+ * test ID of a property. A worker without a target lists the test IDs of the
+ * properties and then executes inputs of all of them, each of which names
+ * its property.
  *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *

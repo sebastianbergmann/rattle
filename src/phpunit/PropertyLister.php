@@ -75,7 +75,10 @@ final readonly class PropertyLister
                     throw new WorkerException($this->failure(sprintf('The properties cannot be listed: %s', ProtocolData::string($frame['message'] ?? null)), $worker));
                 }
 
+                // the worker would go on to run the examples of the
+                // properties
                 if (($frame['type'] ?? null) === 'properties') {
+                    $worker->send(['type' => 'shutdown']);
                     $worker->wait();
 
                     return $this->propertiesIn($frame);

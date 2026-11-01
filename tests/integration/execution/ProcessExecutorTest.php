@@ -11,6 +11,7 @@ namespace SebastianBergmann\Rattle;
 
 use function array_map;
 use function count;
+use function dirname;
 use function getcwd;
 use function realpath;
 use function sprintf;
@@ -197,6 +198,33 @@ final class ProcessExecutorTest extends TestCase
         $this->assertSame([], $second->tokens());
     }
 
+    public function testServesAllThePropertiesOfAPhpunitTestSuite(): void
+    {
+        $executor = $this->testSuiteExecutor();
+        $classify = 'SebastianBergmann\Rattle\Fixture\Phpunit\ClassifierTest::testClassifiesEveryList';
+        $counts   = 'SebastianBergmann\Rattle\Fixture\Phpunit\ClassifierTest::testCountsAreNotNegative';
+
+        $this->assertSame([$classify, $counts], $executor->properties());
+        $this->assertSame(8192, $executor->target()->maximumNumberOfChoices());
+
+        $short  = $executor->execute(Job::replay(0, [0])->withTarget($classify));
+        $failed = $executor->execute(Job::replay(1, [1, 7, 1, 3, 1, 9, 0])->withTarget($classify));
+        $passed = $executor->execute(Job::replay(2, [1, 7, 1, 3, 1, 9, 0])->withTarget($counts));
+
+        $this->assertSame(Outcome::Passed, $short->outcome());
+        $this->assertNotSame([], $short->features());
+        $this->assertSame(Outcome::Failed, $failed->outcome());
+        $this->assertSame(Outcome::Passed, $passed->outcome());
+    }
+
+    public function testAWorkerThatServesAllThePropertiesOfATestSuiteRejectsAnInputThatNamesNoProperty(): void
+    {
+        $this->expectException(WorkerException::class);
+        $this->expectExceptionMessageIsOrContains('An input does not name a property of the test suite');
+
+        $this->testSuiteExecutor()->execute(Job::replay(0, [0]));
+    }
+
     public function testExecutesBatchesOnSeveralWorkers(): void
     {
         $executor = $this->executor(3);
@@ -258,6 +286,32 @@ final class ProcessExecutorTest extends TestCase
         $this->expectExceptionMessageIsOrContains('The bootstrap file "/does/not/exist.php" does not exist');
 
         (new ProcessExecutor(new WorkerConfiguration(self::FIXTURES . '/target.php', '/does/not/exist.php', [], 1, 100, null, false, 100), 1))->start();
+    }
+
+    /**
+     * An executor whose workers serve all the properties of the PHPUnit test
+     * suite of the fixture.
+     */
+    private function testSuiteExecutor(): ProcessExecutor
+    {
+        $fixture = dirname(__DIR__, 2) . '/fixtures/phpunit';
+
+        $this->executor = new ProcessExecutor(
+            new WorkerConfiguration(
+                '',
+                dirname(__DIR__, 3) . '/vendor/autoload.php',
+                [$fixture . '/src'],
+                1,
+                8192,
+                '64M',
+                false,
+                10000,
+                new PhpunitTestSuite($fixture . '/phpunit.xml', null),
+            ),
+            1,
+        );
+
+        return $this->executor;
     }
 
     /**

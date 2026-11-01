@@ -25,6 +25,9 @@ use SebastianBergmann\ChoiceSequence\ChoiceSource;
  * all the features that it produced. An input can also require features, and
  * its result tells whether it produced them all.
  *
+ * An input for a worker that serves all the properties of a PHPUnit test
+ * suite names the property whose example it is.
+ *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
  * @internal This class is not covered by the backward compatibility promise for sebastian/rattle
@@ -48,6 +51,11 @@ final readonly class Job
      * @var list<int>
      */
     private array $requiredFeatures;
+
+    /**
+     * @var ?non-empty-string
+     */
+    private ?string $target;
 
     /**
      * @param non-negative-int       $id
@@ -77,24 +85,26 @@ final readonly class Job
         $reportDrawnValues = $data['drawnValues'] ?? null;
         $reportAllFeatures = $data['allFeatures'] ?? false;
         $requiredFeatures  = ProtocolData::listOfIntegers($data['requiredFeatures'] ?? []);
+        $target            = isset($data['target']) ? ProtocolData::nonEmptyString($data['target']) : null;
 
         if (!is_int($id) || $id < 0 || !is_bool($reportDrawnValues) || !is_bool($reportAllFeatures)) {
             throw new ProtocolException('Invalid input');
         }
 
         if (isset($data['seed']) && is_int($data['seed'])) {
-            return new self($id, null, $data['seed'], $reportDrawnValues, $reportAllFeatures, $requiredFeatures);
+            return new self($id, null, $data['seed'], $reportDrawnValues, $reportAllFeatures, $requiredFeatures, $target);
         }
 
-        return new self($id, ProtocolData::listOfNonNegativeIntegers($data['choices'] ?? null), null, $reportDrawnValues, $reportAllFeatures, $requiredFeatures);
+        return new self($id, ProtocolData::listOfNonNegativeIntegers($data['choices'] ?? null), null, $reportDrawnValues, $reportAllFeatures, $requiredFeatures, $target);
     }
 
     /**
      * @param non-negative-int        $id
      * @param ?list<non-negative-int> $choices
      * @param list<int>               $requiredFeatures
+     * @param ?non-empty-string       $target
      */
-    private function __construct(int $id, ?array $choices, ?int $seed, bool $reportDrawnValues, bool $reportAllFeatures = false, array $requiredFeatures = [])
+    private function __construct(int $id, ?array $choices, ?int $seed, bool $reportDrawnValues, bool $reportAllFeatures = false, array $requiredFeatures = [], ?string $target = null)
     {
         $this->id                = $id;
         $this->choices           = $choices;
@@ -102,6 +112,7 @@ final readonly class Job
         $this->reportDrawnValues = $reportDrawnValues;
         $this->reportAllFeatures = $reportAllFeatures;
         $this->requiredFeatures  = $requiredFeatures;
+        $this->target            = $target;
     }
 
     /**
@@ -109,7 +120,7 @@ final readonly class Job
      */
     public function withAllFeatures(): self
     {
-        return new self($this->id, $this->choices, $this->seed, $this->reportDrawnValues, true, $this->requiredFeatures);
+        return new self($this->id, $this->choices, $this->seed, $this->reportDrawnValues, true, $this->requiredFeatures, $this->target);
     }
 
     /**
@@ -120,7 +131,17 @@ final readonly class Job
      */
     public function withRequiredFeatures(array $features): self
     {
-        return new self($this->id, $this->choices, $this->seed, $this->reportDrawnValues, $this->reportAllFeatures, $features);
+        return new self($this->id, $this->choices, $this->seed, $this->reportDrawnValues, $this->reportAllFeatures, $features, $this->target);
+    }
+
+    /**
+     * The same input, as an example of the property with the given test ID.
+     *
+     * @param non-empty-string $target
+     */
+    public function withTarget(string $target): self
+    {
+        return new self($this->id, $this->choices, $this->seed, $this->reportDrawnValues, $this->reportAllFeatures, $this->requiredFeatures, $target);
     }
 
     /**
@@ -173,6 +194,16 @@ final readonly class Job
     }
 
     /**
+     * The test ID of the property whose example the input is, or null.
+     *
+     * @return ?non-empty-string
+     */
+    public function target(): ?string
+    {
+        return $this->target;
+    }
+
+    /**
      * The choice sequence that is replayed, or an empty one for an input that
      * is generated.
      */
@@ -194,11 +225,15 @@ final readonly class Job
     }
 
     /**
-     * @return array{id: non-negative-int, drawnValues: bool, allFeatures?: true, requiredFeatures?: non-empty-list<int>, choices?: list<non-negative-int>, seed?: int}
+     * @return array{id: non-negative-int, drawnValues: bool, target?: non-empty-string, allFeatures?: true, requiredFeatures?: non-empty-list<int>, choices?: list<non-negative-int>, seed?: int}
      */
     public function asArray(): array
     {
         $data = ['id' => $this->id, 'drawnValues' => $this->reportDrawnValues];
+
+        if ($this->target !== null) {
+            $data['target'] = $this->target;
+        }
 
         if ($this->reportAllFeatures) {
             $data['allFeatures'] = true;

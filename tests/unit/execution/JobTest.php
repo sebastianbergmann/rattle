@@ -36,6 +36,7 @@ final class JobTest extends TestCase
             'choices that are not an array'           => [['id' => 1, 'drawnValues' => false, 'choices' => 'abc']],
             'allFeatures that is not a bool'          => [['id' => 1, 'drawnValues' => false, 'allFeatures' => 1, 'choices' => []]],
             'required feature that is not an integer' => [['id' => 1, 'drawnValues' => false, 'requiredFeatures' => ['a'], 'choices' => []]],
+            'empty target'                            => [['id' => 1, 'drawnValues' => false, 'target' => '', 'choices' => []]],
         ];
     }
 
@@ -89,6 +90,18 @@ final class JobTest extends TestCase
         $this->assertArrayNotHasKey('allFeatures', $replay->asArray());
         $this->assertEquals($replay->withRequiredFeatures([5, 1 << 56 | 6]), Job::fromArray($replay->withRequiredFeatures([5, 1 << 56 | 6])->asArray()));
         $this->assertArrayNotHasKey('requiredFeatures', $replay->asArray());
+    }
+
+    public function testCanNameTheProperty(): void
+    {
+        $job = Job::replay(3, [1, 2], true)->withRequiredFeatures([5])->withAllFeatures();
+
+        $this->assertNull($job->target());
+        $this->assertSame('Vendor\\ParserTest::testRoundTrip', $job->withTarget('Vendor\\ParserTest::testRoundTrip')->target());
+        $this->assertSame([5], $job->withTarget('Vendor\\ParserTest::testRoundTrip')->requiredFeatures());
+        $this->assertTrue($job->withTarget('Vendor\\ParserTest::testRoundTrip')->reportAllFeatures());
+        $this->assertEquals($job->withTarget('Vendor\\ParserTest::testRoundTrip'), Job::fromArray($job->withTarget('Vendor\\ParserTest::testRoundTrip')->asArray()));
+        $this->assertArrayNotHasKey('target', $job->asArray());
     }
 
     public function testCanRequireFeatures(): void

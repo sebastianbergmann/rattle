@@ -51,6 +51,12 @@ final class ProcessExecutor implements Executor
      * How long the supervisor waits for a worker to be ready.
      */
     private const float STARTUP_TIMEOUT = 120.0;
+
+    /**
+     * The name of the target of workers that serve all the properties of a
+     * PHPUnit test suite.
+     */
+    private const string TEST_SUITE = 'phpunit';
     private readonly WorkerConfiguration $configuration;
 
     /**
@@ -68,6 +74,14 @@ final class ProcessExecutor implements Executor
      */
     private array $workers             = [];
     private ?TargetDescription $target = null;
+
+    /**
+     * The test IDs of the properties that the workers serve, when they serve
+     * all the properties of a PHPUnit test suite.
+     *
+     * @var ?list<non-empty-string>
+     */
+    private ?array $properties = null;
 
     /**
      * @var non-negative-int
@@ -99,6 +113,22 @@ final class ProcessExecutor implements Executor
         assert($this->target !== null);
 
         return $this->target;
+    }
+
+    /**
+     * The test IDs of the properties that the workers serve, when they serve
+     * all the properties of a PHPUnit test suite, or null when they serve one
+     * target. The workers are started when they were not started before.
+     *
+     * @throws WorkerException
+     *
+     * @return ?list<non-empty-string>
+     */
+    public function properties(): ?array
+    {
+        $this->target();
+
+        return $this->properties;
     }
 
     public function target(): TargetDescription
@@ -476,7 +506,9 @@ final class ProcessExecutor implements Executor
                     throw new WorkerException($this->startupFailure(sprintf('The worker could not be started: %s', ProtocolData::string($frame['message'] ?? null)), $worker));
                 }
 
-                if (($frame['type'] ?? null) === 'ready') {
+                // a worker that serves all the properties of a PHPUnit test
+                // suite lists them instead of describing one target
+                if (($frame['type'] ?? null) === 'ready' || ($frame['type'] ?? null) === 'properties') {
                     $this->handshake($frame, $worker);
 
                     return $worker;
@@ -512,11 +544,26 @@ final class ProcessExecutor implements Executor
             throw new WorkerException('The worker sent an invalid handshake');
         }
 
-        $this->target ??= new TargetDescription(
-            ProtocolData::nonEmptyString($frame['name'] ?? null),
-            $maximumLength,
-            $maximumNumberOfChoices,
-        );
+        try {
+            if (($frame['type'] ?? null) === 'properties') {
+                $properties = [];
+
+                foreach (ProtocolData::listOfStrings($frame['properties'] ?? null) as $property) {
+                    $properties[] = ProtocolData::nonEmptyString($property);
+                }
+
+                $this->properties ??= $properties;
+                $this->target ??= new TargetDescription(self::TEST_SUITE, null, $maximumNumberOfChoices);
+
+                return;
+            }
+
+            $name = ProtocolData::nonEmptyString($frame['name'] ?? null);
+        } catch (ProtocolException $e) {
+            throw new WorkerException(sprintf('The worker sent an invalid handshake: %s', $e->getMessage()), 0, $e);
+        }
+
+        $this->target ??= new TargetDescription($name, $maximumLength, $maximumNumberOfChoices);
     }
 
     private function startupFailure(string $message, WorkerProcess $worker): string

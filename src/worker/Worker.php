@@ -31,6 +31,7 @@ use function sprintf;
 use function strtolower;
 use function substr;
 use function trim;
+use Closure;
 use SebastianBergmann\Rattle\Instrumentation\ComparisonOperands;
 use SebastianBergmann\Rattle\Instrumentation\IncludeHook;
 use SebastianBergmann\Rattle\Instrumentation\Instrumentor;
@@ -96,10 +97,35 @@ final class Worker
                 $properties = $api->properties();
                 $name       = $this->configuration->target();
 
+                // a worker without a target lists the properties and then
+                // runs the examples of all of them, with a runner for each
+                // property, so that the features that it has seen are kept
+                // apart for every property
                 if ($name === '') {
-                    $this->stream->write(['type' => 'properties', 'protocol' => Frame::PROTOCOL_VERSION, 'properties' => $properties]);
+                    $this->stream->write(
+                        [
+                            'type'                   => 'properties',
+                            'protocol'               => Frame::PROTOCOL_VERSION,
+                            'properties'             => $properties,
+                            'maximumNumberOfChoices' => $this->configuration->maximumNumberOfChoices(),
+                        ],
+                    );
 
-                    return 0;
+                    $runners = [];
+
+                    return $this->serve(
+                        $hook,
+                        function (Job $job) use ($api, $properties, $workingDirectory, &$runners): InputRunner
+                        {
+                            $property = $job->target();
+
+                            if ($property === null || !in_array($property, $properties, true)) {
+                                throw new ProtocolException('An input does not name a property of the test suite');
+                            }
+
+                            return $runners[$property] ??= new PropertyExampleRunner($api, $property, $this->configuration->timeout(), $this->configuration->maximumNumberOfChoices(), $workingDirectory);
+                        },
+                    );
                 }
 
                 if (!in_array($name, $properties, true)) {
@@ -126,8 +152,6 @@ final class Worker
             return 2;
         }
 
-        $this->runner = $runner;
-
         $this->stream->write(
             [
                 'type'                   => 'ready',
@@ -139,8 +163,40 @@ final class Worker
             ],
         );
 
-        $numberOfFailures = 0;
-        $threshold        = $this->memoryThreshold();
+        return $this->serve($hook, static fn (Job $job): InputRunner => $runner);
+    }
+
+    /**
+     * Reports the input that was executed when the process ended.
+     */
+    public function shutdown(): void
+    {
+        $result = $this->runner?->resultOfInterruptedExecution();
+
+        if ($result === null) {
+            return;
+        }
+
+        // after the memory limit was exceeded, reporting the result needs memory
+        ini_set('memory_limit', '-1');
+
+        $this->stream->write(['type' => 'result', 'result' => $result->withTokens($this->operands->takeUnreported())->asArray(), 'last' => true]);
+    }
+
+    /**
+     * Executes the inputs that the supervisor sends, each with the runner
+     * that is returned for it, until the supervisor shuts the worker down or
+     * the worker retires.
+     *
+     * @param Closure(Job): InputRunner $runnerFor
+     *
+     * @return 0|2
+     */
+    private function serve(IncludeHook $hook, Closure $runnerFor): int
+    {
+        $numberOfFailures   = 0;
+        $numberOfExecutions = 0;
+        $threshold          = $this->memoryThreshold();
 
         while (true) {
             try {
@@ -159,7 +215,10 @@ final class Worker
                 $retire = false;
 
                 foreach (array_values($inputs) as $index => $input) {
-                    $job = Job::fromArray(ProtocolData::array($input));
+                    $job    = Job::fromArray(ProtocolData::array($input));
+                    $runner = $runnerFor($job);
+
+                    $this->runner = $runner;
 
                     if (ob_get_level() === 0) {
                         $this->redirectOutput();
@@ -170,6 +229,8 @@ final class Worker
                     // executed, are reported with its result
                     $result = $runner->run($job)->withTokens($this->operands->takeUnreported())->asArray();
 
+                    $numberOfExecutions++;
+
                     // output of the target is forwarded after each input
                     @ob_flush();
 
@@ -177,7 +238,7 @@ final class Worker
                     // whether the worker exits after it, so that it does not
                     // send another batch to it
                     $retire = $index === $last &&
-                              ($runner->numberOfExecutions() >= $this->configuration->numberOfExecutions() ||
+                              ($numberOfExecutions >= $this->configuration->numberOfExecutions() ||
                                memory_get_usage() > $threshold);
 
                     $this->stream->write(['type' => 'result', 'result' => $result, 'retire' => $retire]);
@@ -200,23 +261,6 @@ final class Worker
                 return 0;
             }
         }
-    }
-
-    /**
-     * Reports the input that was executed when the process ended.
-     */
-    public function shutdown(): void
-    {
-        $result = $this->runner?->resultOfInterruptedExecution();
-
-        if ($result === null) {
-            return;
-        }
-
-        // after the memory limit was exceeded, reporting the result needs memory
-        ini_set('memory_limit', '-1');
-
-        $this->stream->write(['type' => 'result', 'result' => $result->withTokens($this->operands->takeUnreported())->asArray(), 'last' => true]);
     }
 
     private function prepareProcess(): void
