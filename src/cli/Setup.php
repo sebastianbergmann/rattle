@@ -9,11 +9,13 @@
  */
 namespace SebastianBergmann\Rattle;
 
+use const PHP_EOL;
 use const STDERR;
 use function explode;
 use function fwrite;
 use function getcwd;
 use function is_file;
+use function printf;
 use function realpath;
 use function rtrim;
 use function sprintf;
@@ -103,5 +105,33 @@ final readonly class Setup
                 fwrite(STDERR, sprintf('[worker %d] %s', $worker, $line) . "\n");
             }
         };
+    }
+
+    /**
+     * Writes the findings of a command in SARIF when --sarif is given, and
+     * returns whether this succeeded.
+     */
+    public function writeSarifReport(?SarifReport $report, ?string $file): bool
+    {
+        if ($report === null || $file === null) {
+            return true;
+        }
+
+        try {
+            $report->write($file);
+        } catch (FindingException $e) {
+            print $e->getMessage() . PHP_EOL;
+
+            return false;
+        }
+
+        printf(
+            '%d finding%s written to %s in SARIF.' . PHP_EOL,
+            $report->numberOfResults(),
+            $report->numberOfResults() === 1 ? ' was' : 's were',
+            $file,
+        );
+
+        return true;
     }
 }

@@ -57,6 +57,8 @@ final class ArgumentsBuilderTest extends TestCase
             'unknown unit of time'                          => [['rattle', 'fuzz', 'target.php', '--max-time', '1w']],
             'negative maximum number of shrinking attempts' => [['rattle', 'fuzz', 'target.php', '--max-shrink-attempts', '-1']],
             'seed with run'                                 => [['rattle', 'run', 'target.php', 'input', '--seed', '1']],
+            'SARIF with run'                                => [['rattle', 'run', 'target.php', 'input', '--sarif', 'findings.sarif']],
+            'empty SARIF file'                              => [['rattle', 'regress', 'target.php', '--sarif', '']],
         ];
     }
 
@@ -88,6 +90,7 @@ final class ArgumentsBuilderTest extends TestCase
         $this->assertFalse($arguments->verbose());
         $this->assertFalse($arguments->raw());
         $this->assertNull($arguments->inputLog());
+        $this->assertNull($arguments->sarifFile());
         $this->assertFalse($arguments->help());
         $this->assertFalse($arguments->version());
     }
@@ -104,6 +107,7 @@ final class ArgumentsBuilderTest extends TestCase
                 '--cache-directory', 'cache', '--findings-directory', 'findings',
                 '--bootstrap', 'bootstrap.php', '--source', 'src', '--source', 'lib',
                 '--ignore-deprecations', '--stop-on-finding', '--verbose', '--log-inputs', 'inputs.log',
+                '--sarif', 'findings.sarif',
             ],
         );
 
@@ -127,6 +131,7 @@ final class ArgumentsBuilderTest extends TestCase
         $this->assertTrue($arguments->stopOnFinding());
         $this->assertTrue($arguments->verbose());
         $this->assertSame('inputs.log', $arguments->inputLog());
+        $this->assertSame('findings.sarif', $arguments->sarifFile());
     }
 
     public function testParsesTheArgumentsOfTheRunCommand(): void
@@ -161,9 +166,10 @@ final class ArgumentsBuilderTest extends TestCase
 
     public function testParsesTheOptionsForReplayingTheInputsOfThePropertiesOfAPhpunitTestSuite(): void
     {
-        $arguments = (new ArgumentsBuilder)->build(['rattle', 'regress', '--phpunit', '--configuration', 'phpunit.xml', '--filter', 'Parser']);
+        $arguments = (new ArgumentsBuilder)->build(['rattle', 'regress', '--phpunit', '--configuration', 'phpunit.xml', '--filter', 'Parser', '--sarif', 'findings.sarif']);
 
         $this->assertSame('regress', $arguments->command());
+        $this->assertSame('findings.sarif', $arguments->sarifFile());
         $this->assertNull($arguments->target());
         $this->assertTrue($arguments->phpunit());
         $this->assertSame('phpunit.xml', $arguments->phpunitConfiguration());

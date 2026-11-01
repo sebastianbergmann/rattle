@@ -11,6 +11,7 @@ namespace SebastianBergmann\Rattle;
 
 use const GLOB_ONLYDIR;
 use const PHP_BINARY;
+use function array_column;
 use function array_merge;
 use function count;
 use function dirname;
@@ -305,11 +306,13 @@ final class FixturesTest extends TestCase
 
         $this->assertSame(1, $exit);
 
-        [$exit, $output] = $this->rattle(array_merge(['regress', $project . '/exit/target.php'], $options));
+        [$exit, $output] = $this->rattle(array_merge(['regress', $project . '/exit/target.php', '--sarif', $this->directory . '/regress.sarif'], $options));
 
         $this->assertSame(1, $exit, $output);
         $this->assertStringContainsString('Process exited with status 0', $output);
         $this->assertMatchesRegularExpression('/Replayed [0-9]+ inputs?, 1 failed/', $output);
+        $this->assertStringContainsString('1 finding was written to ' . $this->directory . '/regress.sarif in SARIF.', $output);
+        $this->assertSame(['process-ended'], array_column(SarifResults::inFile($this->directory . '/regress.sarif'), 'ruleId'));
 
         // the defect is fixed: -h no longer exits
         file_put_contents(
@@ -317,10 +320,32 @@ final class FixturesTest extends TestCase
             str_replace('exit(0);', "return ['options' => ['h'], 'arguments' => \$arguments];", (string) file_get_contents($project . '/exit/src/CommandLine.php')),
         );
 
-        [$exit, $output] = $this->rattle(array_merge(['regress', $project . '/exit/target.php'], $options));
+        [$exit, $output] = $this->rattle(array_merge(['regress', $project . '/exit/target.php', '--sarif', $this->directory . '/regress.sarif'], $options));
 
         $this->assertSame(0, $exit, $output);
         $this->assertMatchesRegularExpression('/Replayed [0-9]+ inputs?, 0 failed/', $output);
+
+        // the report without results tells code scanning that the finding
+        // is fixed
+        $this->assertSame([], SarifResults::inFile($this->directory . '/regress.sarif'));
+    }
+
+    public function testWritesTheFindingsOfARunInSarif(): void
+    {
+        [$exit, $output] = $this->fuzz('traversal', ['--seed', '6', '--max-executions', '1200', '--stop-on-finding', '--sarif', $this->directory . '/fuzz.sarif']);
+
+        $this->assertSame(1, $exit, $output);
+        $this->assertStringContainsString('1 finding was written to ' . $this->directory . '/fuzz.sarif in SARIF.', $output);
+
+        $results = SarifResults::inFile($this->directory . '/fuzz.sarif');
+        $result  = $results[0] ?? null;
+
+        $this->assertCount(1, $results);
+        $this->assertNotNull($result);
+        $this->assertSame(
+            ['path-traversal', 'error', 'tests/fixtures/targets/traversal/src/TemplateLoader.php', '%SRCROOT%', 30, null],
+            [$result['ruleId'], $result['level'], $result['uri'], $result['uriBaseId'], $result['startLine'], $result['property']],
+        );
     }
 
     public function testMinimizesAnInput(): void

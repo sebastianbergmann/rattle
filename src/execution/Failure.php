@@ -146,6 +146,26 @@ final readonly class Failure
         return $this->kind;
     }
 
+    /**
+     * The class of a throwable, null for the other kinds of failures.
+     *
+     * @return ?class-string
+     */
+    public function className(): ?string
+    {
+        return $this->class;
+    }
+
+    /**
+     * The location of a throwable, null for the other kinds of failures.
+     *
+     * @return ?non-empty-string
+     */
+    public function location(): ?string
+    {
+        return $this->location;
+    }
+
     public function isExit(): bool
     {
         return $this->kind === self::EXIT;

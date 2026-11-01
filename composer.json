@@ -54,7 +54,8 @@
             "tests/unit/",
             "tests/integration/",
             "tests/end-to-end/",
-            "tests/fixtures/worker/src/"
+            "tests/fixtures/worker/src/",
+            "tests/support/"
         ]
     },
     "bin": [

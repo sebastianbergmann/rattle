@@ -263,6 +263,18 @@ rattle regress fuzz/csv-parser.php
 
 in CI. It replays the minimal input of every finding and every input of the corpus once, and fails while any of them still makes the target fail.
 
+## Findings in SARIF
+
+With `--sarif <file>`, `rattle regress` writes the inputs that still fail, and `rattle fuzz` the findings of the run, new ones and known ones that it found again, to a file in SARIF 2.1.0, the format in which code scanning, such as GitHub's, takes the results of analysis tools:
+
+```
+rattle regress --sarif rattle.sarif fuzz/csv-parser.php
+```
+
+Every kind of finding is a rule. The vulnerabilities that the detectors find are errors, with a security severity and the tag of their CWE: path traversal (CWE-22), code injection (CWE-94), command injection (CWE-78), and unsafe deserialization (CWE-502). Uncaught throwables, issues, fatal errors, timeouts, and processes that ended are warnings. A result is reported at the location of its finding, relative to the working directory, with its stack trace, and is identified by the ID of its finding, so that code scanning recognizes it in later reports.
+
+For code scanning, report what `rattle regress` replays: a finding that is fixed is no longer in the report, so its alert is closed. A run of `rattle fuzz` does not necessarily find every known finding again.
+
 ## Limitations
 
 * When rattle is installed with Composer, `nikic/php-parser` must be compatible with the version that your project uses. The PHAR does not have this constraint.

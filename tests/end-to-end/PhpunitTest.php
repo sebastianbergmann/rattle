@@ -227,10 +227,19 @@ final class PhpunitTest extends TestCase
 
         // the finding fails again when rattle replays it, as the detectors
         // run there as well
-        [$exit, $output] = $this->rattle(['regress', ...$options]);
+        [$exit, $output] = $this->rattle(['regress', ...$options, '--sarif', $this->directory . '/regress.sarif']);
 
         $this->assertSame(1, $exit, $output);
         $this->assertStringContainsString(PathTraversal::class . ' at ' . self::FIXTURE . '/src/Templates.php:23', $output);
+
+        $results = SarifResults::inFile($this->directory . '/regress.sarif');
+        $result  = $results[0] ?? null;
+
+        $this->assertCount(1, $results);
+        $this->assertNotNull($result);
+        $this->assertSame('path-traversal', $result['ruleId']);
+        $this->assertSame('SebastianBergmann\\Rattle\\Fixture\\Phpunit\\TemplatesTest::testLoadsEveryTemplate', $result['property']);
+        $this->assertSame(self::FIXTURE . '/src/Templates.php', $result['uri']);
     }
 
     public function testReportsATestSuiteWithoutProperties(): void

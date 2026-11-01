@@ -90,6 +90,11 @@ final readonly class Arguments
     private ?string $phpunitFilter;
 
     /**
+     * @var ?non-empty-string
+     */
+    private ?string $sarifFile;
+
+    /**
      * @param ?non-empty-string $command
      * @param ?positive-int     $jobs
      * @param positive-int      $timeout
@@ -101,8 +106,9 @@ final readonly class Arguments
      * @param list<string>      $sources
      * @param ?non-empty-string $phpunitConfiguration
      * @param ?non-empty-string $phpunitFilter
+     * @param ?non-empty-string $sarifFile
      */
-    public function __construct(?string $command, ?string $target, ?string $input, ?int $jobs, ?int $seed, int $timeout, ?string $memoryLimit, ?float $maximumTime, ?int $maximumNumberOfExecutions, int $maximumNumberOfChoices, int $maximumNumberOfShrinkingAttempts, int $numberOfExecutionsPerWorker, array $corpusDirectories, ?string $seedsDirectory, ?string $dictionary, string $cacheDirectory, string $findingsDirectory, ?string $bootstrap, array $sources, bool $ignoreDeprecations, bool $stopOnFinding, bool $verbose, bool $raw, ?string $inputLog, bool $help, bool $version, bool $phpunit = false, ?string $phpunitConfiguration = null, ?string $phpunitFilter = null)
+    public function __construct(?string $command, ?string $target, ?string $input, ?int $jobs, ?int $seed, int $timeout, ?string $memoryLimit, ?float $maximumTime, ?int $maximumNumberOfExecutions, int $maximumNumberOfChoices, int $maximumNumberOfShrinkingAttempts, int $numberOfExecutionsPerWorker, array $corpusDirectories, ?string $seedsDirectory, ?string $dictionary, string $cacheDirectory, string $findingsDirectory, ?string $bootstrap, array $sources, bool $ignoreDeprecations, bool $stopOnFinding, bool $verbose, bool $raw, ?string $inputLog, bool $help, bool $version, bool $phpunit = false, ?string $phpunitConfiguration = null, ?string $phpunitFilter = null, ?string $sarifFile = null)
     {
         $this->command                          = $command;
         $this->target                           = $target;
@@ -133,6 +139,7 @@ final readonly class Arguments
         $this->phpunit                          = $phpunit;
         $this->phpunitConfiguration             = $phpunitConfiguration;
         $this->phpunitFilter                    = $phpunitFilter;
+        $this->sarifFile                        = $sarifFile;
     }
 
     /**
@@ -325,5 +332,15 @@ final readonly class Arguments
     public function phpunitFilter(): ?string
     {
         return $this->phpunitFilter;
+    }
+
+    /**
+     * The file to which the findings are written in SARIF.
+     *
+     * @return ?non-empty-string
+     */
+    public function sarifFile(): ?string
+    {
+        return $this->sarifFile;
     }
 }

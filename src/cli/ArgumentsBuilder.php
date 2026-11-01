@@ -54,6 +54,7 @@ final readonly class ArgumentsBuilder
                 'findings-directory=',
                 'stop-on-finding',
                 'log-inputs=',
+                'sarif=',
                 'phpunit',
                 'configuration=',
                 'filter=',
@@ -81,6 +82,7 @@ final readonly class ArgumentsBuilder
                 'jobs=',
                 'cache-directory=',
                 'findings-directory=',
+                'sarif=',
                 'phpunit',
                 'configuration=',
                 'filter=',
@@ -162,6 +164,7 @@ final readonly class ArgumentsBuilder
         $verbose                          = false;
         $raw                              = false;
         $inputLog                         = null;
+        $sarifFile                        = null;
         $help                             = false;
         $version                          = false;
         $phpunitConfiguration             = null;
@@ -276,6 +279,11 @@ final readonly class ArgumentsBuilder
 
                     break;
 
+                case '--sarif':
+                    $sarifFile = $this->nonEmptyString($option, $value);
+
+                    break;
+
                 case '--configuration':
                     $phpunitConfiguration = $this->nonEmptyString($option, $value);
 
@@ -338,6 +346,7 @@ final readonly class ArgumentsBuilder
             $phpunit,
             $phpunitConfiguration,
             $phpunitFilter,
+            $sarifFile,
         );
     }
 

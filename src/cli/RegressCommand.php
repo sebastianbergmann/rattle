@@ -13,6 +13,7 @@ use const PHP_EOL;
 use function array_slice;
 use function count;
 use function file_get_contents;
+use function getcwd;
 use function glob;
 use function printf;
 use function sort;
@@ -46,15 +47,16 @@ final readonly class RegressCommand implements Command
         }
 
         $phpunit = $configuration->phpunit();
+        $report  = $arguments->sarifFile() === null ? null : new SarifReport((string) getcwd());
 
         if ($phpunit === null) {
-            $outcome = $this->regress($arguments, $configuration, null);
+            $outcome = $this->regress($arguments, $configuration, null, $report);
 
             if ($outcome === null) {
                 return 2;
             }
 
-            return $this->summarize($outcome, null);
+            return $this->finish($outcome, null, $setup, $report, $arguments);
         }
 
         try {
@@ -74,7 +76,7 @@ final readonly class RegressCommand implements Command
         $total = ['replayed' => 0, 'failed' => 0, 'invalid' => 0];
 
         foreach ($properties as $property) {
-            $outcome = $this->regress($arguments, $configuration->withTarget($property), PropertyDirectory::nameOf($property));
+            $outcome = $this->regress($arguments, $configuration->withTarget($property), $property, $report);
 
             if ($outcome === null) {
                 return 2;
@@ -85,7 +87,27 @@ final readonly class RegressCommand implements Command
             $total['invalid']  += $outcome['invalid'];
         }
 
-        return $this->summarize($total, count($properties));
+        return $this->finish($total, count($properties), $setup, $report, $arguments);
+    }
+
+    /**
+     * Shows the outcome, and writes the inputs that failed in SARIF when
+     * --sarif is given.
+     *
+     * @param array{replayed: non-negative-int, failed: non-negative-int, invalid: non-negative-int} $outcome
+     * @param ?positive-int                                                                          $numberOfProperties null for a fuzz target
+     *
+     * @return 0|1|2
+     */
+    private function finish(array $outcome, ?int $numberOfProperties, Setup $setup, ?SarifReport $report, Arguments $arguments): int
+    {
+        $exit = $this->summarize($outcome, $numberOfProperties);
+
+        if (!$setup->writeSarifReport($report, $arguments->sarifFile())) {
+            return 2;
+        }
+
+        return $exit;
     }
 
     /**
@@ -94,12 +116,14 @@ final readonly class RegressCommand implements Command
      * worker reports, and the ones of a property after its test ID; workers
      * are not started for a property without inputs.
      *
-     * @param ?non-empty-string $directory the name of the directories of the target, null when its worker reports it
+     * @param ?non-empty-string $property the test ID of the property, null for a fuzz target, whose worker reports the name of its directories
      *
      * @return ?array{replayed: non-negative-int, failed: non-negative-int, invalid: non-negative-int} null when the inputs could not be replayed
      */
-    private function regress(Arguments $arguments, WorkerConfiguration $configuration, ?string $directory): ?array
+    private function regress(Arguments $arguments, WorkerConfiguration $configuration, ?string $property, ?SarifReport $report): ?array
     {
+        $directory = $property === null ? null : PropertyDirectory::nameOf($property);
+
         if ($directory !== null) {
             $paths = $this->inputsIn($arguments, $directory);
 
@@ -160,6 +184,8 @@ final readonly class RegressCommand implements Command
 
                     if ($result->isFinding()) {
                         printf('Fails: %s' . PHP_EOL . '       %s' . PHP_EOL, $files[$result->id()] ?? '', $result->failure()->describe());
+
+                        $report?->add($result->failure(), $property);
 
                         $failures++;
                     }

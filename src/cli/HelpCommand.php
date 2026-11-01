@@ -55,6 +55,7 @@ Options for "rattle fuzz":
   --cache-directory <dir>     Directory for the corpus (default: .rattle.cache)
   --findings-directory <dir>  Directory for the findings (default: fuzz/findings)
   --stop-on-finding           Stop after the first new finding
+  --sarif <file>              Write the findings of the run to this file in SARIF
   --phpunit                   Fuzz the properties of the PHPUnit test suite together instead
                               of a target: they share the time of --max-time, and
                               --max-executions applies to every property
@@ -78,6 +79,7 @@ Options for "rattle regress":
   --jobs <n>                  Number of worker processes (default: 1)
   --cache-directory <dir>     Directory for the corpus (default: .rattle.cache)
   --findings-directory <dir>  Directory for the findings (default: fuzz/findings)
+  --sarif <file>              Write the inputs that still fail to this file in SARIF
   --phpunit                   Replay the inputs of every property of the PHPUnit test suite
   --configuration <file>      PHPUnit configuration file (default: as PHPUnit looks for one)
   --filter <pattern>          Only replay the inputs of the properties that match the pattern

@@ -20,6 +20,7 @@ use function fclose;
 use function file_put_contents;
 use function fopen;
 use function fwrite;
+use function getcwd;
 use function implode;
 use function is_dir;
 use function is_file;
@@ -170,7 +171,8 @@ final readonly class FuzzCommand implements Command
             print 'Warning: ' . $warning . PHP_EOL;
         }
 
-        $log = null;
+        $log    = null;
+        $report = $arguments->sarifFile() === null ? null : new SarifReport((string) getcwd());
 
         if ($arguments->inputLog() !== null) {
             $log = fopen($arguments->inputLog(), 'w');
@@ -181,7 +183,7 @@ final readonly class FuzzCommand implements Command
             $corpus     = new Corpus($corpusDirectory),
             $dictionary = new Dictionary($tokens, Sentinels::tokens()),
             Mutator::create($corpus, $dictionary, $target->maximumNumberOfChoices()),
-            $findings,
+            $report === null ? $findings : new FindingRecorder($findings, $report, null),
             new EngineConfiguration($seed, $arguments->maximumNumberOfExecutions(), $maximumTime, $arguments->stopOnFinding()),
             $status->update(...),
             $this->inputLogger($log),
@@ -219,6 +221,10 @@ final readonly class FuzzCommand implements Command
                 $written === 1 ? 'was' : 'were',
                 $arguments->cacheDirectory() . '/' . $name . '/dictionary.txt',
             );
+        }
+
+        if (!(new Setup)->writeSarifReport($report, $arguments->sarifFile())) {
+            return 2;
         }
 
         return $statistics->findings > 0 ? 1 : 0;
@@ -278,6 +284,7 @@ final readonly class FuzzCommand implements Command
         }
 
         $status                = new StatusLine(STDOUT, stream_isatty(STDOUT), static fn (): float => microtime(true));
+        $report                = $arguments->sarifFile() === null ? null : new SarifReport((string) getcwd());
         $dictionary            = new Dictionary($tokens, Sentinels::tokens());
         $ids                   = new JobIds;
         $loader                = new InputLoader;
@@ -322,7 +329,7 @@ final readonly class FuzzCommand implements Command
                 $corpus,
                 $dictionary,
                 Mutator::create($corpus, $dictionary, $target->maximumNumberOfChoices()),
-                $findings,
+                $report === null ? $findings : new FindingRecorder($findings, $report, $property),
                 // every property draws from a random number generator of its
                 // own, so that the properties are not mutated in lockstep
                 new EngineConfiguration(Engine::seedOf($seed, $index), $arguments->maximumNumberOfExecutions(), null, $arguments->stopOnFinding(), EngineConfiguration::DEFAULT_BATCH_SIZE, $property),
@@ -411,6 +418,10 @@ final readonly class FuzzCommand implements Command
                 $written === 1 ? ' that was' : 's that were',
                 $written === 1 ? 'was' : 'were',
             );
+        }
+
+        if (!(new Setup)->writeSarifReport($report, $arguments->sarifFile())) {
+            return 2;
         }
 
         return $totals->findings > 0 ? 1 : 0;
