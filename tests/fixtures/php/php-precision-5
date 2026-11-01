@@ -1,0 +1,4 @@
+#!/bin/sh
+# runs the PHP on the PATH with another precision of floats, which the
+# fixtures of differential fuzzing take for another version of PHP
+exec php -d precision=5 "$@"

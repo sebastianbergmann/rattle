@@ -68,6 +68,7 @@ final class ProcessExecutor implements Executor
      * @var ?Closure(int, string): void
      */
     private readonly ?Closure $stderr;
+    private readonly PhpBinary $php;
 
     /**
      * @var array<int, WorkerProcess>
@@ -91,12 +92,22 @@ final class ProcessExecutor implements Executor
     /**
      * @param positive-int                $numberOfWorkers
      * @param ?Closure(int, string): void $stderr          receives what a worker writes to its standard error stream, with the number of the worker
+     * @param ?PhpBinary                  $php             the PHP binary that runs the workers, by default the one that runs rattle
      */
-    public function __construct(WorkerConfiguration $configuration, int $numberOfWorkers, ?Closure $stderr = null)
+    public function __construct(WorkerConfiguration $configuration, int $numberOfWorkers, ?Closure $stderr = null, ?PhpBinary $php = null)
     {
         $this->configuration   = $configuration;
         $this->numberOfWorkers = $numberOfWorkers;
         $this->stderr          = $stderr;
+        $this->php             = $php ?? PhpBinary::current();
+    }
+
+    /**
+     * The PHP binary that runs the workers.
+     */
+    public function php(): PhpBinary
+    {
+        return $this->php;
     }
 
     /**
@@ -468,7 +479,7 @@ final class ProcessExecutor implements Executor
      */
     private function startWorker(int $index): WorkerProcess
     {
-        $worker   = WorkerProcess::forConfiguration($this->configuration);
+        $worker   = WorkerProcess::forConfiguration($this->configuration, $this->php);
         $deadline = microtime(true) + self::STARTUP_TIMEOUT;
 
         while (microtime(true) < $deadline) {

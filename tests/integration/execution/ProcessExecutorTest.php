@@ -37,6 +37,7 @@ use SebastianBergmann\Rattle\Fixture\Worker\Behaviour;
 #[UsesClass(FrameBuffer::class)]
 #[UsesClass(Job::class)]
 #[UsesClass(Outcome::class)]
+#[UsesClass(PhpBinary::class)]
 #[UsesClass(ProtocolData::class)]
 #[UsesClass(Result::class)]
 #[UsesClass(TargetDescription::class)]
@@ -304,6 +305,19 @@ final class ProcessExecutorTest extends TestCase
         $this->assertSame(0, $executor->capacity());
         $this->assertCount(6, $this->collect($executor, 6));
         $this->assertSame(3, $executor->capacity());
+    }
+
+    public function testStartsTheWorkersWithAnotherPhpBinary(): void
+    {
+        $php = PhpBinary::at(dirname(__DIR__, 2) . '/fixtures/php/php-precision-5');
+
+        $this->executor = new ProcessExecutor($this->configuration(), 1, null, $php);
+
+        $this->executor->start();
+
+        $this->assertSame($php, $this->executor->php());
+        $this->assertSame(Outcome::Passed, $this->executor->execute(Job::replay(0, [Behaviour::PASS, 0]))->outcome());
+        $this->assertSame(PhpBinary::current()->path(), (new ProcessExecutor($this->configuration(), 1))->php()->path());
     }
 
     public function testExecutesOneInputAtATime(): void

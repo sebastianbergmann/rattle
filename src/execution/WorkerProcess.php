@@ -10,7 +10,6 @@
 namespace SebastianBergmann\Rattle;
 
 use const INF;
-use const PHP_BINARY;
 use const SIGKILL;
 use function defined;
 use function dirname;
@@ -106,11 +105,12 @@ final class WorkerProcess
 
     /**
      * Starts a worker process with the given configuration, from the rattle
-     * executable or from the PHAR that the supervisor runs from.
+     * executable or from the PHAR that the supervisor runs from, with the PHP
+     * binary that runs the supervisor unless another one is given.
      *
      * @throws WorkerException
      */
-    public static function forConfiguration(WorkerConfiguration $configuration): self
+    public static function forConfiguration(WorkerConfiguration $configuration, ?PhpBinary $php = null): self
     {
         $environment = getenv();
 
@@ -131,7 +131,7 @@ final class WorkerProcess
         }
 
         return self::start(
-            [PHP_BINARY, $executable, 'worker', ...$configuration->asArguments()],
+            [($php ?? PhpBinary::current())->path(), $executable, 'worker', ...$configuration->asArguments()],
             $environment,
         );
     }
