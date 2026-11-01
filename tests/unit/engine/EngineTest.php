@@ -20,6 +20,7 @@ use function mkdir;
 use function rmdir;
 use function scandir;
 use function str_contains;
+use function str_repeat;
 use function sys_get_temp_dir;
 use function uniqid;
 use function unlink;
@@ -179,6 +180,39 @@ final class EngineTest extends TestCase
         } finally {
             $this->removeDirectory($directory);
         }
+    }
+
+    public function testReplacesACorpusEntryWithAShorterInputThatProducesTheFeaturesThatTheEntryOwns(): void
+    {
+        $corpus     = new Corpus;
+        $dictionary = new Dictionary;
+        $engine     = new Engine(
+            $this->executor(
+                static function (string $bytes): void
+                {
+                    Edges::through(1, null);
+
+                    if (str_contains($bytes, 'Z')) {
+                        Edges::through(2, null);
+                    }
+                },
+            ),
+            $corpus,
+            $dictionary,
+            Mutator::create($corpus, $dictionary, 8192),
+            $this->findings(),
+            new EngineConfiguration(1, 3000),
+        );
+
+        $long = BytesEncoding::choicesFor(str_repeat('x', 20) . 'Z', 64);
+
+        $statistics = $engine->run([$long]);
+        $entry      = $corpus->entries()[0] ?? null;
+
+        $this->assertNotNull($entry);
+        $this->assertGreaterThan(0, $statistics->reducedEntries);
+        $this->assertLessThan(count($long), $entry->length());
+        $this->assertStringContainsString('Z', BytesEncoding::bytesFor($entry->sequence()->choices(), 64));
     }
 
     public function testGeneratesInputsWhileTheCorpusIsEmpty(): void

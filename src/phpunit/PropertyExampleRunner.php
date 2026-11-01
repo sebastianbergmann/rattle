@@ -17,6 +17,7 @@ use function error_get_last;
 use function in_array;
 use function sprintf;
 use SebastianBergmann\Rattle\Instrumentation\Edges;
+use SebastianBergmann\Rattle\Instrumentation\Features;
 
 /**
  * Executes the examples of a PHPUnit property: PHPUnit generates the
@@ -102,13 +103,15 @@ final class PropertyExampleRunner implements InputRunner
             return new Result($job->id(), $outcome, $example->failure(), $example->sequence(), [], $example->values());
         }
 
-        $features = [];
+        $features                 = [];
+        $producedRequiredFeatures = false;
 
         if ($outcome !== Outcome::Rejected) {
-            $features = $job->reportAllFeatures() ? $this->newFeatures->all($edges) : $this->newFeatures->of($edges);
+            $features                 = $job->reportAllFeatures() ? $this->newFeatures->all($edges) : $this->newFeatures->of($edges);
+            $producedRequiredFeatures = $job->requiredFeatures() !== [] && Features::produces($edges, $job->requiredFeatures());
         }
 
-        return new Result($job->id(), $outcome, null, $example->sequence(), $features, $example->values());
+        return new Result($job->id(), $outcome, null, $example->sequence(), $features, $example->values(), [], $producedRequiredFeatures);
     }
 
     /**

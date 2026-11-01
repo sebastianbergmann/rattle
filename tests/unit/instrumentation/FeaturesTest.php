@@ -58,4 +58,16 @@ final class FeaturesTest extends TestCase
             Features::fromEdges([5 => 1, 6 => 2, $edge => 1000]),
         );
     }
+
+    public function testTellsWhetherAnExecutionProducedFeatures(): void
+    {
+        $edge = 0x0FFFFFFF << 28 | 0x0FFFFFFF;
+        $hits = [5 => 1, 6 => 2, $edge => 1000];
+
+        $this->assertTrue(Features::produces($hits, []));
+        $this->assertTrue(Features::produces($hits, [5, 7 << 56 | $edge]));
+        $this->assertTrue(Features::produces($hits, Features::fromEdges($hits)));
+        $this->assertFalse(Features::produces($hits, [1 << 56 | 5]));
+        $this->assertFalse(Features::produces($hits, [5, 8]));
+    }
 }

@@ -47,6 +47,11 @@ final class Scheduler
      */
     private array $cumulativeWeights = [];
 
+    /**
+     * The number of changes of the corpus when the weights were computed.
+     */
+    private int $numberOfChanges = -1;
+
     public static function weightOf(CorpusEntry $entry, int $numberOfEntries): float
     {
         $novelty = 1 + log(1 + count($entry->newFeatures()), 2);
@@ -67,8 +72,10 @@ final class Scheduler
 
         assert($entries !== []);
 
-        if (count($this->cumulativeWeights) !== count($entries)) {
+        if ($this->numberOfChanges !== $this->corpus->numberOfChanges()) {
             $this->computeWeights($entries);
+
+            $this->numberOfChanges = $this->corpus->numberOfChanges();
         }
 
         $total    = $this->cumulativeWeights[count($this->cumulativeWeights) - 1] ?? 0.0;

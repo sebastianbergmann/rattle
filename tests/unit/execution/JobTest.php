@@ -27,14 +27,15 @@ final class JobTest extends TestCase
     public static function invalidData(): array
     {
         return [
-            'id missing'                     => [['drawnValues' => false, 'choices' => []]],
-            'negative id'                    => [['id' => -1, 'drawnValues' => false, 'choices' => []]],
-            'drawnValues missing'            => [['id' => 1, 'choices' => []]],
-            'choices missing'                => [['id' => 1, 'drawnValues' => false]],
-            'negative choice'                => [['id' => 1, 'drawnValues' => false, 'choices' => [-1]]],
-            'choices that are not a list'    => [['id' => 1, 'drawnValues' => false, 'choices' => ['a' => 1]]],
-            'choices that are not an array'  => [['id' => 1, 'drawnValues' => false, 'choices' => 'abc']],
-            'allFeatures that is not a bool' => [['id' => 1, 'drawnValues' => false, 'allFeatures' => 1, 'choices' => []]],
+            'id missing'                              => [['drawnValues' => false, 'choices' => []]],
+            'negative id'                             => [['id' => -1, 'drawnValues' => false, 'choices' => []]],
+            'drawnValues missing'                     => [['id' => 1, 'choices' => []]],
+            'choices missing'                         => [['id' => 1, 'drawnValues' => false]],
+            'negative choice'                         => [['id' => 1, 'drawnValues' => false, 'choices' => [-1]]],
+            'choices that are not a list'             => [['id' => 1, 'drawnValues' => false, 'choices' => ['a' => 1]]],
+            'choices that are not an array'           => [['id' => 1, 'drawnValues' => false, 'choices' => 'abc']],
+            'allFeatures that is not a bool'          => [['id' => 1, 'drawnValues' => false, 'allFeatures' => 1, 'choices' => []]],
+            'required feature that is not an integer' => [['id' => 1, 'drawnValues' => false, 'requiredFeatures' => ['a'], 'choices' => []]],
         ];
     }
 
@@ -86,6 +87,17 @@ final class JobTest extends TestCase
         $this->assertEquals($replay->withAllFeatures(), Job::fromArray($replay->withAllFeatures()->asArray()));
         $this->assertEquals($generate->withAllFeatures(), Job::fromArray($generate->withAllFeatures()->asArray()));
         $this->assertArrayNotHasKey('allFeatures', $replay->asArray());
+        $this->assertEquals($replay->withRequiredFeatures([5, 1 << 56 | 6]), Job::fromArray($replay->withRequiredFeatures([5, 1 << 56 | 6])->asArray()));
+        $this->assertArrayNotHasKey('requiredFeatures', $replay->asArray());
+    }
+
+    public function testCanRequireFeatures(): void
+    {
+        $job = Job::replay(3, [1, 2]);
+
+        $this->assertSame([], $job->requiredFeatures());
+        $this->assertSame([5, 6], $job->withRequiredFeatures([5, 6])->requiredFeatures());
+        $this->assertSame([5, 6], $job->withRequiredFeatures([5, 6])->withAllFeatures()->requiredFeatures());
     }
 
     /**

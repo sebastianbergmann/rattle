@@ -22,7 +22,8 @@ use SebastianBergmann\ChoiceSequence\ChoiceSource;
  *
  * The result of an input has the features that it produced and that the
  * process that executed it had not seen before, unless the input asks for
- * all the features that it produced.
+ * all the features that it produced. An input can also require features, and
+ * its result tells whether it produced them all.
  *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
@@ -42,6 +43,11 @@ final readonly class Job
     private ?int $seed;
     private bool $reportDrawnValues;
     private bool $reportAllFeatures;
+
+    /**
+     * @var list<int>
+     */
+    private array $requiredFeatures;
 
     /**
      * @param non-negative-int       $id
@@ -70,29 +76,32 @@ final readonly class Job
         $id                = $data['id'] ?? null;
         $reportDrawnValues = $data['drawnValues'] ?? null;
         $reportAllFeatures = $data['allFeatures'] ?? false;
+        $requiredFeatures  = ProtocolData::listOfIntegers($data['requiredFeatures'] ?? []);
 
         if (!is_int($id) || $id < 0 || !is_bool($reportDrawnValues) || !is_bool($reportAllFeatures)) {
             throw new ProtocolException('Invalid input');
         }
 
         if (isset($data['seed']) && is_int($data['seed'])) {
-            return new self($id, null, $data['seed'], $reportDrawnValues, $reportAllFeatures);
+            return new self($id, null, $data['seed'], $reportDrawnValues, $reportAllFeatures, $requiredFeatures);
         }
 
-        return new self($id, ProtocolData::listOfNonNegativeIntegers($data['choices'] ?? null), null, $reportDrawnValues, $reportAllFeatures);
+        return new self($id, ProtocolData::listOfNonNegativeIntegers($data['choices'] ?? null), null, $reportDrawnValues, $reportAllFeatures, $requiredFeatures);
     }
 
     /**
      * @param non-negative-int        $id
      * @param ?list<non-negative-int> $choices
+     * @param list<int>               $requiredFeatures
      */
-    private function __construct(int $id, ?array $choices, ?int $seed, bool $reportDrawnValues, bool $reportAllFeatures = false)
+    private function __construct(int $id, ?array $choices, ?int $seed, bool $reportDrawnValues, bool $reportAllFeatures = false, array $requiredFeatures = [])
     {
         $this->id                = $id;
         $this->choices           = $choices;
         $this->seed              = $seed;
         $this->reportDrawnValues = $reportDrawnValues;
         $this->reportAllFeatures = $reportAllFeatures;
+        $this->requiredFeatures  = $requiredFeatures;
     }
 
     /**
@@ -100,7 +109,18 @@ final readonly class Job
      */
     public function withAllFeatures(): self
     {
-        return new self($this->id, $this->choices, $this->seed, $this->reportDrawnValues, true);
+        return new self($this->id, $this->choices, $this->seed, $this->reportDrawnValues, true, $this->requiredFeatures);
+    }
+
+    /**
+     * The same input, whose result tells whether it produced all of the
+     * features.
+     *
+     * @param list<int> $features
+     */
+    public function withRequiredFeatures(array $features): self
+    {
+        return new self($this->id, $this->choices, $this->seed, $this->reportDrawnValues, $this->reportAllFeatures, $features);
     }
 
     /**
@@ -145,6 +165,14 @@ final readonly class Job
     }
 
     /**
+     * @return list<int>
+     */
+    public function requiredFeatures(): array
+    {
+        return $this->requiredFeatures;
+    }
+
+    /**
      * The choice sequence that is replayed, or an empty one for an input that
      * is generated.
      */
@@ -166,7 +194,7 @@ final readonly class Job
     }
 
     /**
-     * @return array{id: non-negative-int, drawnValues: bool, allFeatures?: true, choices?: list<non-negative-int>, seed?: int}
+     * @return array{id: non-negative-int, drawnValues: bool, allFeatures?: true, requiredFeatures?: non-empty-list<int>, choices?: list<non-negative-int>, seed?: int}
      */
     public function asArray(): array
     {
@@ -174,6 +202,10 @@ final readonly class Job
 
         if ($this->reportAllFeatures) {
             $data['allFeatures'] = true;
+        }
+
+        if ($this->requiredFeatures !== []) {
+            $data['requiredFeatures'] = $this->requiredFeatures;
         }
 
         if ($this->choices !== null) {

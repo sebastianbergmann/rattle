@@ -304,6 +304,17 @@ final readonly class FuzzCommand implements Command
             $statistics->duplicateFindings === 1 ? ' was' : 's were',
         );
 
+        if ($statistics->reducedEntries > 0) {
+            printf(
+                '%d corpus entr%s replaced with %s that %s fewer choices and produce%s the same features.' . PHP_EOL,
+                $statistics->reducedEntries,
+                $statistics->reducedEntries === 1 ? 'y was' : 'ies were',
+                $statistics->reducedEntries === 1 ? 'an input' : 'inputs',
+                $statistics->reducedEntries === 1 ? 'has' : 'have',
+                $statistics->reducedEntries === 1 ? 's' : '',
+            );
+        }
+
         if ($statistics->removedInputs > 0) {
             printf(
                 '%d stored input%s that produce%s no feature that a smaller input does not produce %s removed from the corpus.' . PHP_EOL,

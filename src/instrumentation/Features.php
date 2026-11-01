@@ -47,6 +47,26 @@ final readonly class Features
     }
 
     /**
+     * Whether an execution that took the edges as often as given produced
+     * all of the features.
+     *
+     * @param array<int, positive-int> $hits     how often each edge was taken
+     * @param list<int>                $features
+     */
+    public static function produces(array $hits, array $features): bool
+    {
+        foreach ($features as $feature) {
+            $count = $hits[$feature & 0x00FFFFFFFFFFFFFF] ?? null;
+
+            if ($count === null || self::bucketOf($count) !== $feature >> 56) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * @param positive-int $count
      *
      * @return int<0, 7>

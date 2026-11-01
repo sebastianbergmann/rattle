@@ -79,6 +79,18 @@ final class ResultTest extends TestCase
         $this->assertSame(['GET'], $result->withTokens(['GET'])->withFailure(Failure::exit())->tokens());
     }
 
+    public function testTellsWhetherTheInputProducedTheFeaturesThatItRequired(): void
+    {
+        $produced = new Result(1, Outcome::Passed, null, new ChoiceSequence([1]), [], null, [], true);
+        $other    = new Result(1, Outcome::Passed, null, new ChoiceSequence([1]), [], null);
+
+        $this->assertTrue($produced->producedRequiredFeatures());
+        $this->assertFalse($other->producedRequiredFeatures());
+        $this->assertTrue(Result::fromArray($produced->asArray())->producedRequiredFeatures());
+        $this->assertArrayNotHasKey('producedRequiredFeatures', $other->asArray());
+        $this->assertTrue($produced->withTokens(['GET'])->producedRequiredFeatures());
+    }
+
     public function testTheInputThatWasSentStandsInForTheConsumedSequenceWhenTheProcessEnded(): void
     {
         $result = Result::processEnded(Job::replay(9, [4, 5]), Failure::processEnded(9, null));

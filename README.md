@@ -172,6 +172,8 @@ rattle instruments the code in your source directories while it is included: it 
 
 How often an edge was taken is put into one of the buckets 1, 2, 3, 4–7, 8–15, 16–31, 32–127, and 128+. An input that takes an edge that no input took before, or takes it a number of times that falls into a bucket that was not seen for this edge before, is added to the corpus.
 
+An input that was mutated from a corpus entry, has fewer choices than the entry, and produces every feature that the entry was added for, but no feature that is new, replaces the entry. This way, the corpus becomes smaller while fuzzing goes on, and so does the time that it takes to execute its inputs. When fuzzing ends, rattle tells how many entries were replaced.
+
 A basic block starts:
 
 * at the start of the body of a function, a method, a closure, a property hook, a `catch`, and a `finally`

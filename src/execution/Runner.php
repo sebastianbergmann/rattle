@@ -41,6 +41,7 @@ use function sprintf;
 use SebastianBergmann\ChoiceSequence\ChoiceSource;
 use SebastianBergmann\ChoiceSequence\TooManyChoicesException;
 use SebastianBergmann\Rattle\Instrumentation\Edges;
+use SebastianBergmann\Rattle\Instrumentation\Features;
 use Throwable;
 
 /**
@@ -184,13 +185,15 @@ final class Runner implements InputRunner
             return new Result($job->id(), $outcome, $this->failure ?? $this->failureOf($throwable), $source->sequence(), [], $drawnValues);
         }
 
-        $features = [];
+        $features                 = [];
+        $producedRequiredFeatures = false;
 
         if ($outcome !== Outcome::Rejected) {
-            $features = $job->reportAllFeatures() ? $this->newFeatures->all($edges) : $this->newFeatures->of($edges);
+            $features                 = $job->reportAllFeatures() ? $this->newFeatures->all($edges) : $this->newFeatures->of($edges);
+            $producedRequiredFeatures = $job->requiredFeatures() !== [] && Features::produces($edges, $job->requiredFeatures());
         }
 
-        return new Result($job->id(), $outcome, null, $source->sequence(), $features, $drawnValues);
+        return new Result($job->id(), $outcome, null, $source->sequence(), $features, $drawnValues, [], $producedRequiredFeatures);
     }
 
     /**

@@ -31,6 +31,9 @@ use SebastianBergmann\ChoiceSequence\SpanKind;
  * are tokens for the dictionary. They are base64-encoded for the protocol,
  * because they are often not valid UTF-8.
  *
+ * When the input required features, the result tells whether it produced
+ * them all.
+ *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
  * @internal This class is not covered by the backward compatibility promise for sebastian/rattle
@@ -59,6 +62,7 @@ final readonly class Result
      * @var list<non-empty-string>
      */
     private array $tokens;
+    private bool $producedRequiredFeatures;
 
     /**
      * The result of an input during which the process of a worker ended
@@ -121,6 +125,7 @@ final readonly class Result
             ProtocolData::listOfIntegers($data['features'] ?? null),
             $drawnValues,
             $tokens,
+            ($data['producedRequiredFeatures'] ?? false) === true,
         );
     }
 
@@ -129,8 +134,9 @@ final readonly class Result
      * @param list<int>              $features
      * @param ?list<string>          $drawnValues
      * @param list<non-empty-string> $tokens
+     * @param bool                   $producedRequiredFeatures whether the input produced all the features that it required
      */
-    public function __construct(int $id, Outcome $outcome, ?Failure $failure, ChoiceSequence $sequence, array $features, ?array $drawnValues, array $tokens = [])
+    public function __construct(int $id, Outcome $outcome, ?Failure $failure, ChoiceSequence $sequence, array $features, ?array $drawnValues, array $tokens = [], bool $producedRequiredFeatures = false)
     {
         assert(($failure !== null) === $outcome->isFinding());
 
@@ -141,6 +147,8 @@ final readonly class Result
         $this->features    = $features;
         $this->drawnValues = $drawnValues;
         $this->tokens      = $tokens;
+
+        $this->producedRequiredFeatures = $producedRequiredFeatures;
     }
 
     /**
@@ -201,9 +209,17 @@ final readonly class Result
         return $this->tokens;
     }
 
+    /**
+     * Whether the input produced all the features that it required.
+     */
+    public function producedRequiredFeatures(): bool
+    {
+        return $this->producedRequiredFeatures;
+    }
+
     public function withFailure(Failure $failure): self
     {
-        return new self($this->id, Outcome::Failed, $failure, $this->sequence, $this->features, $this->drawnValues, $this->tokens);
+        return new self($this->id, Outcome::Failed, $failure, $this->sequence, $this->features, $this->drawnValues, $this->tokens, $this->producedRequiredFeatures);
     }
 
     /**
@@ -211,7 +227,7 @@ final readonly class Result
      */
     public function withTokens(array $tokens): self
     {
-        return new self($this->id, $this->outcome, $this->failure, $this->sequence, $this->features, $this->drawnValues, $tokens);
+        return new self($this->id, $this->outcome, $this->failure, $this->sequence, $this->features, $this->drawnValues, $tokens, $this->producedRequiredFeatures);
     }
 
     /**
@@ -251,6 +267,10 @@ final readonly class Result
 
         if ($this->tokens !== []) {
             $data['tokens'] = array_map(base64_encode(...), $this->tokens);
+        }
+
+        if ($this->producedRequiredFeatures) {
+            $data['producedRequiredFeatures'] = true;
         }
 
         return $data;

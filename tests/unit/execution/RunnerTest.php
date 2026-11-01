@@ -118,6 +118,22 @@ final class RunnerTest extends TestCase
         $this->assertSame([], $again->features());
     }
 
+    public function testTellsWhetherTheInputProducedTheFeaturesThatItRequired(): void
+    {
+        $runner = $this->runner(static function (Input $input): void
+        {
+            Edges::through(1, null);
+
+            if ($input->bool()) {
+                Edges::through(2, null);
+            }
+        });
+
+        $this->assertTrue($runner->run(Job::replay(1, [1])->withRequiredFeatures([1, 1 << 28 | 2]))->producedRequiredFeatures());
+        $this->assertFalse($runner->run(Job::replay(2, [0])->withRequiredFeatures([1, 1 << 28 | 2]))->producedRequiredFeatures());
+        $this->assertFalse($runner->run(Job::replay(3, [1]))->producedRequiredFeatures());
+    }
+
     public function testReportsAllFeaturesWhenTheInputAsksForThem(): void
     {
         $runner = $this->runner(static function (Input $input): void

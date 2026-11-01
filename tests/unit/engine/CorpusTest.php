@@ -106,6 +106,36 @@ final class CorpusTest extends TestCase
         $this->assertSame(['.', '..', 'other-name'], scandir($this->directory));
     }
 
+    public function testReplacesAnEntryWithAnInputThatHasFewerChoices(): void
+    {
+        $this->directory = sys_get_temp_dir() . '/rattle-corpus-' . uniqid();
+
+        $corpus = new Corpus($this->directory);
+
+        $corpus->add(new ChoiceSequence([1, 2, 3]), [10, 20]);
+        $corpus->add(new ChoiceSequence([4]), [30]);
+
+        $changes = $corpus->numberOfChanges();
+
+        $this->assertFalse($corpus->replace(0, new ChoiceSequence([5, 6, 7])));
+        $this->assertSame($changes, $corpus->numberOfChanges());
+
+        $this->assertTrue($corpus->replace(0, new ChoiceSequence([1, 2])));
+
+        $entry = $corpus->entries()[0] ?? null;
+
+        $this->assertNotNull($entry);
+        $this->assertSame([1, 2], $entry->sequence()->choices());
+        $this->assertSame([10, 20], $entry->newFeatures());
+        $this->assertSame(0, $entry->index());
+        $this->assertSame(2, $corpus->numberOfEntries());
+        $this->assertSame($changes + 1, $corpus->numberOfChanges());
+
+        // the input that replaced the entry is stored instead of it
+        $this->assertFileExists($this->directory . '/' . Corpus::fileNameOf("choice-sequence v1\n1\n2\n"));
+        $this->assertFileDoesNotExist($this->directory . '/' . Corpus::fileNameOf("choice-sequence v1\n1\n2\n3\n"));
+    }
+
     public function testRemovesNothingWithoutADirectory(): void
     {
         $this->assertFalse((new Corpus)->remove([1, 2]));

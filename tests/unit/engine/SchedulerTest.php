@@ -62,4 +62,20 @@ final class SchedulerTest extends TestCase
 
         $this->assertSame(2, $scheduler->choose(new Randomizer(new Xoshiro256StarStar(3)))->index());
     }
+
+    public function testChoosesTheEntryThatReplacedAnEntry(): void
+    {
+        $corpus = new Corpus;
+
+        $corpus->add(new ChoiceSequence(array_fill(0, 96, 0)), [1]);
+
+        $scheduler  = new Scheduler($corpus);
+        $randomizer = new Randomizer(new Xoshiro256StarStar(1));
+
+        $this->assertSame(96, $scheduler->choose($randomizer)->length());
+
+        $corpus->replace(0, new ChoiceSequence([0]));
+
+        $this->assertSame(1, $scheduler->choose($randomizer)->length());
+    }
 }

@@ -51,6 +51,14 @@ final class Statistics
     public int $corpusEntries = 0;
 
     /**
+     * The number of corpus entries that were replaced with an input that has
+     * fewer choices and produces all the features that the entry owns.
+     *
+     * @var non-negative-int
+     */
+    public int $reducedEntries = 0;
+
+    /**
      * The number of stored inputs that were removed from the directory of the
      * corpus because they produce no feature that a smaller input does not
      * produce.

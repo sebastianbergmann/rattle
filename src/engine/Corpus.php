@@ -9,6 +9,7 @@
  */
 namespace SebastianBergmann\Rattle;
 
+use function assert;
 use function count;
 use function file_put_contents;
 use function hash;
@@ -24,7 +25,9 @@ use SebastianBergmann\ChoiceSequence\Encoder;
  * The inputs that produced features that no input before them produced, and
  * the set of known features.
  *
- * An input is added when it produced at least one feature that is new.
+ * An input is added when it produced at least one feature that is new. An
+ * entry owns the features that were new when it was added, and is replaced
+ * with an input that has fewer choices and produces all of them.
  *
  * When the corpus has a directory, each entry is stored there in the format
  * "choice-sequence v1", in a file whose name is the hexadecimal SHA-256 of
@@ -47,6 +50,14 @@ final class Corpus
      * @var array<int, true>
      */
     private array $features = [];
+
+    /**
+     * How often an entry was added or replaced, which tells whether the
+     * entries changed since they were looked at last.
+     *
+     * @var non-negative-int
+     */
+    private int $numberOfChanges = 0;
 
     /**
      * @return non-empty-string
@@ -88,9 +99,41 @@ final class Corpus
 
         $this->entries[] = $entry;
 
+        $this->numberOfChanges++;
+
         $this->store($sequence);
 
         return $entry;
+    }
+
+    /**
+     * Replaces the entry with the given index with an input that produced
+     * all the features that the entry owns, unless the input has at least as
+     * many choices as the entry, and returns whether it was replaced. The
+     * input is stored, and the entry is removed from the directory.
+     *
+     * @param non-negative-int $index
+     *
+     * @throws CorpusException
+     */
+    public function replace(int $index, ChoiceSequence $sequence): bool
+    {
+        $entry = $this->entries[$index] ?? null;
+
+        assert($entry !== null);
+
+        if (count($sequence->choices()) >= $entry->length()) {
+            return false;
+        }
+
+        $this->entries[$index] = new CorpusEntry($sequence, $entry->newFeatures(), $index);
+
+        $this->numberOfChanges++;
+
+        $this->store($sequence);
+        $this->remove($entry->sequence()->choices());
+
+        return true;
     }
 
     /**
@@ -141,6 +184,14 @@ final class Corpus
     public function numberOfEntries(): int
     {
         return count($this->entries);
+    }
+
+    /**
+     * @return non-negative-int
+     */
+    public function numberOfChanges(): int
+    {
+        return $this->numberOfChanges;
     }
 
     /**

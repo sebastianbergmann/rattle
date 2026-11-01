@@ -37,6 +37,11 @@ use Random\Randomizer;
  * is passed to the finding handler. The constant operands of comparisons
  * that a result reports, whatever its outcome, are added to the dictionary.
  *
+ * An input that was mutated from a corpus entry, has fewer choices than the
+ * entry, produces all the features that the entry owns, and produces no
+ * feature that is new, replaces the entry, so that the corpus becomes
+ * smaller as fuzzing goes on.
+ *
  * An input to start with that was stored in the directory of the corpus is
  * removed from it when it is rejected or produces no feature that a smaller
  * input to start with did not produce, so that the stored corpus keeps only
@@ -86,6 +91,14 @@ final class Engine
      * @var array<non-negative-int, Job>
      */
     private array $pending = [];
+
+    /**
+     * The entries that the inputs that were submitted and may replace them
+     * were mutated from, by the IDs of the inputs.
+     *
+     * @var array<non-negative-int, CorpusEntry>
+     */
+    private array $parents = [];
 
     /**
      * The number of inputs to start with, which are submitted first and
@@ -225,7 +238,18 @@ final class Engine
             } elseif ($this->corpus->isEmpty() || $this->randomizer->nextFloat() < EngineConfiguration::PROBABILITY_OF_GENERATION) {
                 $job = Job::generate($id, self::seedOf($this->configuration->seed(), $this->numberOfGeneratedInputs++));
             } else {
-                $job = Job::replay($id, $this->mutator->mutate($this->scheduler->choose($this->randomizer), $this->randomizer));
+                $entry   = $this->scheduler->choose($this->randomizer);
+                $choices = $this->mutator->mutate($entry, $this->randomizer);
+                $job     = Job::replay($id, $choices);
+
+                // a mutation with fewer choices than the entry it was mutated
+                // from replaces the entry when it produces all the features
+                // that the entry owns
+                if (count($choices) < $entry->length()) {
+                    $job = $job->withRequiredFeatures($entry->newFeatures());
+
+                    $this->parents[$id] = $entry;
+                }
             }
 
             $this->pending[$id] = $job;
@@ -287,7 +311,9 @@ final class Engine
 
         assert($job !== null);
 
-        unset($this->pending[$result->id()]);
+        $parent = $this->parents[$result->id()] ?? null;
+
+        unset($this->pending[$result->id()], $this->parents[$result->id()]);
 
         $this->statistics->executions++;
 
@@ -325,6 +351,11 @@ final class Engine
         // that it consumed are stored instead
         if ($initial && ($entry === null || $entry->sequence()->choices() !== $job->choices())) {
             $this->removeStoredInput($job);
+        }
+
+        if ($entry === null && $parent !== null && $result->producedRequiredFeatures() &&
+            $this->corpus->replace($parent->index(), $result->sequence())) {
+            $this->statistics->reducedEntries++;
         }
     }
 
