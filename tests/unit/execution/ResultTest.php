@@ -43,6 +43,9 @@ final class ResultTest extends TestCase
             'negative maximum'                 => [['id' => 1, 'outcome' => 'passed', 'sequence' => ['choices' => [1], 'spans' => [], 'maxima' => [-1]], 'features' => []]],
             'feature that is not an integer'   => [['id' => 1, 'outcome' => 'passed', 'sequence' => ['choices' => [1], 'spans' => [], 'maxima' => []], 'features' => ['a']]],
             'drawn value that is not a string' => [['id' => 1, 'outcome' => 'passed', 'sequence' => ['choices' => [], 'spans' => [], 'maxima' => []], 'features' => [], 'drawnValues' => [1]]],
+            'token that is not base64-encoded' => [['id' => 1, 'outcome' => 'passed', 'sequence' => ['choices' => [], 'spans' => [], 'maxima' => []], 'features' => [], 'tokens' => ['not base64!']]],
+            'empty token'                      => [['id' => 1, 'outcome' => 'passed', 'sequence' => ['choices' => [], 'spans' => [], 'maxima' => []], 'features' => [], 'tokens' => ['']]],
+            'token that is not a string'       => [['id' => 1, 'outcome' => 'passed', 'sequence' => ['choices' => [], 'spans' => [], 'maxima' => []], 'features' => [], 'tokens' => [1]]],
         ];
     }
 
@@ -61,6 +64,19 @@ final class ResultTest extends TestCase
         $this->assertEquals($failed, Result::fromArray($failed->asArray()));
         $this->assertTrue($failed->isFinding());
         $this->assertFalse($passed->isFinding());
+    }
+
+    public function testHasTheTokensThatWereFoundWhileTheInputWasExecuted(): void
+    {
+        $result = new Result(1, Outcome::Passed, null, new ChoiceSequence([1]), [], null);
+
+        $this->assertSame([], $result->tokens());
+        $this->assertArrayNotHasKey('tokens', $result->asArray());
+
+        $result = $result->withTokens(["\x89PNG\r\n", 'GET']);
+
+        $this->assertSame(["\x89PNG\r\n", 'GET'], Result::fromArray($result->asArray())->tokens());
+        $this->assertSame(['GET'], $result->withTokens(['GET'])->withFailure(Failure::exit())->tokens());
     }
 
     public function testTheInputThatWasSentStandsInForTheConsumedSequenceWhenTheProcessEnded(): void

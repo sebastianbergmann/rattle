@@ -9,7 +9,10 @@
  */
 namespace SebastianBergmann\Rattle;
 
+use function array_map;
 use function assert;
+use function base64_decode;
+use function base64_encode;
 use function is_array;
 use function is_int;
 use function is_string;
@@ -22,6 +25,11 @@ use SebastianBergmann\ChoiceSequence\SpanKind;
  * target fail, the choice sequence it consumed, with spans and maxima, the
  * features it produced that the process that executed it had not seen
  * before, and, when asked for, the values that were drawn.
+ *
+ * A result also has the constant operands of comparisons that the process
+ * found in the code that it instrumented and had not reported before, which
+ * are tokens for the dictionary. They are base64-encoded for the protocol,
+ * because they are often not valid UTF-8.
  *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
@@ -46,6 +54,11 @@ final readonly class Result
      * @var ?list<string>
      */
     private ?array $drawnValues;
+
+    /**
+     * @var list<non-empty-string>
+     */
+    private array $tokens;
 
     /**
      * The result of an input during which the process of a worker ended
@@ -88,6 +101,18 @@ final readonly class Result
             $drawnValues = ProtocolData::listOfStrings($data['drawnValues']);
         }
 
+        $tokens = [];
+
+        foreach (ProtocolData::listOfStrings($data['tokens'] ?? []) as $token) {
+            $token = base64_decode($token, true);
+
+            if ($token === false || $token === '') {
+                throw new ProtocolException('Invalid token');
+            }
+
+            $tokens[] = $token;
+        }
+
         return new self(
             $id,
             $outcome,
@@ -95,15 +120,17 @@ final readonly class Result
             self::sequenceFromArray(ProtocolData::array($data['sequence'] ?? null)),
             ProtocolData::listOfIntegers($data['features'] ?? null),
             $drawnValues,
+            $tokens,
         );
     }
 
     /**
-     * @param non-negative-int $id
-     * @param list<int>        $features
-     * @param ?list<string>    $drawnValues
+     * @param non-negative-int       $id
+     * @param list<int>              $features
+     * @param ?list<string>          $drawnValues
+     * @param list<non-empty-string> $tokens
      */
-    public function __construct(int $id, Outcome $outcome, ?Failure $failure, ChoiceSequence $sequence, array $features, ?array $drawnValues)
+    public function __construct(int $id, Outcome $outcome, ?Failure $failure, ChoiceSequence $sequence, array $features, ?array $drawnValues, array $tokens = [])
     {
         assert(($failure !== null) === $outcome->isFinding());
 
@@ -113,6 +140,7 @@ final readonly class Result
         $this->sequence    = $sequence;
         $this->features    = $features;
         $this->drawnValues = $drawnValues;
+        $this->tokens      = $tokens;
     }
 
     /**
@@ -162,9 +190,28 @@ final readonly class Result
         return $this->drawnValues;
     }
 
+    /**
+     * The constant operands of comparisons that were found in code that was
+     * instrumented and were not reported before.
+     *
+     * @return list<non-empty-string>
+     */
+    public function tokens(): array
+    {
+        return $this->tokens;
+    }
+
     public function withFailure(Failure $failure): self
     {
-        return new self($this->id, Outcome::Failed, $failure, $this->sequence, $this->features, $this->drawnValues);
+        return new self($this->id, Outcome::Failed, $failure, $this->sequence, $this->features, $this->drawnValues, $this->tokens);
+    }
+
+    /**
+     * @param list<non-empty-string> $tokens
+     */
+    public function withTokens(array $tokens): self
+    {
+        return new self($this->id, $this->outcome, $this->failure, $this->sequence, $this->features, $this->drawnValues, $tokens);
     }
 
     /**
@@ -200,6 +247,10 @@ final readonly class Result
 
         if ($this->drawnValues !== null) {
             $data['drawnValues'] = $this->drawnValues;
+        }
+
+        if ($this->tokens !== []) {
+            $data['tokens'] = array_map(base64_encode(...), $this->tokens);
         }
 
         return $data;

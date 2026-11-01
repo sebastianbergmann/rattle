@@ -183,6 +183,20 @@ final class ProcessExecutorTest extends TestCase
         $this->assertSame(3, $executor->numberOfRestarts());
     }
 
+    public function testReportsTheConstantOperandsOfComparisonsInTheCodeThatIsInstrumentedOnce(): void
+    {
+        $executor = $this->executor();
+        $executor->start();
+
+        $first  = $executor->execute(Job::replay(0, [Behaviour::PASS, 0]));
+        $second = $executor->execute(Job::replay(1, [Behaviour::PASS, 0]));
+
+        // the switch of Behaviour::run() compares with the constants of its
+        // class, of which only 10 and 11 have more than one digit
+        $this->assertSame(['10', '11'], $first->tokens());
+        $this->assertSame([], $second->tokens());
+    }
+
     public function testExecutesBatchesOnSeveralWorkers(): void
     {
         $executor = $this->executor(3);

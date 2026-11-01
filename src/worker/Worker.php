@@ -31,6 +31,7 @@ use function sprintf;
 use function strtolower;
 use function substr;
 use function trim;
+use SebastianBergmann\Rattle\Instrumentation\ComparisonOperands;
 use SebastianBergmann\Rattle\Instrumentation\IncludeHook;
 use SebastianBergmann\Rattle\Instrumentation\Instrumentor;
 use Throwable;
@@ -61,12 +62,14 @@ final class Worker
     private const int DEFAULT_MEMORY_THRESHOLD = 512 * 1024 * 1024;
     private readonly WorkerConfiguration $configuration;
     private readonly FrameStream $stream;
+    private readonly ComparisonOperands $operands;
     private ?InputRunner $runner = null;
 
     public function __construct(WorkerConfiguration $configuration, FrameStream $stream)
     {
         $this->configuration = $configuration;
         $this->stream        = $stream;
+        $this->operands      = new ComparisonOperands;
     }
 
     /**
@@ -81,7 +84,7 @@ final class Worker
         $this->prepareProcess();
 
         $phpunit = $this->configuration->phpunit();
-        $hook    = new IncludeHook(new Instrumentor, $this->configuration->sources(), $phpunit === null ? [$this->configuration->target()] : []);
+        $hook    = new IncludeHook(new Instrumentor($this->operands), $this->configuration->sources(), $phpunit === null ? [$this->configuration->target()] : []);
 
         try {
             $hook->register();
@@ -162,7 +165,10 @@ final class Worker
                         $this->redirectOutput();
                     }
 
-                    $result = $runner->run($job)->asArray();
+                    // the constant operands of the comparisons in the code
+                    // that was instrumented, before the input or while it was
+                    // executed, are reported with its result
+                    $result = $runner->run($job)->withTokens($this->operands->takeUnreported())->asArray();
 
                     // output of the target is forwarded after each input
                     @ob_flush();
@@ -210,7 +216,7 @@ final class Worker
         // after the memory limit was exceeded, reporting the result needs memory
         ini_set('memory_limit', '-1');
 
-        $this->stream->write(['type' => 'result', 'result' => $result->asArray(), 'last' => true]);
+        $this->stream->write(['type' => 'result', 'result' => $result->withTokens($this->operands->takeUnreported())->asArray(), 'last' => true]);
     }
 
     private function prepareProcess(): void
