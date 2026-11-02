@@ -59,6 +59,18 @@ final class FeaturesTest extends TestCase
         );
     }
 
+    public function testFindsTheFeaturesThatWereNotSeenAndAddsThemToTheSeenFeatures(): void
+    {
+        $seen = [5 => true];
+
+        $this->assertSame([1 << 56 | 6, 2 << 56 | 7], Features::unseen([5 => 1, 6 => 2, 7 => 3], $seen));
+        $this->assertSame([5 => true, 1 << 56 | 6 => true, 2 << 56 | 7 => true], $seen);
+
+        // another bucket of an edge that was seen is a feature of its own
+        $this->assertSame([3 << 56 | 5], Features::unseen([5 => 4, 6 => 2], $seen));
+        $this->assertSame([], Features::unseen([5 => 7, 6 => 2], $seen));
+    }
+
     public function testTellsWhetherAnExecutionProducedFeatures(): void
     {
         $edge = 0x0FFFFFFF << 28 | 0x0FFFFFFF;

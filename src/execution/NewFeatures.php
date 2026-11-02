@@ -34,16 +34,7 @@ final class NewFeatures
      */
     public function of(array $hits): array
     {
-        $features = [];
-
-        foreach (Features::fromEdges($hits) as $feature) {
-            if (!isset($this->seen[$feature])) {
-                $this->seen[$feature] = true;
-                $features[]           = $feature;
-            }
-        }
-
-        return $features;
+        return Features::unseen($hits, $this->seen);
     }
 
     /**

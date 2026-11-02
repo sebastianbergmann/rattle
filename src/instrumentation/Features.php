@@ -19,6 +19,10 @@ namespace SebastianBergmann\Rattle\Instrumentation;
  * when it takes an edge that was not taken before, or takes an edge a number
  * of times that falls into a bucket that was not seen for this edge before.
  *
+ * The features of every execution are computed, so the bucket of a number of
+ * hits is looked up in a table, and the features that were not seen before
+ * are found in one pass over the edges.
+ *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
  * @internal This class is not covered by the backward compatibility promise for sebastian/rattle
@@ -26,9 +30,19 @@ namespace SebastianBergmann\Rattle\Instrumentation;
 final readonly class Features
 {
     /**
-     * The smallest number of hits that falls into each bucket.
+     * The bucket of every number of hits below 128, from which on the number
+     * falls into the last bucket, 7.
      */
-    private const array LOWER_BOUNDS = [1, 2, 3, 4, 8, 16, 32, 128];
+    private const array BUCKETS = [
+        0, 0, 1, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4,
+        5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+        6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+        6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+        6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+        6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+        6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+        6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+    ];
 
     /**
      * @param array<int, positive-int> $hits how often each edge was taken
@@ -37,10 +51,40 @@ final readonly class Features
      */
     public static function fromEdges(array $hits): array
     {
+        $buckets  = self::BUCKETS;
         $features = [];
 
         foreach ($hits as $edge => $count) {
-            $features[] = (self::bucketOf($count) << 56) | $edge;
+            $features[] = (($count < 128 ? $buckets[$count] : 7) << 56) | $edge;
+        }
+
+        return $features;
+    }
+
+    /**
+     * The features of an execution that took the edges as often as given
+     * that are not among the features that were seen, which are added to
+     * them.
+     *
+     * @param array<int, positive-int> $hits how often each edge was taken
+     * @param array<int, true>         $seen
+     *
+     * @param-out array<int, true> $seen
+     *
+     * @return list<int>
+     */
+    public static function unseen(array $hits, array &$seen): array
+    {
+        $buckets  = self::BUCKETS;
+        $features = [];
+
+        foreach ($hits as $edge => $count) {
+            $feature = (($count < 128 ? $buckets[$count] : 7) << 56) | $edge;
+
+            if (!isset($seen[$feature])) {
+                $seen[$feature] = true;
+                $features[]     = $feature;
+            }
         }
 
         return $features;
@@ -73,14 +117,6 @@ final readonly class Features
      */
     public static function bucketOf(int $count): int
     {
-        $bucket = 0;
-
-        foreach (self::LOWER_BOUNDS as $index => $lowerBound) {
-            if ($count >= $lowerBound) {
-                $bucket = $index;
-            }
-        }
-
-        return $bucket;
+        return $count < 128 ? self::BUCKETS[$count] : 7;
     }
 }
