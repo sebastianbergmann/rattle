@@ -276,6 +276,19 @@ final readonly class WorkerConfiguration
     }
 
     /**
+     * The settings that PHP is started with for the worker process. OPcache
+     * caches instrumented code under the path of the file that it was
+     * instrumented from, so its file cache is turned off: instrumented code
+     * must never be stored where another process could load it.
+     *
+     * @return list<string>
+     */
+    public function phpSettings(): array
+    {
+        return ['-d', 'opcache.file_cache=', '-d', 'opcache.file_cache_only=0'];
+    }
+
+    /**
      * @return list<string>
      */
     public function asArguments(): array

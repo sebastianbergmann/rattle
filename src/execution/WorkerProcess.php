@@ -131,7 +131,7 @@ final class WorkerProcess
         }
 
         return self::start(
-            [($php ?? PhpBinary::current())->path(), $executable, 'worker', ...$configuration->asArguments()],
+            [($php ?? PhpBinary::current())->path(), ...$configuration->phpSettings(), $executable, 'worker', ...$configuration->asArguments()],
             $environment,
         );
     }

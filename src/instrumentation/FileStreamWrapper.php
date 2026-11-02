@@ -123,6 +123,12 @@ final class FileStreamWrapper
     private mixed $stream = null;
 
     /**
+     * The real path of the included file whose transformed code the stream in
+     * memory holds.
+     */
+    private ?string $transformed = null;
+
+    /**
      * @var null|resource
      */
     private mixed $directory = null;
@@ -208,8 +214,9 @@ final class FileStreamWrapper
                     fwrite($stream, $code);
                     rewind($stream);
 
-                    $this->stream = $stream;
-                    $openedPath   = $realpath;
+                    $this->stream      = $stream;
+                    $this->transformed = $realpath;
+                    $openedPath        = $realpath;
 
                     return true;
                 }
@@ -288,11 +295,33 @@ final class FileStreamWrapper
     }
 
     /**
+     * The stream in memory that holds transformed code has no modification
+     * time, and OPcache does not cache code without one while it checks
+     * timestamps. For transformed code, the metadata of the included file is
+     * reported instead, with the size of the transformed code.
+     *
      * @return array<int|string, int>|false
      */
     public function stream_stat(): array|false
     {
-        return fstat($this->stream());
+        $stat = fstat($this->stream());
+
+        if ($stat === false || $this->transformed === null) {
+            return $stat;
+        }
+
+        $path     = $this->transformed;
+        $original = self::native(static fn (): array|false => @stat($path));
+
+        if (!is_array($original)) {
+            // @codeCoverageIgnoreStart
+            return $stat;
+            // @codeCoverageIgnoreEnd
+        }
+
+        $original[7] = $original['size'] = $stat['size'];
+
+        return $original;
     }
 
     public function stream_set_option(int $option, int $first, ?int $second): bool

@@ -90,6 +90,13 @@ final class WorkerConfigurationTest extends TestCase
         $this->assertEquals($configuration, WorkerConfiguration::fromArguments($configuration->asArguments()));
     }
 
+    public function testTurnsTheFileCacheOfOpcacheOffForTheWorkerProcess(): void
+    {
+        $configuration = new WorkerConfiguration('target.php', null, [], 1, 100, null, false, 50);
+
+        $this->assertSame(['-d', 'opcache.file_cache=', '-d', 'opcache.file_cache_only=0'], $configuration->phpSettings());
+    }
+
     /**
      * @param list<string> $arguments
      */

@@ -45,6 +45,7 @@ use function scandir;
 use function sort;
 use function stream_set_blocking;
 use function stream_set_write_buffer;
+use function strlen;
 use function symlink;
 use function sys_get_temp_dir;
 use function touch;
@@ -121,6 +122,27 @@ final class FileStreamWrapperTest extends TestCase
         $this->assertSame('untouched', include $this->directory . '/untouched.php');
         $this->assertTrue(require_once $this->directory . '/untouched.php');
         $this->assertSame([$this->directory . '/untouched.php'], $this->transformed);
+    }
+
+    public function testReportsTheMetadataOfAnIncludedFileWithTheSizeOfItsTransformedCode(): void
+    {
+        $path       = $this->directory . '/transformed.php';
+        $wrapper    = new FileStreamWrapper;
+        $openedPath = null;
+
+        touch($path, 1000000000);
+
+        // PHP passes 0x80 when it opens a file for include or require
+        $this->assertTrue($wrapper->stream_open($path, 'rb', 0x80, $openedPath));
+
+        $stat = $wrapper->stream_stat();
+
+        $wrapper->stream_close();
+
+        $this->assertIsArray($stat);
+        $this->assertSame(1000000000, $stat['mtime'] ?? null);
+        $this->assertSame(strlen("<?php return 'transformed from ' . __FILE__;\n"), $stat['size'] ?? null);
+        $this->assertSame($stat['size'], $stat[7] ?? null);
     }
 
     public function testDoesNotTransformFilesThatAreReadButNotIncluded(): void
