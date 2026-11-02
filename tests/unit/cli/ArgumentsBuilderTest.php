@@ -152,6 +152,13 @@ final class ArgumentsBuilderTest extends TestCase
         $this->assertTrue($arguments->raw());
     }
 
+    public function testReplacesWorkersLessOftenByDefaultWithOpcache(): void
+    {
+        $this->assertSame(100000, (new ArgumentsBuilder)->build(['rattle', 'fuzz', 'target.php', '--opcache'])->numberOfExecutionsPerWorker());
+        $this->assertSame(50, (new ArgumentsBuilder)->build(['rattle', 'fuzz', 'target.php', '--opcache', '--worker-executions', '50'])->numberOfExecutionsPerWorker());
+        $this->assertSame(100000, (new ArgumentsBuilder)->build(['rattle', 'regress', 'target.php', '--opcache'])->numberOfExecutionsPerWorker());
+    }
+
     public function testParsesTheOptionsForFuzzingThePropertiesOfAPhpunitTestSuite(): void
     {
         $arguments = (new ArgumentsBuilder)->build(['rattle', 'fuzz', '--phpunit', '--configuration', 'phpunit.xml', '--filter', 'Parser']);

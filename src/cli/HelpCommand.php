@@ -50,7 +50,8 @@ Options for "rattle fuzz":
   --max-time <duration>       Stop after this duration, for instance 90s, 30m, 12h, or 2d
   --max-executions <n>        Stop after this number of executions
   --max-shrink-attempts <n>   Maximum number of attempts to minimize a finding (default: 500)
-  --worker-executions <n>     Replace a worker after this number of executions (default: 10000)
+  --worker-executions <n>     Replace a worker after this number of executions
+                              (default: 10000, with --opcache 100000)
   --corpus <dir>              Import the choice sequences in this directory
   --seeds <dir>               Import the raw files in this directory (bytes targets only)
   --dictionary <file>         Insert the tokens of this dictionary file

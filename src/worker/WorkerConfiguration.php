@@ -31,6 +31,13 @@ final readonly class WorkerConfiguration
 {
     public const int DEFAULT_TIMEOUT                         = 1;
     public const int DEFAULT_NUMBER_OF_EXECUTIONS_PER_WORKER = 10000;
+
+    /**
+     * With OPcache and its JIT, a worker process takes longer to start,
+     * because the JIT compiles the functions of every file that it loads, so
+     * it is replaced less often.
+     */
+    public const int DEFAULT_NUMBER_OF_EXECUTIONS_PER_WORKER_WITH_OPCACHE = 100000;
     private string $target;
     private ?string $bootstrap;
 

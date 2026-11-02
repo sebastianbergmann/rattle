@@ -164,7 +164,7 @@ final readonly class ArgumentsBuilder
         $maximumNumberOfExecutions        = null;
         $maximumNumberOfChoices           = ChoiceSource::DEFAULT_MAXIMUM_NUMBER_OF_CHOICES;
         $maximumNumberOfShrinkingAttempts = Minimizer::DEFAULT_MAXIMUM_NUMBER_OF_ATTEMPTS;
-        $numberOfExecutionsPerWorker      = WorkerConfiguration::DEFAULT_NUMBER_OF_EXECUTIONS_PER_WORKER;
+        $numberOfExecutionsPerWorker      = null;
         $corpusDirectories                = [];
         $seedsDirectory                   = null;
         $dictionary                       = null;
@@ -359,6 +359,10 @@ final readonly class ArgumentsBuilder
 
         if ($phpunit && $seedsDirectory !== null) {
             throw new ArgumentsBuilderException('The option --seeds cannot be used with --phpunit, because properties are not bytes targets');
+        }
+
+        if ($numberOfExecutionsPerWorker === null) {
+            $numberOfExecutionsPerWorker = $opcache ? WorkerConfiguration::DEFAULT_NUMBER_OF_EXECUTIONS_PER_WORKER_WITH_OPCACHE : WorkerConfiguration::DEFAULT_NUMBER_OF_EXECUTIONS_PER_WORKER;
         }
 
         return new Arguments(
