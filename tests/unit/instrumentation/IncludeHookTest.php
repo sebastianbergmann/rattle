@@ -51,6 +51,25 @@ final class IncludeHookTest extends TestCase
         $this->assertFalse($hook->shouldInstrument((string) realpath(__DIR__ . '/../../../src/instrumentation/Edges.php')));
     }
 
+    public function testInstrumentsASourceDirectoryInAVendorDirectoryButNotTheVendorDirectoriesBelowIt(): void
+    {
+        $source = (string) realpath(self::FIXTURES . '/vendor/package');
+        $hook   = new IncludeHook(new Instrumentor, [$source], []);
+
+        $this->assertTrue($hook->shouldInstrument($source . '/vendored.php'));
+        $this->assertFalse($hook->shouldInstrument($source . '/vendor/other/file.php'));
+    }
+
+    public function testInstrumentsAVendorDirectoryBelowASourceDirectoryWhenItIsASourceDirectoryItself(): void
+    {
+        $root    = (string) realpath(self::FIXTURES);
+        $package = (string) realpath(self::FIXTURES . '/vendor/package');
+        $hook    = new IncludeHook(new Instrumentor, [$root, $package], []);
+
+        $this->assertTrue($hook->shouldInstrument($package . '/vendored.php'));
+        $this->assertFalse($hook->shouldInstrument($root . '/vendor/other/file.php'));
+    }
+
     public function testInstrumentsFilesWhileTheyAreIncluded(): void
     {
         $hook = new IncludeHook(new Instrumentor, [self::FIXTURES], [self::FIXTURES . '/source/excluded.php']);

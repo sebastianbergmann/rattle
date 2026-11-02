@@ -187,7 +187,7 @@ With `--phpunit`, these commands work on the properties of a PHPUnit test suite 
 
 With `--php <binary>`, `rattle fuzz`, `rattle run`, and `rattle regress` compare the outcomes of inputs on other versions of PHP, see [Differences between versions of PHP](#differences-between-versions-of-php).
 
-Only the code in your source directories is instrumented: the directories given with `--source`, otherwise the `<directory>` and `<file>` entries in `<source><include>` of the PHPUnit configuration file, otherwise `src/`. The configuration file is the one given with `--configuration`, otherwise `phpunit.xml`, `phpunit.dist.xml`, or `phpunit.xml.dist` in the working directory, as for PHPUnit. Code in `vendor/` is never instrumented.
+Only the code in your source directories is instrumented: the directories given with `--source`, otherwise the `<directory>` and `<file>` entries in `<source><include>` of the PHPUnit configuration file, otherwise `src/`. The configuration file is the one given with `--configuration`, otherwise `phpunit.xml`, `phpunit.dist.xml`, or `phpunit.xml.dist` in the working directory, as for PHPUnit. Code in a `vendor/` directory below a source directory is not instrumented. A source directory can be in a `vendor/` directory itself, though: with `--source vendor/<vendor>/<package>/src`, rattle instruments a library that is installed with Composer.
 
 Run `rattle --help` for all options. The exit code is 0 when there is no new finding, 1 when there is at least one new finding, and 2 when the usage or the configuration is invalid.
 
@@ -238,7 +238,7 @@ These constructs are not instrumented:
 * expressions that must be constant: default values of parameters and properties, constants, values of enumeration cases, attribute arguments, initializers of `static` variables, and values in `declare`, including closures within them
 * the body of an arrow function that returns by reference, which cannot be wrapped without returning a value instead of a reference
 * `xor`, which always evaluates both operands, a `match` without a matching arm, and expressions that are aborted by an exception: these do not lead to edges of their own
-* code that is not loaded from a file below your source directories, such as code in `vendor/`, code that is passed to `eval()`, and files that are loaded before rattle registers its include hook, such as the files that Composer's autoloader includes eagerly (`autoload.files`)
+* code that is not loaded from a file below your source directories, or from a `vendor/` directory below one, code that is passed to `eval()`, and files that are loaded before rattle registers its include hook, such as the files that Composer's autoloader includes eagerly (`autoload.files`)
 
 ## The dictionary
 

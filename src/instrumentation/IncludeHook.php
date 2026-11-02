@@ -15,12 +15,16 @@ use function realpath;
 use function rtrim;
 use function str_contains;
 use function str_starts_with;
+use function strlen;
+use function substr;
 
 /**
  * Instruments the files below the source directories while they are
- * included (see FileStreamWrapper). Files in a vendor directory, the target
- * file, and rattle's own files are never instrumented. Files in a PHAR are
- * not included through file:// and are not instrumented either.
+ * included (see FileStreamWrapper). Files in a vendor directory below a
+ * source directory, the target file, and rattle's own files are never
+ * instrumented. A source directory can be in a vendor directory itself, the
+ * one of a library that is installed with Composer, for instance. Files in a
+ * PHAR are not included through file:// and are not instrumented either.
  *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
@@ -68,10 +72,6 @@ final class IncludeHook
 
     public function shouldInstrument(string $path): bool
     {
-        if (str_contains($path, '/vendor/')) {
-            return false;
-        }
-
         foreach ($this->excluded as $excluded) {
             if (self::contains($excluded, $path)) {
                 return false;
@@ -79,7 +79,8 @@ final class IncludeHook
         }
 
         foreach ($this->sources as $source) {
-            if (self::contains($source, $path)) {
+            // the vendor directories above a source directory do not count
+            if (self::contains($source, $path) && !str_contains(substr($path, strlen($source)), '/vendor/')) {
                 return true;
             }
         }
