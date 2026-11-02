@@ -56,6 +56,7 @@ final readonly class WorkerConfiguration
      */
     private int $numberOfExecutions;
     private ?PhpunitTestSuite $phpunit;
+    private bool $opcache;
 
     /**
      * @param list<string> $arguments
@@ -75,6 +76,7 @@ final readonly class WorkerConfiguration
         $phpunit                = false;
         $phpunitConfiguration   = null;
         $phpunitFilter          = null;
+        $opcache                = false;
 
         for ($i = 0; $i < count($arguments); $i++) {
             $argument = $arguments[$i];
@@ -87,6 +89,12 @@ final readonly class WorkerConfiguration
 
             if ($argument === '--phpunit') {
                 $phpunit = true;
+
+                continue;
+            }
+
+            if ($argument === '--opcache') {
+                $opcache = true;
 
                 continue;
             }
@@ -164,6 +172,7 @@ final readonly class WorkerConfiguration
             $ignoreDeprecations,
             $numberOfExecutions,
             $phpunit ? new PhpunitTestSuite($phpunitConfiguration, $phpunitFilter) : null,
+            $opcache,
         );
     }
 
@@ -173,8 +182,9 @@ final readonly class WorkerConfiguration
      * @param positive-int $timeout
      * @param positive-int $maximumNumberOfChoices
      * @param positive-int $numberOfExecutions
+     * @param bool         $opcache                whether the worker process runs with OPcache and its JIT
      */
-    public function __construct(string $target, ?string $bootstrap, array $sources, int $timeout, int $maximumNumberOfChoices, ?string $memoryLimit, bool $ignoreDeprecations, int $numberOfExecutions, ?PhpunitTestSuite $phpunit = null)
+    public function __construct(string $target, ?string $bootstrap, array $sources, int $timeout, int $maximumNumberOfChoices, ?string $memoryLimit, bool $ignoreDeprecations, int $numberOfExecutions, ?PhpunitTestSuite $phpunit = null, bool $opcache = false)
     {
         $this->target                 = $target;
         $this->bootstrap              = $bootstrap;
@@ -185,6 +195,7 @@ final readonly class WorkerConfiguration
         $this->ignoreDeprecations     = $ignoreDeprecations;
         $this->numberOfExecutions     = $numberOfExecutions;
         $this->phpunit                = $phpunit;
+        $this->opcache                = $opcache;
     }
 
     /**
@@ -204,6 +215,7 @@ final readonly class WorkerConfiguration
             $this->ignoreDeprecations,
             $this->numberOfExecutions,
             $this->phpunit,
+            $this->opcache,
         );
     }
 
@@ -276,16 +288,44 @@ final readonly class WorkerConfiguration
     }
 
     /**
-     * The settings that PHP is started with for the worker process. OPcache
-     * caches instrumented code under the path of the file that it was
-     * instrumented from, so its file cache is turned off: instrumented code
-     * must never be stored where another process could load it.
+     * Whether the worker process runs with OPcache and its JIT.
+     */
+    public function opcache(): bool
+    {
+        return $this->opcache;
+    }
+
+    /**
+     * The settings that PHP is started with for the worker process: OPcache
+     * and its JIT, when they are turned on, and otherwise the settings of
+     * php.ini. OPcache caches instrumented code under the path of the file
+     * that it was instrumented from, so its file cache is turned off either
+     * way: instrumented code must never be stored where another process could
+     * load it.
+     *
+     * The JIT compiles the functions of a file when the file is loaded. The
+     * tracing JIT compiles the code that is executed often while it is
+     * executed, so an execution during which it compiles uses more memory
+     * than one during which it does not: whether an input exhausts the memory
+     * would depend on the inputs that the worker process executed before.
      *
      * @return list<string>
      */
     public function phpSettings(): array
     {
-        return ['-d', 'opcache.file_cache=', '-d', 'opcache.file_cache_only=0'];
+        $settings = ['-d', 'opcache.file_cache=', '-d', 'opcache.file_cache_only=0'];
+
+        if ($this->opcache) {
+            $settings = [
+                ...$settings,
+                '-d', 'opcache.enable=1',
+                '-d', 'opcache.enable_cli=1',
+                '-d', 'opcache.jit=function',
+                '-d', 'opcache.jit_buffer_size=128M',
+            ];
+        }
+
+        return $settings;
     }
 
     /**
@@ -326,6 +366,10 @@ final readonly class WorkerConfiguration
 
         $arguments[] = '--worker-executions';
         $arguments[] = (string) $this->numberOfExecutions;
+
+        if ($this->opcache) {
+            $arguments[] = '--opcache';
+        }
 
         if ($this->phpunit !== null) {
             $arguments[] = '--phpunit';

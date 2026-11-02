@@ -95,6 +95,7 @@ final class ArgumentsBuilderTest extends TestCase
         $this->assertNull($arguments->inputLog());
         $this->assertNull($arguments->sarifFile());
         $this->assertSame([], $arguments->phpBinaries());
+        $this->assertFalse($arguments->opcache());
         $this->assertFalse($arguments->help());
         $this->assertFalse($arguments->version());
     }
@@ -111,7 +112,7 @@ final class ArgumentsBuilderTest extends TestCase
                 '--cache-directory', 'cache', '--findings-directory', 'findings',
                 '--bootstrap', 'bootstrap.php', '--source', 'src', '--source', 'lib',
                 '--ignore-deprecations', '--stop-on-finding', '--verbose', '--log-inputs', 'inputs.log',
-                '--sarif', 'findings.sarif', '--php', '/usr/bin/php8.6', '--php', '/usr/bin/php8.7',
+                '--sarif', 'findings.sarif', '--php', '/usr/bin/php8.6', '--php', '/usr/bin/php8.7', '--opcache',
             ],
         );
 
@@ -137,6 +138,7 @@ final class ArgumentsBuilderTest extends TestCase
         $this->assertSame('inputs.log', $arguments->inputLog());
         $this->assertSame('findings.sarif', $arguments->sarifFile());
         $this->assertSame(['/usr/bin/php8.6', '/usr/bin/php8.7'], $arguments->phpBinaries());
+        $this->assertTrue($arguments->opcache());
     }
 
     public function testParsesTheArgumentsOfTheRunCommand(): void

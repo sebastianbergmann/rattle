@@ -95,6 +95,7 @@ Options for all commands:
   --source <dir>              Instrument the code in this directory, can be repeated
                               (default: <source> of the PHPUnit configuration, otherwise src/)
   --ignore-deprecations       Deprecations are not findings
+  --opcache                   Run the worker processes with OPcache and its JIT
   --verbose                   Show what the worker processes write to standard error
 
 Exit codes: 0 when there is no new finding, 1 when there is a new finding

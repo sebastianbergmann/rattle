@@ -36,6 +36,7 @@ final readonly class ArgumentsBuilder
         'bootstrap=',
         'source=',
         'ignore-deprecations',
+        'opcache',
         'verbose',
     ];
     private const array COMMANDS = [
@@ -178,6 +179,7 @@ final readonly class ArgumentsBuilder
         $inputLog                         = null;
         $sarifFile                        = null;
         $phpBinaries                      = [];
+        $opcache                          = false;
         $json                             = false;
         $htmlFile                         = null;
         $help                             = false;
@@ -271,6 +273,11 @@ final readonly class ArgumentsBuilder
 
                 case '--ignore-deprecations':
                     $ignoreDeprecations = true;
+
+                    break;
+
+                case '--opcache':
+                    $opcache = true;
 
                     break;
 
@@ -388,6 +395,7 @@ final readonly class ArgumentsBuilder
             $json,
             $htmlFile,
             $phpBinaries,
+            $opcache,
         );
     }
 

@@ -38,7 +38,7 @@ final class WorkerConfigurationTest extends TestCase
 
     public function testCanBePassedAsArguments(): void
     {
-        $configuration = new WorkerConfiguration('target.php', 'bootstrap.php', ['src', 'lib'], 2, 100, '256M', true, 50);
+        $configuration = new WorkerConfiguration('target.php', 'bootstrap.php', ['src', 'lib'], 2, 100, '256M', true, 50, null, true);
         $parsed        = WorkerConfiguration::fromArguments($configuration->asArguments());
 
         $this->assertEquals($configuration, $parsed);
@@ -50,6 +50,7 @@ final class WorkerConfigurationTest extends TestCase
         $this->assertSame('256M', $parsed->memoryLimit());
         $this->assertTrue($parsed->ignoreDeprecations());
         $this->assertSame(50, $parsed->numberOfExecutions());
+        $this->assertTrue($parsed->opcache());
     }
 
     public function testCanBePassedAsArgumentsForAPropertyOfAPhpunitTestSuite(): void
@@ -87,6 +88,7 @@ final class WorkerConfigurationTest extends TestCase
         $this->assertNull($configuration->memoryLimit());
         $this->assertFalse($configuration->ignoreDeprecations());
         $this->assertSame(10000, $configuration->numberOfExecutions());
+        $this->assertFalse($configuration->opcache());
         $this->assertEquals($configuration, WorkerConfiguration::fromArguments($configuration->asArguments()));
     }
 
@@ -95,6 +97,24 @@ final class WorkerConfigurationTest extends TestCase
         $configuration = new WorkerConfiguration('target.php', null, [], 1, 100, null, false, 50);
 
         $this->assertSame(['-d', 'opcache.file_cache=', '-d', 'opcache.file_cache_only=0'], $configuration->phpSettings());
+    }
+
+    public function testTurnsOpcacheAndItsJitOnForTheWorkerProcessWhenItIsAskedTo(): void
+    {
+        $configuration = new WorkerConfiguration('target.php', null, [], 1, 100, null, false, 50, null, true);
+
+        $this->assertSame(
+            [
+                '-d', 'opcache.file_cache=',
+                '-d', 'opcache.file_cache_only=0',
+                '-d', 'opcache.enable=1',
+                '-d', 'opcache.enable_cli=1',
+                '-d', 'opcache.jit=function',
+                '-d', 'opcache.jit_buffer_size=128M',
+            ],
+            $configuration->phpSettings(),
+        );
+        $this->assertTrue($configuration->withTarget('other.php')->opcache());
     }
 
     /**

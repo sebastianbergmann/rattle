@@ -84,6 +84,7 @@ final readonly class Setup
             $arguments->ignoreDeprecations(),
             $arguments->numberOfExecutionsPerWorker(),
             $phpunit,
+            $arguments->opcache(),
         );
     }
 

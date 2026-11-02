@@ -104,6 +104,7 @@ final readonly class Arguments
      * @var list<non-empty-string>
      */
     private array $phpBinaries;
+    private bool $opcache;
 
     /**
      * @param ?non-empty-string      $command
@@ -121,7 +122,7 @@ final readonly class Arguments
      * @param ?non-empty-string      $htmlFile
      * @param list<non-empty-string> $phpBinaries
      */
-    public function __construct(?string $command, ?string $target, ?string $input, ?int $jobs, ?int $seed, int $timeout, ?string $memoryLimit, ?float $maximumTime, ?int $maximumNumberOfExecutions, int $maximumNumberOfChoices, int $maximumNumberOfShrinkingAttempts, int $numberOfExecutionsPerWorker, array $corpusDirectories, ?string $seedsDirectory, ?string $dictionary, string $cacheDirectory, string $findingsDirectory, ?string $bootstrap, array $sources, bool $ignoreDeprecations, bool $stopOnFinding, bool $verbose, bool $raw, ?string $inputLog, bool $help, bool $version, bool $phpunit = false, ?string $phpunitConfiguration = null, ?string $phpunitFilter = null, ?string $sarifFile = null, bool $json = false, ?string $htmlFile = null, array $phpBinaries = [])
+    public function __construct(?string $command, ?string $target, ?string $input, ?int $jobs, ?int $seed, int $timeout, ?string $memoryLimit, ?float $maximumTime, ?int $maximumNumberOfExecutions, int $maximumNumberOfChoices, int $maximumNumberOfShrinkingAttempts, int $numberOfExecutionsPerWorker, array $corpusDirectories, ?string $seedsDirectory, ?string $dictionary, string $cacheDirectory, string $findingsDirectory, ?string $bootstrap, array $sources, bool $ignoreDeprecations, bool $stopOnFinding, bool $verbose, bool $raw, ?string $inputLog, bool $help, bool $version, bool $phpunit = false, ?string $phpunitConfiguration = null, ?string $phpunitFilter = null, ?string $sarifFile = null, bool $json = false, ?string $htmlFile = null, array $phpBinaries = [], bool $opcache = false)
     {
         $this->command                          = $command;
         $this->target                           = $target;
@@ -156,6 +157,7 @@ final readonly class Arguments
         $this->json                             = $json;
         $this->htmlFile                         = $htmlFile;
         $this->phpBinaries                      = $phpBinaries;
+        $this->opcache                          = $opcache;
     }
 
     /**
@@ -387,5 +389,13 @@ final readonly class Arguments
     public function phpBinaries(): array
     {
         return $this->phpBinaries;
+    }
+
+    /**
+     * Whether the worker processes run with OPcache and its JIT.
+     */
+    public function opcache(): bool
+    {
+        return $this->opcache;
     }
 }

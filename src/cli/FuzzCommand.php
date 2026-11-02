@@ -800,6 +800,10 @@ final readonly class FuzzCommand implements Command
             $options .= '--ignore-deprecations ';
         }
 
+        if ($arguments->opcache()) {
+            $options .= '--opcache ';
+        }
+
         return $options;
     }
 

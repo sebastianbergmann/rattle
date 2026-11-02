@@ -22,6 +22,7 @@ use function glob;
 use function implode;
 use function is_dir;
 use function is_file;
+use function json_decode;
 use function mkdir;
 use function preg_match;
 use function proc_close;
@@ -100,6 +101,14 @@ final class FixturesTest extends TestCase
                 'Fatal error at %s/memory/src/RunLengthDecoder.php:35',
                 null,
                 ['--memory-limit', '64M'],
+            ],
+            'a fatal error for exhausted memory, with OPcache and its JIT' => [
+                'memory',
+                1,
+                500,
+                'Fatal error at %s/memory/src/RunLengthDecoder.php:35',
+                null,
+                ['--memory-limit', '64M', '--opcache'],
             ],
             'the error for the call stack limit for unbounded recursion' => [
                 'recursion',
@@ -191,6 +200,12 @@ final class FixturesTest extends TestCase
         foreach (['input', 'original', 'input.bin', 'finding.json', 'README.txt'] as $file) {
             $this->assertFileExists($finding . '/' . $file);
         }
+
+        // the minimal input failed in the same way when it was replayed
+        $metadata = json_decode((string) file_get_contents($finding . '/finding.json'), true);
+
+        $this->assertIsArray($metadata);
+        $this->assertTrue($metadata['minimized'] ?? null);
 
         // the inputs are stored in the format of choice sequences and are read
         // with the decoder of sebastian/choice-sequence
@@ -447,6 +462,18 @@ final class FixturesTest extends TestCase
         $this->assertSame(0, $exit, $output);
         $this->assertStringContainsString('Outcome: passed', $output);
         $this->assertStringContainsString("#1 'abc'", $output);
+    }
+
+    public function testRunsTheWorkerProcessesWithOpcacheWhichCachesTheInstrumentedCode(): void
+    {
+        $input = $this->directory . '/input';
+
+        file_put_contents($input, 'a');
+
+        [$exit, $output] = $this->rattle(array_merge(['run', '--raw', '--opcache', self::FIXTURES . '/opcache/target.php', $input], $this->executionOptions('opcache')));
+
+        $this->assertSame(0, $exit, $output);
+        $this->assertStringContainsString('Outcome: passed', $output);
     }
 
     public function testReportsInvalidConfigurationWithExitCodeTwo(): void
