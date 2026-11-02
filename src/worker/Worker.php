@@ -13,6 +13,7 @@ use const SIG_IGN;
 use const SIGINT;
 use const STDERR;
 use function array_values;
+use function assert;
 use function count;
 use function fwrite;
 use function getcwd;
@@ -199,9 +200,10 @@ final class Worker
      */
     private function serve(IncludeHook $hook, Closure $runnerFor): int
     {
-        $numberOfFailures   = 0;
-        $numberOfExecutions = 0;
-        $threshold          = $this->memoryThreshold();
+        $numberOfFailures          = 0;
+        $numberOfExecutions        = 0;
+        $numberOfInstrumentedFiles = 0;
+        $threshold                 = $this->memoryThreshold();
 
         while (true) {
             try {
@@ -231,8 +233,16 @@ final class Worker
 
                     // the constant operands of the comparisons in the code
                     // that was instrumented, before the input or while it was
-                    // executed, are reported with its result
-                    $result = $runner->run($job)->withTokens($this->operands->takeUnreported())->asArray();
+                    // executed, are reported with its result, and so is the
+                    // number of files that were instrumented
+                    $result = $runner->run($job)->withTokens($this->operands->takeUnreported());
+
+                    $instrumentedFiles = $hook->numberOfInstrumentedFiles() - $numberOfInstrumentedFiles;
+
+                    assert($instrumentedFiles >= 0);
+
+                    $numberOfInstrumentedFiles = $hook->numberOfInstrumentedFiles();
+                    $result                    = $result->withInstrumentedFiles($instrumentedFiles)->asArray();
 
                     $numberOfExecutions++;
 

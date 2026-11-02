@@ -86,6 +86,10 @@ final class IncludeHookTest extends TestCase
             $hook->unregister();
         }
 
+        // only the file below the sources that is not excluded and not in a
+        // vendor directory below them was instrumented
+        $this->assertSame(1, $hook->numberOfInstrumentedFiles());
+
         Edges::reset();
         excluded(1);
         vendored(1);
@@ -118,6 +122,7 @@ final class IncludeHookTest extends TestCase
         }
 
         $this->assertSame(1, count($hook->failures()));
+        $this->assertSame(0, $hook->numberOfInstrumentedFiles());
         $this->assertStringStartsWith('Cannot instrument', $hook->failures()[(string) realpath(self::FIXTURES . '/source/broken.php')] ?? '');
     }
 }

@@ -225,6 +225,7 @@ final class FixturesTest extends TestCase
 
         $this->assertSame(0, $exit, $output);
         $this->assertStringContainsString('1 token that was found in comparisons was written to ' . $dictionary, $output);
+        $this->assertStringNotContainsString('No file below the source directories was instrumented', $output);
         $this->assertStringEqualsFile($dictionary, "# the constant operands of comparisons that rattle found in the code that it instrumented\n\"RATL\"\n");
 
         // the dictionary file can be passed with --dictionary, and is written
@@ -248,6 +249,22 @@ final class FixturesTest extends TestCase
         $this->assertSame(0, $exit, $output);
         $this->assertStringNotContainsString('found in comparisons', $output);
         $this->assertFileDoesNotExist($dictionary);
+    }
+
+    public function testWarnsWhenNoFileBelowTheSourceDirectoriesWasInstrumented(): void
+    {
+        // the code of the csv target is not below the source directory of
+        // another fixture
+        [$exit, $output] = $this->rattle(
+            [
+                'fuzz', self::FIXTURES . '/csv/target.php', '--jobs', '1', '--seed', '1', '--max-executions', '1000',
+                '--bootstrap', self::FIXTURES . '/bootstrap.php', '--source', self::FIXTURES . '/magic/src',
+                '--cache-directory', $this->directory . '/cache', '--findings-directory', $this->directory . '/findings',
+            ],
+        );
+
+        $this->assertSame(0, $exit, $output);
+        $this->assertSame(1, substr_count($output, 'Warning: No file below the source directories was instrumented, so no coverage guides fuzzing.'), $output);
     }
 
     public function testTwoRunsWithTheSameSeedAndOneJobExecuteTheSameInputs(): void

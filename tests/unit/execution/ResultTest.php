@@ -45,6 +45,8 @@ final class ResultTest extends TestCase
             'token that is not base64-encoded' => [['id' => 1, 'outcome' => 'passed', 'sequence' => ['choices' => [], 'spans' => [], 'maxima' => []], 'features' => [], 'tokens' => ['not base64!']]],
             'empty token'                      => [['id' => 1, 'outcome' => 'passed', 'sequence' => ['choices' => [], 'spans' => [], 'maxima' => []], 'features' => [], 'tokens' => ['']]],
             'token that is not a string'       => [['id' => 1, 'outcome' => 'passed', 'sequence' => ['choices' => [], 'spans' => [], 'maxima' => []], 'features' => [], 'tokens' => [1]]],
+            'negative number of files'         => [['id' => 1, 'outcome' => 'passed', 'sequence' => ['choices' => [], 'spans' => [], 'maxima' => []], 'features' => [], 'instrumentedFiles' => -1]],
+            'number of files that is not int'  => [['id' => 1, 'outcome' => 'passed', 'sequence' => ['choices' => [], 'spans' => [], 'maxima' => []], 'features' => [], 'instrumentedFiles' => '1']],
         ];
     }
 
@@ -76,6 +78,19 @@ final class ResultTest extends TestCase
 
         $this->assertSame(["\x89PNG\r\n", 'GET'], Result::fromArray($result->asArray())->tokens());
         $this->assertSame(['GET'], $result->withTokens(['GET'])->withFailure(Failure::exit())->tokens());
+    }
+
+    public function testHasTheNumberOfFilesThatWereInstrumentedSinceThePreviousResult(): void
+    {
+        $result = new Result(1, Outcome::Passed, null, new ChoiceSequence([1]), [], null);
+
+        $this->assertSame(0, $result->instrumentedFiles());
+        $this->assertArrayNotHasKey('instrumentedFiles', $result->asArray());
+
+        $result = $result->withInstrumentedFiles(3);
+
+        $this->assertSame(3, Result::fromArray($result->asArray())->instrumentedFiles());
+        $this->assertSame(3, $result->withTokens(['GET'])->withFailure(Failure::exit())->instrumentedFiles());
     }
 
     public function testTellsWhetherTheInputProducedTheFeaturesThatItRequired(): void

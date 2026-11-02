@@ -433,6 +433,8 @@ final class Engine
 
         $this->dictionary->addFoundTokens($result->tokens());
 
+        $this->statistics->instrumentedFiles += $result->instrumentedFiles();
+
         if ($result->isFinding()) {
             if ($this->findings->handle($result, $job)) {
                 $this->countFinding(true);

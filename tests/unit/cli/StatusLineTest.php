@@ -105,16 +105,68 @@ final class StatusLineTest extends TestCase
         $this->assertStringEndsWith("time: 2s\n", $contents);
     }
 
-    private function statistics(): Statistics
+    public function testWarnsOnceWhenNoFileWasInstrumentedAfterTheFirstThousandExecutions(): void
+    {
+        $stream     = $this->stream();
+        $status     = new StatusLine($stream, false, fn (): float => $this->now);
+        $statistics = $this->statistics(0);
+
+        $statistics->executions = 999;
+        $status->update($statistics);
+
+        $this->assertStringNotContainsString('Warning', $this->contents($stream));
+
+        $statistics->executions = 1000;
+        $this->now              = 1.0;
+        $status->update($statistics);
+        $status->update($statistics);
+        $status->finish($statistics);
+
+        $this->assertSame(1, substr_count($this->contents($stream), 'Warning: No file below the source directories was instrumented, so no coverage guides fuzzing.'));
+    }
+
+    public function testWarnsAtTheEndOfAShorterRunWhenNoFileWasInstrumented(): void
+    {
+        $stream     = $this->stream();
+        $status     = new StatusLine($stream, false, fn (): float => $this->now);
+        $statistics = $this->statistics(0);
+
+        $statistics->executions = 10;
+        $status->update($statistics);
+
+        $this->assertStringNotContainsString('Warning', $this->contents($stream));
+
+        $status->finish($statistics);
+
+        $this->assertStringContainsString('Warning: No file below the source directories was instrumented', $this->contents($stream));
+    }
+
+    public function testDoesNotWarnWhenAFileWasInstrumented(): void
+    {
+        $stream = $this->stream();
+        $status = new StatusLine($stream, false, fn (): float => $this->now);
+
+        $this->now = 10.0;
+        $status->update($this->statistics());
+        $status->finish($this->statistics());
+
+        $this->assertStringNotContainsString('Warning', $this->contents($stream));
+    }
+
+    /**
+     * @param non-negative-int $instrumentedFiles
+     */
+    private function statistics(int $instrumentedFiles = 4): Statistics
     {
         $statistics = new Statistics(0.0);
 
-        $statistics->executions    = 12345;
-        $statistics->features      = 67;
-        $statistics->corpusEntries = 8;
-        $statistics->tokens        = 3;
-        $statistics->findings      = 2;
-        $statistics->rejected      = 9;
+        $statistics->executions        = 12345;
+        $statistics->features          = 67;
+        $statistics->corpusEntries     = 8;
+        $statistics->tokens            = 3;
+        $statistics->findings          = 2;
+        $statistics->rejected          = 9;
+        $statistics->instrumentedFiles = $instrumentedFiles;
 
         return $statistics;
     }

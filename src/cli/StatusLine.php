@@ -23,12 +23,18 @@ use Closure;
  * updated in place, and every ten seconds otherwise. Each new finding gets a
  * line of its own.
  *
+ * When no file below the source directories was instrumented after the first
+ * 1,000 executions, or by the end of a shorter run, a warning gets a line of
+ * its own, as no coverage guides fuzzing then.
+ *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
  * @internal This class is not covered by the backward compatibility promise for sebastian/rattle
  */
 final class StatusLine
 {
+    private const int EXECUTIONS_BEFORE_WARNING = 1000;
+
     /**
      * @var resource
      */
@@ -41,6 +47,7 @@ final class StatusLine
     private readonly Closure $clock;
     private float $lastUpdate = 0.0;
     private string $line      = '';
+    private bool $warned      = false;
 
     public static function format(Statistics $statistics, float $now): string
     {
@@ -88,6 +95,10 @@ final class StatusLine
      */
     public function update(Statistics $statistics, string $prefix = ''): void
     {
+        if ($statistics->executions >= self::EXECUTIONS_BEFORE_WARNING) {
+            $this->warnWhenNothingWasInstrumented($statistics);
+        }
+
         $now = ($this->clock)();
 
         if ($now - $this->lastUpdate < ($this->terminal ? 1.0 : 10.0)) {
@@ -112,6 +123,10 @@ final class StatusLine
 
     public function finish(Statistics $statistics, string $prefix = ''): void
     {
+        if ($statistics->executions > 0) {
+            $this->warnWhenNothingWasInstrumented($statistics);
+        }
+
         $this->show($statistics, ($this->clock)(), $prefix);
 
         if ($this->terminal) {
@@ -119,6 +134,19 @@ final class StatusLine
         }
 
         $this->line = '';
+    }
+
+    private function warnWhenNothingWasInstrumented(Statistics $statistics): void
+    {
+        if ($this->warned || $statistics->instrumentedFiles > 0) {
+            return;
+        }
+
+        $this->warned = true;
+
+        $this->finding(
+            'Warning: No file below the source directories was instrumented, so no coverage guides fuzzing. The code that is fuzzed is not below them, or it is in a vendor directory below one of them.',
+        );
     }
 
     private function show(Statistics $statistics, float $now, string $prefix): void

@@ -50,6 +50,11 @@ final class IncludeHook
     private array $failures = [];
 
     /**
+     * @var non-negative-int
+     */
+    private int $numberOfInstrumentedFiles = 0;
+
+    /**
      * @param list<string> $sources  the directories and files to instrument
      * @param list<string> $excluded the directories and files not to instrument
      */
@@ -89,6 +94,16 @@ final class IncludeHook
     }
 
     /**
+     * The number of files that were instrumented while they were included.
+     *
+     * @return non-negative-int
+     */
+    public function numberOfInstrumentedFiles(): int
+    {
+        return $this->numberOfInstrumentedFiles;
+    }
+
+    /**
      * The files that could not be instrumented, and why, by their path. These
      * files are included without instrumentation.
      *
@@ -114,12 +129,16 @@ final class IncludeHook
         }
 
         try {
-            return $this->instrumentor->instrument($code, $path);
+            $instrumented = $this->instrumentor->instrument($code, $path);
         } catch (InstrumentationFailedException $e) {
             $this->failures[$path] = $e->getMessage();
 
             return null;
         }
+
+        $this->numberOfInstrumentedFiles++;
+
+        return $instrumented;
     }
 
     /**

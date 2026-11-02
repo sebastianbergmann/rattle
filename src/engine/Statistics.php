@@ -74,6 +74,15 @@ final class Statistics
      * @var non-negative-int
      */
     public int $tokens = 0;
+
+    /**
+     * The number of files that the workers instrumented. Every worker
+     * instruments the files that it includes, so a file is counted once per
+     * worker process.
+     *
+     * @var non-negative-int
+     */
+    public int $instrumentedFiles = 0;
     private readonly float $start;
 
     public function __construct(?float $start = null)

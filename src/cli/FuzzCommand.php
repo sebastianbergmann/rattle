@@ -662,6 +662,7 @@ final readonly class FuzzCommand implements Command
             $totals->corpusEntries     += $statistics->corpusEntries;
             $totals->reducedEntries    += $statistics->reducedEntries;
             $totals->removedInputs     += $statistics->removedInputs;
+            $totals->instrumentedFiles += $statistics->instrumentedFiles;
         }
 
         $totals->tokens = $dictionary->numberOfTokens();

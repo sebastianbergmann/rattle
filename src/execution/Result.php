@@ -29,7 +29,9 @@ use SebastianBergmann\ChoiceSequence\SpanKind;
  * A result also has the constant operands of comparisons that the process
  * found in the code that it instrumented and had not reported before, which
  * are tokens for the dictionary. They are base64-encoded for the protocol,
- * because they are often not valid UTF-8.
+ * because they are often not valid UTF-8. And it has the number of files that
+ * the process instrumented since its previous result, so that the supervisor
+ * can tell when no file is instrumented at all.
  *
  * When the input required features, the result tells whether it produced
  * them all.
@@ -66,6 +68,11 @@ final readonly class Result
      */
     private array $tokens;
     private bool $producedRequiredFeatures;
+
+    /**
+     * @var non-negative-int
+     */
+    private int $instrumentedFiles;
 
     /**
      * The result of an input during which the process of a worker ended
@@ -120,6 +127,12 @@ final readonly class Result
             $tokens[] = $token;
         }
 
+        $instrumentedFiles = $data['instrumentedFiles'] ?? 0;
+
+        if (!is_int($instrumentedFiles) || $instrumentedFiles < 0) {
+            throw new ProtocolException('Invalid number of instrumented files');
+        }
+
         return new self(
             $id,
             $outcome,
@@ -129,6 +142,7 @@ final readonly class Result
             $drawnValues,
             $tokens,
             ($data['producedRequiredFeatures'] ?? false) === true,
+            $instrumentedFiles,
         );
     }
 
@@ -138,8 +152,9 @@ final readonly class Result
      * @param ?list<string>          $drawnValues
      * @param list<non-empty-string> $tokens
      * @param bool                   $producedRequiredFeatures whether the input produced all the features that it required
+     * @param non-negative-int       $instrumentedFiles        the number of files that the process instrumented since its previous result
      */
-    public function __construct(int $id, Outcome $outcome, ?Failure $failure, ?ChoiceSequence $sequence, array $features, ?array $drawnValues, array $tokens = [], bool $producedRequiredFeatures = false)
+    public function __construct(int $id, Outcome $outcome, ?Failure $failure, ?ChoiceSequence $sequence, array $features, ?array $drawnValues, array $tokens = [], bool $producedRequiredFeatures = false, int $instrumentedFiles = 0)
     {
         assert(($failure !== null) === $outcome->isFinding());
 
@@ -152,6 +167,7 @@ final readonly class Result
         $this->tokens      = $tokens;
 
         $this->producedRequiredFeatures = $producedRequiredFeatures;
+        $this->instrumentedFiles        = $instrumentedFiles;
     }
 
     /**
@@ -231,9 +247,20 @@ final readonly class Result
         return $this->producedRequiredFeatures;
     }
 
+    /**
+     * The number of files that the process instrumented since its previous
+     * result.
+     *
+     * @return non-negative-int
+     */
+    public function instrumentedFiles(): int
+    {
+        return $this->instrumentedFiles;
+    }
+
     public function withFailure(Failure $failure): self
     {
-        return new self($this->id, Outcome::Failed, $failure, $this->sequence, $this->features, $this->drawnValues, $this->tokens, $this->producedRequiredFeatures);
+        return new self($this->id, Outcome::Failed, $failure, $this->sequence, $this->features, $this->drawnValues, $this->tokens, $this->producedRequiredFeatures, $this->instrumentedFiles);
     }
 
     /**
@@ -241,7 +268,15 @@ final readonly class Result
      */
     public function withTokens(array $tokens): self
     {
-        return new self($this->id, $this->outcome, $this->failure, $this->sequence, $this->features, $this->drawnValues, $tokens, $this->producedRequiredFeatures);
+        return new self($this->id, $this->outcome, $this->failure, $this->sequence, $this->features, $this->drawnValues, $tokens, $this->producedRequiredFeatures, $this->instrumentedFiles);
+    }
+
+    /**
+     * @param non-negative-int $instrumentedFiles
+     */
+    public function withInstrumentedFiles(int $instrumentedFiles): self
+    {
+        return new self($this->id, $this->outcome, $this->failure, $this->sequence, $this->features, $this->drawnValues, $this->tokens, $this->producedRequiredFeatures, $instrumentedFiles);
     }
 
     /**
@@ -288,6 +323,10 @@ final readonly class Result
 
         if ($this->producedRequiredFeatures) {
             $data['producedRequiredFeatures'] = true;
+        }
+
+        if ($this->instrumentedFiles > 0) {
+            $data['instrumentedFiles'] = $this->instrumentedFiles;
         }
 
         return $data;
