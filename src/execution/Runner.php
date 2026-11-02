@@ -179,7 +179,7 @@ final class Runner implements InputRunner
             error_reporting($errorReporting);
         }
 
-        $edges = Edges::$hits;
+        $edges = Edges::hits();
 
         $this->job = null;
 

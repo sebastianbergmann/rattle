@@ -122,7 +122,9 @@ final class BlockFinder extends NodeVisitorAbstract
             $node instanceof Stmt\Catch_ ||
             $node instanceof Stmt\Finally_) {
             if ($node->stmts !== null) {
-                $this->bracedBody($node, $node->stmts);
+                // the body of a catch or a finally is not entered again
+                // without entering another block first
+                $this->bracedBody($node, $node->stmts, !$node instanceof Stmt\Catch_ && !$node instanceof Stmt\Finally_);
             }
 
             return;
@@ -130,7 +132,7 @@ final class BlockFinder extends NodeVisitorAbstract
 
         if ($node instanceof Node\PropertyHook) {
             if (is_array($node->body)) {
-                $this->bracedBody($node, $node->body);
+                $this->bracedBody($node, $node->body, true);
             } elseif ($node->body !== null) {
                 $this->expression($node->body);
             }
@@ -142,26 +144,26 @@ final class BlockFinder extends NodeVisitorAbstract
             $node instanceof Stmt\While_ ||
             $node instanceof Stmt\For_ ||
             $node instanceof Stmt\Foreach_) {
-            $this->body($node->stmts, $this->tokenAfterHeader($node));
+            $this->body($node->stmts, $this->tokenAfterHeader($node), !$node instanceof Stmt\If_);
             $this->after($node);
 
             return;
         }
 
         if ($node instanceof Stmt\ElseIf_) {
-            $this->body($node->stmts, $this->tokenAfterHeader($node));
+            $this->body($node->stmts, $this->tokenAfterHeader($node), false);
 
             return;
         }
 
         if ($node instanceof Stmt\Else_) {
-            $this->body($node->stmts, $this->significantTokenAfter($node->getStartTokenPos()));
+            $this->body($node->stmts, $this->significantTokenAfter($node->getStartTokenPos()), false);
 
             return;
         }
 
         if ($node instanceof Stmt\Do_) {
-            $this->body($node->stmts, $this->significantTokenAfter($node->getStartTokenPos()));
+            $this->body($node->stmts, $this->significantTokenAfter($node->getStartTokenPos()), true);
             $this->after($node);
 
             return;
@@ -185,7 +187,8 @@ final class BlockFinder extends NodeVisitorAbstract
         if ($node instanceof Stmt\Switch_ ||
             $node instanceof Stmt\TryCatch ||
             $node instanceof Stmt\Label) {
-            $this->after($node);
+            // goto jumps to a label
+            $this->after($node, $node instanceof Stmt\Label);
 
             return;
         }
@@ -245,8 +248,9 @@ final class BlockFinder extends NodeVisitorAbstract
      * closing brace of an empty body.
      *
      * @param array<Node> $stmts
+     * @param bool        $repeated whether the body is the body of a function, which is entered again and again
      */
-    private function bracedBody(Node $node, array $stmts): void
+    private function bracedBody(Node $node, array $stmts, bool $repeated): void
     {
         foreach ($stmts as $first) {
             $index = $first->getStartTokenPos();
@@ -255,7 +259,7 @@ final class BlockFinder extends NodeVisitorAbstract
                 $index--;
             } while ($this->token($index)->id !== ord('{'));
 
-            $this->afterToken($index);
+            $this->afterToken($index, $repeated);
 
             return;
         }
@@ -264,7 +268,7 @@ final class BlockFinder extends NodeVisitorAbstract
 
         assert($closing->text === '}');
 
-        $this->blockStarts[] = BlockStart::beforeStatement($this->offsetOf($closing), $this->depth);
+        $this->blockStarts[] = BlockStart::beforeStatement($this->offsetOf($closing), $this->depth, $repeated);
     }
 
     /**
@@ -272,19 +276,20 @@ final class BlockFinder extends NodeVisitorAbstract
      * its header.
      *
      * @param array<Node> $stmts
+     * @param bool        $repeated whether the body is the body of a loop, which is entered again and again
      */
-    private function body(array $stmts, int $token): void
+    private function body(array $stmts, int $token, bool $repeated): void
     {
         $text = $this->token($token)->text;
 
         if ($text === '{' || $text === ':') {
-            $this->afterToken($token);
+            $this->afterToken($token, $repeated);
 
             return;
         }
 
         if ($text === ';' && $stmts === []) {
-            $this->blockStarts[] = BlockStart::forEmptyStatement($this->offsetOf($this->token($token)), $this->depth);
+            $this->blockStarts[] = BlockStart::forEmptyStatement($this->offsetOf($this->token($token)), $this->depth, $repeated);
 
             return;
         }
@@ -292,21 +297,21 @@ final class BlockFinder extends NodeVisitorAbstract
         assert(count($stmts) === 1);
 
         foreach ($stmts as $statement) {
-            $this->blockStarts[] = BlockStart::aroundStatement($this->startOf($statement), $this->endOf($statement), $this->depth);
+            $this->blockStarts[] = BlockStart::aroundStatement($this->startOf($statement), $this->endOf($statement), $this->depth, $repeated);
         }
     }
 
-    private function afterToken(int $index): void
+    private function afterToken(int $index, bool $repeated = false): void
     {
         $token  = $this->token($index);
         $offset = $this->offsetOf($token) + strlen($token->text);
 
-        $this->blockStarts[] = BlockStart::beforeStatement($offset, $this->depth);
+        $this->blockStarts[] = BlockStart::beforeStatement($offset, $this->depth, $repeated);
     }
 
-    private function after(Stmt $statement): void
+    private function after(Stmt $statement, bool $repeated = false): void
     {
-        $this->blockStarts[] = BlockStart::afterStatement($this->endOf($statement), $this->depth);
+        $this->blockStarts[] = BlockStart::afterStatement($this->endOf($statement), $this->depth, $repeated);
     }
 
     private function expression(Expr $expression): void

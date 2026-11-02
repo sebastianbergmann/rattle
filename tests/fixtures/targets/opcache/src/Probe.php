@@ -24,7 +24,7 @@ final class Probe
 {
     public function check(): void
     {
-        if (Edges::$hits === []) {
+        if (Edges::hits() === []) {
             throw new RuntimeException('The code of the probe is not instrumented');
         }
 

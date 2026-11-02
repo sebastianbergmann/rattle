@@ -14,6 +14,7 @@ use function explode;
 use function file_get_contents;
 use function preg_quote;
 use function preg_replace;
+use function preg_replace_callback;
 use function strlen;
 use function strpos;
 use function substr_count;
@@ -37,8 +38,9 @@ final class InstrumentorTest extends TestCase
 {
     /**
      * The code that is expected is abbreviated: [n] stands for the statement
-     * that enters the block n, and Tn( for the call that enters the block n
-     * within an expression.
+     * that enters the block n, [n*] for the statement that enters the block n
+     * and counts the trace when it has become long, and Tn( for the call that
+     * enters the block n within an expression.
      *
      * @return array<string, array{0: string, 1: string}>
      */
@@ -47,23 +49,23 @@ final class InstrumentorTest extends TestCase
         return [
             'function body' => [
                 '<?php function f() { a(); }',
-                '<?php function f() { [1] a(); }',
+                '<?php function f() { [1*] a(); }',
             ],
             'empty function body' => [
                 '<?php function f() {}',
-                '<?php function f() { [1]}',
+                '<?php function f() { [1*]}',
             ],
             'function body that only contains a comment' => [
                 '<?php function f() {
     // comment
 }',
-                '<?php function f() { [1]
+                '<?php function f() { [1*]
     // comment
 }',
             ],
             'function body that starts with inline HTML' => [
                 '<?php function f() { ?>html<?php }',
-                '<?php function f() { [1] ?>html<?php }',
+                '<?php function f() { [1*] ?>html<?php }',
             ],
             'abstract method' => [
                 '<?php abstract class C { abstract function m(); }',
@@ -71,7 +73,7 @@ final class InstrumentorTest extends TestCase
             ],
             'method and closure' => [
                 '<?php class C { function m() { return function () { a(); }; } }',
-                '<?php class C { function m() { [2] return function () { [1] a(); }; } }',
+                '<?php class C { function m() { [2*] return function () { [1*] a(); }; } }',
             ],
             'if, elseif, and else in braces' => [
                 '<?php if ($a) { a(); } elseif ($b) { b(); } else { c(); }',
@@ -99,11 +101,11 @@ final class InstrumentorTest extends TestCase
             ],
             'loops' => [
                 '<?php for (;;) a(); foreach ($a as $b) {} while ($c): endwhile; do b(); while ($d);',
-                '<?php for (;;) { [1] a(); } [2] foreach ($a as $b) { [3]} [4] while ($c): [5] endwhile; [6] do { [7] b(); } while ($d); [8]',
+                '<?php for (;;) { [1*] a(); } [2] foreach ($a as $b) { [3*]} [4] while ($c): [5*] endwhile; [6] do { [7*] b(); } while ($d); [8]',
             ],
             'loop with parentheses in its condition' => [
                 '<?php while (f(g($a), (1))) a();',
-                '<?php while (f(g($a), (1))) { [1] a(); } [2]',
+                '<?php while (f(g($a), (1))) { [1*] a(); } [2]',
             ],
             'switch' => [
                 '<?php switch ($a) { case 1; case f(1): a(); default: }',
@@ -119,7 +121,7 @@ final class InstrumentorTest extends TestCase
             ],
             'label' => [
                 '<?php l: a(); goto l;',
-                '<?php l: [1] a(); goto l;',
+                '<?php l: [1*] a(); goto l;',
             ],
             'short-circuiting operators' => [
                 '<?php $a && $b; $a || $b; $a and $b; $a or $b; $a ?? $b; $a ? $b : $c; $a ?: $c; $a ??= $b;',
@@ -135,7 +137,7 @@ final class InstrumentorTest extends TestCase
             ],
             'yield' => [
                 '<?php function g() { $a = yield; yield from $b; }',
-                '<?php function g() { [3] $a = T1(yield); T2(yield from $b); }',
+                '<?php function g() { [3*] $a = T1(yield); T2(yield from $b); }',
             ],
             'nullsafe operators' => [
                 '<?php $a?->b()?->c; $a?->$b; $a?->{$b}();',
@@ -143,11 +145,11 @@ final class InstrumentorTest extends TestCase
             ],
             'property hooks' => [
                 '<?php class C { public $p { get => $this->p; set { $this->p = $value; } } public $q { get; } }',
-                '<?php class C { public $p { get => T1($this->p); set { [2] $this->p = $value; } } public $q { get; } }',
+                '<?php class C { public $p { get => T1($this->p); set { [2*] $this->p = $value; } } public $q { get; } }',
             ],
             'constant expressions' => [
                 '<?php const A = B ?? C; class C { const D = E ?: F; public $p = G ?? H; function m($a = I && J) { static $s = K ?? L; } } enum E: int { case A = 1 ?? 2; } #[Attr(A ?? B)] function f() {} declare(ticks=A ?? 1);',
-                '<?php const A = B ?? C; class C { const D = E ?: F; public $p = G ?? H; function m($a = I && J) { [1] static $s = K ?? L; } } enum E: int { case A = 1 ?? 2; } #[Attr(A ?? B)] function f() { [2]} declare(ticks=A ?? 1);',
+                '<?php const A = B ?? C; class C { const D = E ?: F; public $p = G ?? H; function m($a = I && J) { [1*] static $s = K ?? L; } } enum E: int { case A = 1 ?? 2; } #[Attr(A ?? B)] function f() { [2*]} declare(ticks=A ?? 1);',
             ],
         ];
     }
@@ -260,11 +262,21 @@ final class InstrumentorTest extends TestCase
     private function abbreviate(string $code): string
     {
         $edges = preg_quote('\\' . Edges::class, '/');
-        $edge  = $edges . '::\$hits\[' . $edges . '::\$previous << 28 \| (\d+)\]';
 
-        $code = (string) preg_replace(
-            '/isset\(' . $edge . '\) \? \+\+' . $edges . '::\$hits\[' . $edges . '::\$previous << 28 \| \1\] : \(' . $edges . '::\$hits\[' . $edges . '::\$previous << 28 \| \1\] = 1\); ' . $edges . '::\$previous = \1;/',
-            '[$1]',
+        // a statement whose block is not shifted correctly is not abbreviated
+        $code = (string) preg_replace_callback(
+            '/' . $edges . '::\$trace\[\] = ' . $edges . '::\$previous \| (\d+); ' . $edges . '::\$previous = (\d+);( if \(\\\\count\(' . $edges . '::\$trace\) > 65536\) \{ ' . $edges . '::countTrace\(\); \})?/',
+            static function (array $match): string
+            {
+                $block   = (int) ($match[1] ?? 0);
+                $shifted = (int) ($match[2] ?? 0);
+
+                if ($shifted !== $block << 28) {
+                    return $match[0] ?? '';
+                }
+
+                return '[' . $block . (($match[3] ?? '') !== '' ? '*' : '') . ']';
+            },
             $code,
         );
 

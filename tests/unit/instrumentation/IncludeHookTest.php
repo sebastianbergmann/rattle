@@ -93,15 +93,15 @@ final class IncludeHookTest extends TestCase
         Edges::reset();
         excluded(1);
         vendored(1);
-        $this->assertSame([], Edges::$hits);
+        $this->assertSame([], Edges::hits());
 
         Edges::reset();
         $this->assertSame('positive', classify(1));
-        $positive = Edges::$hits;
+        $positive = Edges::hits();
 
         Edges::reset();
         $this->assertSame('not positive', classify(0));
-        $notPositive = Edges::$hits;
+        $notPositive = Edges::hits();
 
         $this->assertCount(2, $positive);
         $this->assertCount(2, $notPositive);

@@ -116,7 +116,7 @@ foreach ($calls as $name => $call) {
 
     $result['issues'] = $issues;
     $results[$name]   = $result;
-    $edges += count(Edges::$hits);
+    $edges += count(Edges::hits());
 }
 
 print json_encode(['results' => $results, 'edges' => $edges], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);

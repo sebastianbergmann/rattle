@@ -102,7 +102,7 @@ final class PropertyExampleRunner implements InputRunner
             $this->job = null;
         }
 
-        $edges   = Edges::$hits;
+        $edges   = Edges::hits();
         $outcome = $example->outcome();
 
         if ($detection !== null) {

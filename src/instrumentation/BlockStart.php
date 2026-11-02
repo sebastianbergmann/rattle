@@ -62,13 +62,20 @@ final readonly class BlockStart
     private string $name;
 
     /**
+     * Whether the block is the start of a function body or a loop body, or
+     * follows a label, where code is entered again and again: the statement
+     * that enters it counts the trace when it has become long.
+     */
+    private bool $repeated;
+
+    /**
      * A statement is inserted at the offset, where a body starts.
      *
      * @param non-negative-int $offset
      */
-    public static function beforeStatement(int $offset, int $depth): self
+    public static function beforeStatement(int $offset, int $depth, bool $repeated = false): self
     {
-        return new self(self::BEFORE_STATEMENT, $offset, $offset, $depth, '');
+        return new self(self::BEFORE_STATEMENT, $offset, $offset, $depth, '', $repeated);
     }
 
     /**
@@ -76,9 +83,9 @@ final readonly class BlockStart
      *
      * @param non-negative-int $end the offset of the last character of the statement
      */
-    public static function afterStatement(int $end, int $depth): self
+    public static function afterStatement(int $end, int $depth, bool $repeated = false): self
     {
-        return new self(self::AFTER_STATEMENT, $end + 1, $end + 1, $depth, '');
+        return new self(self::AFTER_STATEMENT, $end + 1, $end + 1, $depth, '', $repeated);
     }
 
     /**
@@ -88,9 +95,9 @@ final readonly class BlockStart
      * @param non-negative-int $start
      * @param non-negative-int $end   the offset of the last character of the statement
      */
-    public static function aroundStatement(int $start, int $end, int $depth): self
+    public static function aroundStatement(int $start, int $end, int $depth, bool $repeated = false): self
     {
-        return new self(self::AROUND_STATEMENT, $start, $end + 1, $depth, '');
+        return new self(self::AROUND_STATEMENT, $start, $end + 1, $depth, '', $repeated);
     }
 
     /**
@@ -99,9 +106,9 @@ final readonly class BlockStart
      *
      * @param non-negative-int $offset the offset of the semicolon
      */
-    public static function forEmptyStatement(int $offset, int $depth): self
+    public static function forEmptyStatement(int $offset, int $depth, bool $repeated = false): self
     {
-        return new self(self::FOR_EMPTY_STATEMENT, $offset, $offset + 1, $depth, '');
+        return new self(self::FOR_EMPTY_STATEMENT, $offset, $offset + 1, $depth, '', $repeated);
     }
 
     /**
@@ -145,13 +152,14 @@ final readonly class BlockStart
      * @param non-negative-int                                                                                                                                                                                 $start
      * @param non-negative-int                                                                                                                                                                                 $end
      */
-    private function __construct(int $how, int $start, int $end, int $depth, string $name)
+    private function __construct(int $how, int $start, int $end, int $depth, string $name, bool $repeated = false)
     {
-        $this->how   = $how;
-        $this->start = $start;
-        $this->end   = $end;
-        $this->depth = $depth;
-        $this->name  = $name;
+        $this->how      = $how;
+        $this->start    = $start;
+        $this->end      = $end;
+        $this->depth    = $depth;
+        $this->name     = $name;
+        $this->repeated = $repeated;
     }
 
     /**
@@ -169,7 +177,7 @@ final readonly class BlockStart
      */
     public function addTo(SourceEdits $edits, int $block): void
     {
-        $statement = Edges::statementFor($block);
+        $statement = Edges::statementFor($block, $this->repeated);
         $call      = Edges::callFor($block);
         $opening   = 2 * $this->depth;
         $closing   = self::END - 2 * $this->depth;
