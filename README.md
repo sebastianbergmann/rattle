@@ -186,7 +186,7 @@ Every binary must meet rattle's requirements, because the worker processes run r
 rattle fuzz     [options] <target.php|directory>...
 rattle run      [options] <target.php> <input>
 rattle minimize [options] <target.php> <input>
-rattle regress  [options] <target.php>
+rattle regress  [options] <target.php|directory>...
 rattle status   [options] --phpunit
 ```
 
@@ -198,7 +198,7 @@ With `--phpunit`, these commands work on the properties of a PHPUnit test suite 
 
 `rattle minimize` minimizes an input that makes the target fail and writes the minimal input to `<input>.minimized`.
 
-`rattle regress` replays every input in the corpus and findings directories of the target once. Its exit code is 1 when any of them fails.
+`rattle regress` replays every input in the corpus and findings directories of the target, or of every target, once. Its exit code is 1 when any of them fails.
 
 `rattle status --phpunit` shows what the runs found out about the properties of a PHPUnit test suite, see [Continuous fuzzing](#continuous-fuzzing).
 
@@ -327,7 +327,7 @@ Commit the findings directory, `fuzz/findings/` by default, to your repository. 
 rattle regress fuzz/csv-parser.php
 ```
 
-in CI. It replays the minimal input of every finding and every input of the corpus once, and fails while any of them still makes the target fail.
+in CI. It replays the minimal input of every finding and every input of the corpus once, and fails while any of them still makes the target fail. `rattle regress` takes the same targets as `rattle fuzz`, so `rattle regress fuzz/` replays the inputs of every target in the directory, one target after the other, and fails while any input of any of them still fails.
 
 ## Findings in SARIF
 

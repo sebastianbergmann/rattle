@@ -42,7 +42,7 @@ final class ArgumentsBuilderTest extends TestCase
             'unknown command'                               => [['rattle', 'unknown']],
             'fuzz without a target'                         => [['rattle', 'fuzz']],
             'run without an input'                          => [['rattle', 'run', 'target.php']],
-            'too many arguments'                            => [['rattle', 'regress', 'target.php', 'other.php']],
+            'too many arguments'                            => [['rattle', 'minimize', 'target.php', 'input', 'other']],
             'too many arguments for run'                    => [['rattle', 'run', 'target.php', 'input', 'other']],
             'no jobs'                                       => [['rattle', 'fuzz', 'target.php', '--jobs', '0']],
             'filter without --phpunit'                      => [['rattle', 'fuzz', 'target.php', '--filter', 'Parser']],
@@ -142,7 +142,7 @@ final class ArgumentsBuilderTest extends TestCase
         $this->assertTrue($arguments->opcache());
     }
 
-    public function testParsesSeveralTargetsOfTheFuzzCommand(): void
+    public function testParsesSeveralTargetsOfTheFuzzAndRegressCommands(): void
     {
         $arguments = (new ArgumentsBuilder)->build(['rattle', 'fuzz', 'fuzz/', 'other/target.php', '--jobs', '2']);
 
@@ -150,6 +150,7 @@ final class ArgumentsBuilderTest extends TestCase
         $this->assertSame('fuzz/', $arguments->target());
         $this->assertNull($arguments->input());
         $this->assertSame(2, $arguments->jobs());
+        $this->assertSame(['fuzz/', 'other/target.php'], (new ArgumentsBuilder)->build(['rattle', 'regress', 'fuzz/', 'other/target.php'])->targets());
     }
 
     public function testParsesTheArgumentsOfTheRunCommand(): void

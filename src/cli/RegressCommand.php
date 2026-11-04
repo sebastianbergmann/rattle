@@ -23,8 +23,9 @@ use SebastianBergmann\ChoiceSequence\InvalidChoiceSequenceException;
 
 /**
  * Replays every input in the corpus directory and in the findings directory
- * of a target once. An input that makes the target fail is reported, so that
- * CI can check that findings that were fixed stay fixed.
+ * of a target once, or of several targets one after the other. An input that
+ * makes its target fail is reported, so that CI can check that findings that
+ * were fixed stay fixed.
  *
  * With --php, the inputs are replayed on other versions of PHP as well, and an
  * input whose outcome differs between the versions is reported, too.
@@ -60,14 +61,33 @@ final readonly class RegressCommand implements Command
         $phpunit = $configuration->phpunit();
         $report  = $arguments->sarifFile() === null ? null : new SarifReport((string) getcwd());
 
-        if ($phpunit === null) {
+        if ($phpunit === null && $configuration->targets() === []) {
             $outcome = $this->regress($arguments, $configuration, null, $report, $phpBinaries);
 
             if ($outcome === null) {
                 return 2;
             }
 
-            return $this->finish($outcome, null, $setup, $report, $arguments);
+            return $this->finish($outcome, '', $setup, $report, $arguments);
+        }
+
+        if ($phpunit === null) {
+            $total       = ['replayed' => 0, 'failed' => 0, 'invalid' => 0];
+            $targetFiles = [];
+
+            foreach ($configuration->targets() as $file) {
+                $outcome = $this->regress($arguments, $configuration->withTarget($file), null, $report, $phpBinaries, $targetFiles);
+
+                if ($outcome === null) {
+                    return 2;
+                }
+
+                $total['replayed'] += $outcome['replayed'];
+                $total['failed']   += $outcome['failed'];
+                $total['invalid']  += $outcome['invalid'];
+            }
+
+            return $this->finish($total, sprintf(' of %d targets', count($configuration->targets())), $setup, $report, $arguments);
         }
 
         try {
@@ -98,7 +118,7 @@ final readonly class RegressCommand implements Command
             $total['invalid']  += $outcome['invalid'];
         }
 
-        return $this->finish($total, count($properties), $setup, $report, $arguments);
+        return $this->finish($total, sprintf(' of %d propert%s', count($properties), count($properties) === 1 ? 'y' : 'ies'), $setup, $report, $arguments);
     }
 
     /**
@@ -106,13 +126,13 @@ final readonly class RegressCommand implements Command
      * --sarif is given.
      *
      * @param array{replayed: non-negative-int, failed: non-negative-int, invalid: non-negative-int} $outcome
-     * @param ?positive-int                                                                          $numberOfProperties null for a fuzz target
+     * @param string                                                                                 $of      what the inputs belong to, " of 2 properties", for instance, and empty for one fuzz target
      *
      * @return 0|1|2
      */
-    private function finish(array $outcome, ?int $numberOfProperties, Setup $setup, ?SarifReport $report, Arguments $arguments): int
+    private function finish(array $outcome, string $of, Setup $setup, ?SarifReport $report, Arguments $arguments): int
     {
-        $exit = $this->summarize($outcome, $numberOfProperties);
+        $exit = $this->summarize($outcome, $of);
 
         if (!$setup->writeSarifReport($report, $arguments->sarifFile())) {
             return 2;
@@ -131,12 +151,17 @@ final readonly class RegressCommand implements Command
      * PHP as well, and an input fails when it fails on one of the versions, or
      * when its outcome differs between them (see DifferentialExecutor).
      *
-     * @param ?non-empty-string $property    the test ID of the property, null for a fuzz target, whose worker reports the name of its directories
-     * @param list<PhpBinary>   $phpBinaries
+     * When several fuzz targets are replayed, a failure in SARIF names its
+     * target, and two target files whose targets have the same name, and so
+     * the same directories, are an error.
+     *
+     * @param ?non-empty-string         $property    the test ID of the property, null for a fuzz target, whose worker reports the name of its directories
+     * @param list<PhpBinary>           $phpBinaries
+     * @param ?array<array-key, string> $targetFiles the target files of the fuzz targets that were replayed before, by the names of their targets, when several fuzz targets are replayed
      *
      * @return ?array{replayed: non-negative-int, failed: non-negative-int, invalid: non-negative-int} null when the inputs could not be replayed
      */
-    private function regress(Arguments $arguments, WorkerConfiguration $configuration, ?string $property, ?SarifReport $report, array $phpBinaries): ?array
+    private function regress(Arguments $arguments, WorkerConfiguration $configuration, ?string $property, ?SarifReport $report, array $phpBinaries, ?array &$targetFiles = null): ?array
     {
         $directory = $property === null ? null : PropertyDirectory::nameOf($property);
 
@@ -159,6 +184,22 @@ final readonly class RegressCommand implements Command
             print $e->getMessage() . PHP_EOL;
 
             return null;
+        }
+
+        $name = null;
+
+        if ($targetFiles !== null) {
+            $name = $target->name();
+
+            if (isset($targetFiles[$name])) {
+                $executor->shutdown();
+
+                printf('The target files "%s" and "%s" both return a target named "%s"' . PHP_EOL, $targetFiles[$name], $configuration->target(), $name);
+
+                return null;
+            }
+
+            $targetFiles[$name] = $configuration->target();
         }
 
         $paths ??= $this->inputsIn($arguments, $target->name());
@@ -231,7 +272,7 @@ final readonly class RegressCommand implements Command
                         $result->failure()->describe(),
                     );
 
-                    $report?->add($result->failure(), $property);
+                    $report?->add($result->failure(), $property, $name);
 
                     $failed = true;
                 }
@@ -243,7 +284,7 @@ final readonly class RegressCommand implements Command
                 if ($difference->isFinding()) {
                     printf('Differs: %s' . PHP_EOL . '       %s' . PHP_EOL, $files[$job->id()] ?? '', $difference->failure()->describe());
 
-                    $report?->add($difference->failure(), $property);
+                    $report?->add($difference->failure(), $property, $name);
 
                     $failed = true;
                 }
@@ -296,18 +337,18 @@ final readonly class RegressCommand implements Command
 
     /**
      * @param array{replayed: non-negative-int, failed: non-negative-int, invalid: non-negative-int} $outcome
-     * @param ?positive-int                                                                          $numberOfProperties null for a fuzz target
+     * @param string                                                                                 $of      what the inputs belong to, " of 2 properties", for instance, and empty for one fuzz target
      *
      * @return 0|1
      */
-    private function summarize(array $outcome, ?int $numberOfProperties): int
+    private function summarize(array $outcome, string $of): int
     {
         printf(
             '%sReplayed %d input%s%s, %d failed.' . PHP_EOL,
             $outcome['failed'] > 0 || $outcome['invalid'] > 0 ? PHP_EOL : '',
             $outcome['replayed'],
             $outcome['replayed'] === 1 ? '' : 's',
-            $numberOfProperties === null ? '' : sprintf(' of %d propert%s', $numberOfProperties, $numberOfProperties === 1 ? 'y' : 'ies'),
+            $of,
             $outcome['failed'],
         );
 

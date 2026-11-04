@@ -100,7 +100,7 @@ final readonly class ArgumentsBuilder
                 'configuration=',
                 'filter=',
             ],
-            'arguments' => ['target'],
+            'arguments' => ['targets'],
         ],
     ];
 

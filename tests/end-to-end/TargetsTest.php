@@ -35,6 +35,7 @@ use function rmdir;
 use function scandir;
 use function sort;
 use function sprintf;
+use function str_replace;
 use function stream_get_contents;
 use function sys_get_temp_dir;
 use function uniqid;
@@ -228,11 +229,71 @@ final class TargetsTest extends TestCase
         $this->assertStringNotContainsString('targets: ', $output);
     }
 
+    public function testRegressFailsWhileAFindingOfAnyTargetStillFailsAndPassesOnceAllAreFixed(): void
+    {
+        $project = $this->directory . '/project';
+
+        mkdir($project . '/magic/src', 0o777, true);
+        mkdir($project . '/exit/src', 0o777, true);
+
+        foreach (['bootstrap.php', 'magic/target.php', 'magic/src/ImageDecoder.php', 'magic/src/ParseException.php', 'exit/target.php', 'exit/src/CommandLine.php', 'exit/src/UsageException.php'] as $file) {
+            file_put_contents($project . '/' . $file, (string) file_get_contents(self::ROOT . '/' . self::FIXTURES . '/' . $file));
+        }
+
+        $targets = [$project . '/magic/target.php', $project . '/exit/target.php'];
+        $options = ['--bootstrap', $project . '/bootstrap.php', '--source', $project . '/magic/src', '--source', $project . '/exit/src', '--cache-directory', $this->directory . '/cache', '--findings-directory', $this->directory . '/findings'];
+
+        [$exit, $output] = $this->rattle(['fuzz', ...$targets, ...$options, '--jobs', '1', '--seed', '1', '--max-executions', '10000', '--stop-on-finding']);
+
+        $this->assertSame(1, $exit, $output);
+        $this->assertStringContainsString('2 new findings', $output);
+
+        [$exit, $output] = $this->rattle(['regress', ...$targets, ...$options, '--sarif', $this->directory . '/regress.sarif']);
+
+        $this->assertSame(1, $exit, $output);
+        $this->assertStringContainsString('DivisionByZeroError at ' . realpath($project) . '/magic/src/ImageDecoder.php:37', $output);
+        $this->assertStringContainsString('Process exited with status 0', $output);
+        $this->assertMatchesRegularExpression('/Replayed [0-9]+ inputs of 2 targets, 2 failed\./', $output);
+        $this->assertSame(['exit', 'magic-header'], $this->sorted(array_column(SarifResults::inFile($this->directory . '/regress.sarif'), 'target')));
+
+        // the defect of the image decoder is fixed: a scale of 0 is 1
+        file_put_contents(
+            $project . '/magic/src/ImageDecoder.php',
+            str_replace('intdiv(1024, ord($data[4]))', 'intdiv(1024, max(1, ord($data[4])))', (string) file_get_contents($project . '/magic/src/ImageDecoder.php')),
+        );
+
+        [$exit, $output] = $this->rattle(['regress', ...$targets, ...$options]);
+
+        $this->assertSame(1, $exit, $output);
+        $this->assertMatchesRegularExpression('/Replayed [0-9]+ inputs of 2 targets, 1 failed\./', $output);
+
+        // ... and so is the defect of the command line: -h no longer exits
+        file_put_contents(
+            $project . '/exit/src/CommandLine.php',
+            str_replace('exit(0);', "return ['options' => ['h'], 'arguments' => \$arguments];", (string) file_get_contents($project . '/exit/src/CommandLine.php')),
+        );
+
+        [$exit, $output] = $this->rattle(['regress', $project, ...$options]);
+
+        $this->assertSame(2, $exit, $output);
+        $this->assertStringContainsString('contains no target files', $output);
+
+        [$exit, $output] = $this->rattle(['regress', ...$targets, ...$options]);
+
+        $this->assertSame(0, $exit, $output);
+        $this->assertMatchesRegularExpression('/Replayed [0-9]+ inputs of 2 targets, 0 failed\./', $output);
+    }
+
     public function testReportsTargetFilesThatCannotBeFuzzedTogetherWithExitCodeTwo(): void
     {
         $directory = $this->targetDirectory(['csv' => 'csv', 'other' => 'csv']);
 
         [$exit, $output] = $this->rattle(['fuzz', $directory . '/csv.php', $directory . '/other.php', '--bootstrap', $directory . '/bootstrap.php']);
+
+        $this->assertSame(2, $exit, $output);
+        $this->assertStringContainsString(sprintf('The target files "%s/csv.php" and "%s/other.php" both return a target named "csv"', $directory, $directory), $output);
+
+        [$exit, $output] = $this->rattle(['regress', $directory . '/csv.php', $directory . '/other.php', '--bootstrap', $directory . '/bootstrap.php', '--cache-directory', $this->directory . '/cache']);
 
         $this->assertSame(2, $exit, $output);
         $this->assertStringContainsString(sprintf('The target files "%s/csv.php" and "%s/other.php" both return a target named "csv"', $directory, $directory), $output);
@@ -344,6 +405,18 @@ final class TargetsTest extends TestCase
         }
 
         return $files;
+    }
+
+    /**
+     * @param list<?string> $values
+     *
+     * @return list<?string>
+     */
+    private function sorted(array $values): array
+    {
+        sort($values);
+
+        return $values;
     }
 
     /**

@@ -17,7 +17,7 @@ Usage:
   rattle run      [options] --phpunit <test-id> <input>
   rattle minimize [options] <target.php> <input>
   rattle minimize [options] --phpunit <test-id> <input>
-  rattle regress  [options] <target.php>
+  rattle regress  [options] <target.php|directory>...
   rattle regress  [options] --phpunit
   rattle status   [options] --phpunit
 

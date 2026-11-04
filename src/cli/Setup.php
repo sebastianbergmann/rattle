@@ -168,9 +168,9 @@ final readonly class Setup
 
     /**
      * The target files of the targets that the command is given, in the order
-     * in which they are given, each once. When several targets are fuzzed, a
-     * directory stands for the PHP files directly in it, in the order of
-     * their names, except the bootstrap file.
+     * in which they are given, each once. For the commands that fuzz or
+     * replay several targets, a directory stands for the PHP files directly
+     * in it, in the order of their names, except the bootstrap file.
      *
      * @throws ConfigurationException
      *
@@ -185,7 +185,7 @@ final readonly class Setup
         foreach ($arguments->targets() === [] ? [''] : $arguments->targets() as $target) {
             if ($target !== '' && is_file($target)) {
                 $given = [$target];
-            } elseif ($target !== '' && is_dir($target) && $arguments->command() === 'fuzz') {
+            } elseif ($target !== '' && is_dir($target) && ($arguments->command() === 'fuzz' || $arguments->command() === 'regress')) {
                 $given   = [];
                 $entries = scandir($target);
 
