@@ -219,8 +219,15 @@ final readonly class FuzzCommand implements Command
             $differences === null ? null : $differences->check(...),
         );
 
+        // the scheduler keeps what the run learned about the target for later
+        // runs, as for targets that are fuzzed together, and does not change
+        // the inputs that the engine composes
+        $engine->start($initialInputs);
+
+        $scheduler = new TargetScheduler($executor, [$name => $engine], $seed, null, $isInterrupted, null, [$name => TargetHistory::fromFile($this->historyFile($arguments, $name), $name)]);
+
         try {
-            $statistics = $engine->run($initialInputs);
+            $scheduler->run();
         } catch (CorpusException|FindingException|ProtocolException|WorkerException $e) {
             print PHP_EOL . $e->getMessage() . PHP_EOL;
 
@@ -235,7 +242,12 @@ final readonly class FuzzCommand implements Command
             }
         }
 
+        $statistics = $engine->statistics();
+
         $status->finish($statistics);
+
+        $this->writeHistory($arguments, $name, $scheduler->histories()[$name] ?? null);
+        $this->writeSuiteStatus($arguments->cacheDirectory());
 
         print PHP_EOL;
 

@@ -305,6 +305,23 @@ final class FixturesTest extends TestCase
         $this->assertStringContainsString('1 new finding', $output);
     }
 
+    public function testKeepsWhatTheRunsLearnedAboutATargetThatIsFuzzedOnItsOwn(): void
+    {
+        $this->fuzz('csv', ['--seed', '1', '--max-executions', '500']);
+        $this->fuzz('csv', ['--seed', '2', '--max-executions', '500']);
+
+        $history = json_decode((string) file_get_contents($this->directory . '/cache/csv/statistics.json'), true);
+        $status  = json_decode((string) file_get_contents($this->directory . '/cache/status.json'), true);
+
+        $this->assertIsArray($history);
+        $this->assertSame('csv', $history['target'] ?? null);
+        $this->assertSame(2, $history['runs'] ?? null);
+        $this->assertSame(1000, $history['executions'] ?? null);
+        $this->assertIsArray($status);
+        $this->assertIsArray($status['properties'] ?? null);
+        $this->assertSame(['csv'], array_column($status['properties'], 'property'));
+    }
+
     public function testFindingsAreDeduplicatedAcrossRunsThroughTheFindingsDirectory(): void
     {
         [$exit] = $this->fuzz('exit', ['--seed', '1', '--max-executions', '8000', '--stop-on-finding']);

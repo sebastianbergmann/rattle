@@ -143,16 +143,16 @@ Unlike for a fuzz target, a warning, notice, or deprecation that a property trig
 
 ## Continuous fuzzing
 
-A run of `rattle fuzz --phpunit`, or of `rattle fuzz` with several targets, continues where the runs before it with the same cache directory stopped. Next to its corpus, rattle keeps what it learned about every property in `statistics.json`:
+A run of `rattle fuzz` continues where the runs before it with the same cache directory stopped. Next to the corpus of every target, the corpus of every property of a PHPUnit test suite as well, rattle keeps what it learned about the target in `statistics.json`:
 
-* how many new features the property found recently, relative to how often its inputs were executed, so that the next run chooses the properties with the weights that the runs before it arrived at, instead of with the same weight for every property
+* how many new features the target found recently, relative to how often its inputs were executed, so that the next run chooses the targets that are fuzzed together with the weights that the runs before it arrived at, instead of with the same weight for every target
 * the number of its features at the end of the last run
 * totals over all runs: runs, executions, time, findings, and when it last found a new feature
 * the number of its features over its executions and over time: a point at the start and at the end of every run and whenever it found new features, thinned out to at most 1,000 points
 
-A run starts by replaying the corpora of all properties, which reaches the features that they had again. Only features beyond the number that a property had at the end of the last run count as new, so a property whose code or test changed, and that reaches more features than before, is chosen more often again. The time of a property is its share of the time of a run, in proportion to its executions.
+A run starts by replaying the corpora of all targets, which reaches the features that they had again. Only features beyond the number that a target had at the end of the last run count as new, so a target whose code changed, or a property whose test changed, and that reaches more features than before is chosen more often again. The time of a target is its share of the time of a run, in proportion to its executions.
 
-This needs no configuration. To fuzz continuously in CI, run `rattle fuzz --phpunit --max-time <duration>` regularly, for instance every night, and keep the cache directory from one run to the next, with the cache of your CI system, for instance. At the end of every run, rattle writes the status of all properties that were fuzzed with the cache directory to `status.json` in it. A property that is no longer in the test suite is shown until you remove its directory from the cache directory.
+This needs no configuration. To fuzz continuously in CI, run `rattle fuzz --max-time <duration> fuzz/`, or `rattle fuzz --phpunit --max-time <duration>`, regularly, for instance every night, and keep the cache directory from one run to the next, with the cache of your CI system, for instance. At the end of every run, rattle writes the status of all targets that were fuzzed with the cache directory to `status.json` in it. A target that is no longer fuzzed, a property that is no longer in the test suite, for instance, is shown until you remove its directory from the cache directory.
 
 ```
 rattle status --phpunit [--cache-directory <dir>] [--json | --html <file>]
