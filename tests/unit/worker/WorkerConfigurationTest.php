@@ -9,6 +9,7 @@
  */
 namespace SebastianBergmann\Rattle;
 
+use function array_slice;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Small;
@@ -33,6 +34,9 @@ final class WorkerConfigurationTest extends TestCase
             'timeout of zero'                                => [['--target', 'target.php', '--timeout', '0']],
             'maximum number of choices that is not a number' => [['--target', 'target.php', '--max-choices', 'many']],
             'empty filter'                                   => [['--phpunit', '--phpunit-filter', '']],
+            'empty target'                                   => [['--target', '']],
+            'empty target among several'                     => [['--target', 'a.php', '--target', '']],
+            'several properties'                             => [['--phpunit', '--target', 'Vendor\\ATest::testA', '--target', 'Vendor\\BTest::testB']],
         ];
     }
 
@@ -78,6 +82,37 @@ final class WorkerConfigurationTest extends TestCase
         $this->assertNull($parsed->phpunit()->filter());
     }
 
+    public function testCanBePassedAsArgumentsForAWorkerThatLoadsSeveralTargetFiles(): void
+    {
+        $configuration = (new WorkerConfiguration('target.php', 'bootstrap.php', ['src'], 2, 100, '256M', true, 50, null, true))->withTargets(['a.php', 'b.php']);
+        $parsed        = WorkerConfiguration::fromArguments($configuration->asArguments());
+
+        $this->assertEquals($configuration, $parsed);
+        $this->assertSame('', $parsed->target());
+        $this->assertSame(['a.php', 'b.php'], $parsed->targets());
+        $this->assertSame(['--target', 'a.php', '--target', 'b.php'], array_slice($parsed->asArguments(), 0, 4));
+        $this->assertSame('bootstrap.php', $parsed->bootstrap());
+        $this->assertSame(['src'], $parsed->sources());
+        $this->assertTrue($parsed->opcache());
+    }
+
+    public function testLoadsOneTargetFileWhenItIsTheOnlyOne(): void
+    {
+        $configuration = (new WorkerConfiguration('target.php', null, [], 1, 100, null, false, 50))->withTargets(['a.php']);
+
+        $this->assertSame('a.php', $configuration->target());
+        $this->assertSame([], $configuration->targets());
+        $this->assertEquals($configuration, WorkerConfiguration::fromArguments(['--target', 'a.php', '--timeout', '1', '--max-choices', '100', '--worker-executions', '50']));
+    }
+
+    public function testLoadsOneTargetFileOfAWorkerThatLoadsSeveral(): void
+    {
+        $configuration = (new WorkerConfiguration('target.php', null, [], 1, 100, null, false, 50))->withTargets(['a.php', 'b.php'])->withTarget('b.php');
+
+        $this->assertSame('b.php', $configuration->target());
+        $this->assertSame([], $configuration->targets());
+    }
+
     public function testHasDefaults(): void
     {
         $configuration = WorkerConfiguration::fromArguments(['--target', 'target.php']);
@@ -89,6 +124,7 @@ final class WorkerConfigurationTest extends TestCase
         $this->assertFalse($configuration->ignoreDeprecations());
         $this->assertSame(10000, $configuration->numberOfExecutions());
         $this->assertFalse($configuration->opcache());
+        $this->assertSame([], $configuration->targets());
         $this->assertEquals($configuration, WorkerConfiguration::fromArguments($configuration->asArguments()));
     }
 

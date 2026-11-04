@@ -12,6 +12,7 @@ namespace SebastianBergmann\Rattle;
 use const SIG_IGN;
 use const SIGINT;
 use const STDERR;
+use function array_keys;
 use function array_values;
 use function assert;
 use function count;
@@ -45,7 +46,8 @@ use Throwable;
  * At startup, a worker installs its shutdown function, registers the include
  * hook that instruments the code under test, installs the detectors of
  * dangerous sinks (see Detectors), loads the bootstrap file and the target
- * file, and tells the supervisor that it is ready. When the process ends
+ * file, or the target files when there are several, and tells the supervisor
+ * that it is ready, or describes the targets. When the process ends
  * while an input is executed, because of a fatal error or because the target
  * calls exit(), the shutdown function reports a result for that input.
  *
@@ -68,6 +70,20 @@ final class Worker
     private readonly ComparisonOperands $operands;
     private ?InputRunner $runner = null;
 
+    /**
+     * The target that the input that is executed names.
+     */
+    private ?string $target = null;
+
+    /**
+     * The constant operands of the comparisons in the code that was
+     * instrumented while a worker with several targets started, by the
+     * targets that they were not reported for yet.
+     *
+     * @var array<non-empty-string, list<non-empty-string>>
+     */
+    private array $startupTokens = [];
+
     public function __construct(WorkerConfiguration $configuration, FrameStream $stream)
     {
         $this->configuration = $configuration;
@@ -87,7 +103,8 @@ final class Worker
         $this->prepareProcess();
 
         $phpunit = $this->configuration->phpunit();
-        $hook    = new IncludeHook(new Instrumentor($this->operands), $this->configuration->sources(), $phpunit === null ? [$this->configuration->target()] : []);
+        $targets = $this->configuration->targets();
+        $hook    = new IncludeHook(new Instrumentor($this->operands), $this->configuration->sources(), $phpunit === null ? ($targets === [] ? [$this->configuration->target()] : $targets) : []);
 
         try {
             $hook->register();
@@ -140,6 +157,35 @@ final class Worker
 
                 $maximumLength = null;
                 $runner        = new PropertyExampleRunner($api, $name, $this->configuration->timeout(), $this->configuration->maximumNumberOfChoices(), $workingDirectory);
+            } elseif ($targets !== []) {
+                // a worker with several target files describes all their
+                // targets and then executes the inputs of all of them, with a
+                // runner for each target, so that the features that it has
+                // seen are kept apart for every target
+                $runners = $this->loadTargets($targets, $workingDirectory);
+
+                // the constant operands of the comparisons in the code that
+                // was instrumented while the worker started belong to all
+                // targets
+                $tokens = $this->operands->takeUnreported();
+
+                foreach (array_keys($runners) as $name) {
+                    $this->startupTokens[$name] = $tokens;
+                }
+
+                return $this->serve(
+                    $hook,
+                    static function (Job $job) use ($runners): InputRunner
+                    {
+                        $target = $job->target();
+
+                        if ($target === null || !isset($runners[$target])) {
+                            throw new ProtocolException('An input does not name one of the targets of the worker');
+                        }
+
+                        return $runners[$target];
+                    },
+                );
             } else {
                 $target        = (new TargetLoader)->load($this->configuration->target());
                 $name          = $target->name();
@@ -186,7 +232,86 @@ final class Worker
         // after the memory limit was exceeded, reporting the result needs memory
         ini_set('memory_limit', '-1');
 
-        $this->stream->write(['type' => 'result', 'result' => $result->withTokens($this->operands->takeUnreported())->asArray(), 'last' => true]);
+        $this->stream->write(['type' => 'result', 'result' => $result->withTokens($this->tokensFor($this->target))->asArray(), 'last' => true]);
+    }
+
+    /**
+     * Loads the target files, and returns a runner for each of their targets,
+     * by the names of the targets, after describing the targets to the
+     * supervisor.
+     *
+     * @param non-empty-list<string> $files
+     *
+     * @throws InvalidTargetException
+     *
+     * @return array<non-empty-string, Runner>
+     */
+    private function loadTargets(array $files, string $workingDirectory): array
+    {
+        $runners     = [];
+        $loadedFrom  = [];
+        $description = [];
+
+        foreach ($files as $file) {
+            $target = (new TargetLoader)->load($file);
+            $name   = $target->name();
+
+            // the corpus and the findings of a target are kept in directories
+            // that are named after it
+            if (isset($loadedFrom[$name])) {
+                throw new InvalidTargetException(sprintf('The target files "%s" and "%s" both return a target named "%s"', $loadedFrom[$name], $file, $name));
+            }
+
+            $loadedFrom[$name] = $file;
+            $runners[$name]    = new Runner(
+                $target,
+                $this->configuration->maximumNumberOfChoices(),
+                $this->configuration->timeout(),
+                $this->configuration->ignoreDeprecations(),
+                $workingDirectory,
+            );
+
+            $description[] = [
+                'file'                   => $file,
+                'name'                   => $name,
+                'maximumLength'          => $target->maximumLength(),
+                'maximumNumberOfChoices' => $runners[$name]->maximumNumberOfChoices(),
+            ];
+        }
+
+        $this->stream->write(
+            [
+                'type'     => 'targets',
+                'protocol' => Frame::PROTOCOL_VERSION,
+                'targets'  => $description,
+            ],
+        );
+
+        return $runners;
+    }
+
+    /**
+     * The constant operands of the comparisons in the code that was
+     * instrumented that were not reported yet, which are reported with the
+     * result of an input of the target. The ones that were found while a
+     * worker with several targets started are reported with the first result
+     * of each of its targets.
+     *
+     * @return list<non-empty-string>
+     */
+    private function tokensFor(?string $target): array
+    {
+        $tokens = $this->operands->takeUnreported();
+
+        if ($target === null || !isset($this->startupTokens[$target])) {
+            return $tokens;
+        }
+
+        $startup = $this->startupTokens[$target];
+
+        unset($this->startupTokens[$target]);
+
+        return [...$startup, ...$tokens];
     }
 
     /**
@@ -226,6 +351,7 @@ final class Worker
                     $runner = $runnerFor($job);
 
                     $this->runner = $runner;
+                    $this->target = $job->target();
 
                     if (ob_get_level() === 0) {
                         $this->redirectOutput();
@@ -235,7 +361,7 @@ final class Worker
                     // that was instrumented, before the input or while it was
                     // executed, are reported with its result, and so is the
                     // number of files that were instrumented
-                    $result = $runner->run($job)->withTokens($this->operands->takeUnreported());
+                    $result = $runner->run($job)->withTokens($this->tokensFor($job->target()));
 
                     $instrumentedFiles = $hook->numberOfInstrumentedFiles() - $numberOfInstrumentedFiles;
 

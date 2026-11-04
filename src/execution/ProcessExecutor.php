@@ -12,6 +12,7 @@ namespace SebastianBergmann\Rattle;
 use const INF;
 use function array_shift;
 use function assert;
+use function in_array;
 use function is_int;
 use function max;
 use function microtime;
@@ -57,6 +58,12 @@ final class ProcessExecutor implements Executor
      * PHPUnit test suite.
      */
     private const string TEST_SUITE = 'phpunit';
+
+    /**
+     * The name of the target of workers that serve the targets of several
+     * target files.
+     */
+    private const string TARGETS = 'targets';
     private readonly WorkerConfiguration $configuration;
 
     /**
@@ -83,6 +90,22 @@ final class ProcessExecutor implements Executor
      * @var ?list<non-empty-string>
      */
     private ?array $properties = null;
+
+    /**
+     * The targets that the workers serve, by their names, when they load
+     * several target files.
+     *
+     * @var ?array<non-empty-string, TargetDescription>
+     */
+    private ?array $targets = null;
+
+    /**
+     * The target file of each target that the workers serve, by the names of
+     * the targets, when they load several target files.
+     *
+     * @var array<non-empty-string, non-empty-string>
+     */
+    private array $targetFiles = [];
 
     /**
      * @var non-negative-int
@@ -140,6 +163,38 @@ final class ProcessExecutor implements Executor
         $this->target();
 
         return $this->properties;
+    }
+
+    /**
+     * The targets that the workers serve, by their names, in the order of
+     * their target files, when the workers load several target files, or
+     * null when they serve one target. The workers are started when they
+     * were not started before.
+     *
+     * @throws WorkerException
+     *
+     * @return ?array<non-empty-string, TargetDescription>
+     */
+    public function targets(): ?array
+    {
+        $this->target();
+
+        return $this->targets;
+    }
+
+    /**
+     * The target file of each target that the workers serve, by the names of
+     * the targets, when the workers load several target files.
+     *
+     * @throws WorkerException
+     *
+     * @return array<non-empty-string, non-empty-string>
+     */
+    public function targetFiles(): array
+    {
+        $this->target();
+
+        return $this->targetFiles;
     }
 
     public function target(): TargetDescription
@@ -518,8 +573,10 @@ final class ProcessExecutor implements Executor
                 }
 
                 // a worker that serves all the properties of a PHPUnit test
-                // suite lists them instead of describing one target
-                if (($frame['type'] ?? null) === 'ready' || ($frame['type'] ?? null) === 'properties') {
+                // suite lists them instead of describing one target, and a
+                // worker that loads several target files describes all their
+                // targets
+                if (in_array($frame['type'] ?? null, ['ready', 'properties', 'targets'], true)) {
                     $this->handshake($frame, $worker);
 
                     return $worker;
@@ -545,6 +602,12 @@ final class ProcessExecutor implements Executor
             $worker->wait();
 
             throw new WorkerException('The worker speaks another version of the protocol');
+        }
+
+        if (($frame['type'] ?? null) === 'targets') {
+            $this->handshakeOfTargets($frame);
+
+            return;
         }
 
         $maximumLength          = $frame['maximumLength'] ?? null;
@@ -575,6 +638,54 @@ final class ProcessExecutor implements Executor
         }
 
         $this->target ??= new TargetDescription($name, $maximumLength, $maximumNumberOfChoices);
+    }
+
+    /**
+     * @param array<mixed> $frame
+     *
+     * @throws WorkerException
+     */
+    private function handshakeOfTargets(array $frame): void
+    {
+        $targets                = [];
+        $files                  = [];
+        $maximumNumberOfChoices = 1;
+
+        try {
+            foreach (ProtocolData::array($frame['targets'] ?? null) as $data) {
+                $data          = ProtocolData::array($data);
+                $name          = ProtocolData::nonEmptyString($data['name'] ?? null);
+                $file          = ProtocolData::nonEmptyString($data['file'] ?? null);
+                $maximumLength = $data['maximumLength'] ?? null;
+                $choices       = $data['maximumNumberOfChoices'] ?? null;
+
+                if (!is_int($choices) || $choices < 1 ||
+                    !($maximumLength === null || (is_int($maximumLength) && $maximumLength > 0)) ||
+                    isset($targets[$name])) {
+                    throw new ProtocolException('Invalid description of a target');
+                }
+
+                $targets[$name] = new TargetDescription($name, $maximumLength, $choices);
+                $files[$name]   = $file;
+            }
+        } catch (ProtocolException $e) {
+            throw new WorkerException(sprintf('The worker sent an invalid handshake: %s', $e->getMessage()), 0, $e);
+        }
+
+        if ($targets === []) {
+            throw new WorkerException('The worker sent an invalid handshake: it describes no target');
+        }
+
+        foreach ($targets as $target) {
+            $maximumNumberOfChoices = max($maximumNumberOfChoices, $target->maximumNumberOfChoices());
+        }
+
+        if ($this->targets === null) {
+            $this->targets     = $targets;
+            $this->targetFiles = $files;
+        }
+
+        $this->target ??= new TargetDescription(self::TARGETS, null, $maximumNumberOfChoices);
     }
 
     private function startupFailure(string $message, WorkerProcess $worker): string

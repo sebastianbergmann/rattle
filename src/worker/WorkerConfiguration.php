@@ -11,6 +11,7 @@ namespace SebastianBergmann\Rattle;
 
 use function count;
 use function ctype_digit;
+use function in_array;
 use function sprintf;
 
 /**
@@ -22,6 +23,10 @@ use function sprintf;
  * test ID of a property. A worker without a target lists the test IDs of the
  * properties and then executes inputs of all of them, each of which names
  * its property.
+ *
+ * A worker can also load several target files, of fuzz targets that are
+ * fuzzed together. It describes all their targets and then executes inputs
+ * of all of them, each of which names its target.
  *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
@@ -66,13 +71,18 @@ final readonly class WorkerConfiguration
     private bool $opcache;
 
     /**
+     * @var list<string>
+     */
+    private array $targets;
+
+    /**
      * @param list<string> $arguments
      *
      * @throws ArgumentsBuilderException
      */
     public static function fromArguments(array $arguments): self
     {
-        $target                 = null;
+        $targets                = [];
         $bootstrap              = null;
         $sources                = [];
         $timeout                = self::DEFAULT_TIMEOUT;
@@ -116,7 +126,7 @@ final readonly class WorkerConfiguration
 
             switch ($argument) {
                 case '--target':
-                    $target = $value;
+                    $targets[] = $value;
 
                     break;
 
@@ -165,12 +175,12 @@ final readonly class WorkerConfiguration
             }
         }
 
-        if (!$phpunit && ($target === null || $target === '')) {
-            throw new ArgumentsBuilderException('The worker needs a target');
+        if ($phpunit ? count($targets) > 1 : ($targets === [] || in_array('', $targets, true))) {
+            throw new ArgumentsBuilderException($phpunit ? 'The worker serves one property or all of them' : 'The worker needs a target');
         }
 
         return new self(
-            (string) $target,
+            count($targets) === 1 ? $targets[0] : '',
             $bootstrap,
             $sources,
             $timeout,
@@ -180,18 +190,20 @@ final readonly class WorkerConfiguration
             $numberOfExecutions,
             $phpunit ? new PhpunitTestSuite($phpunitConfiguration, $phpunitFilter) : null,
             $opcache,
+            count($targets) > 1 ? $targets : [],
         );
     }
 
     /**
-     * @param string       $target                 the target file, or the test ID of a property; empty only when a worker lists the properties of a PHPUnit test suite
+     * @param string       $target                 the target file, or the test ID of a property; empty only when a worker lists the properties of a PHPUnit test suite, or loads several target files
      * @param list<string> $sources
      * @param positive-int $timeout
      * @param positive-int $maximumNumberOfChoices
      * @param positive-int $numberOfExecutions
      * @param bool         $opcache                whether the worker process runs with OPcache and its JIT
+     * @param list<string> $targets                the target files of a worker that loads several of them, when the target is empty
      */
-    public function __construct(string $target, ?string $bootstrap, array $sources, int $timeout, int $maximumNumberOfChoices, ?string $memoryLimit, bool $ignoreDeprecations, int $numberOfExecutions, ?PhpunitTestSuite $phpunit = null, bool $opcache = false)
+    public function __construct(string $target, ?string $bootstrap, array $sources, int $timeout, int $maximumNumberOfChoices, ?string $memoryLimit, bool $ignoreDeprecations, int $numberOfExecutions, ?PhpunitTestSuite $phpunit = null, bool $opcache = false, array $targets = [])
     {
         $this->target                 = $target;
         $this->bootstrap              = $bootstrap;
@@ -203,12 +215,14 @@ final readonly class WorkerConfiguration
         $this->numberOfExecutions     = $numberOfExecutions;
         $this->phpunit                = $phpunit;
         $this->opcache                = $opcache;
+        $this->targets                = $targets;
     }
 
     /**
      * The configuration of a worker that executes the inputs of another
      * target with the same settings: another property of the same PHPUnit
-     * test suite, for instance.
+     * test suite, for instance, or one of the target files of a worker that
+     * loads several of them.
      */
     public function withTarget(string $target): self
     {
@@ -227,12 +241,52 @@ final readonly class WorkerConfiguration
     }
 
     /**
+     * The configuration of a worker that loads the target files and executes
+     * the inputs of all their targets, with the same settings. With one
+     * target file, the worker loads that one.
+     *
+     * @param non-empty-list<string> $targets
+     */
+    public function withTargets(array $targets): self
+    {
+        if (count($targets) === 1) {
+            return $this->withTarget($targets[0]);
+        }
+
+        return new self(
+            '',
+            $this->bootstrap,
+            $this->sources,
+            $this->timeout,
+            $this->maximumNumberOfChoices,
+            $this->memoryLimit,
+            $this->ignoreDeprecations,
+            $this->numberOfExecutions,
+            $this->phpunit,
+            $this->opcache,
+            $targets,
+        );
+    }
+
+    /**
      * The target file, or the test ID of a property, which is empty when a
-     * worker lists the properties of a PHPUnit test suite.
+     * worker lists the properties of a PHPUnit test suite, or loads several
+     * target files.
      */
     public function target(): string
     {
         return $this->target;
+    }
+
+    /**
+     * The target files of a worker that loads several of them, or an empty
+     * list.
+     *
+     * @return list<string>
+     */
+    public function targets(): array
+    {
+        return $this->targets;
     }
 
     /**
@@ -342,9 +396,9 @@ final readonly class WorkerConfiguration
     {
         $arguments = [];
 
-        if ($this->target !== '') {
+        foreach ($this->targets === [] && $this->target !== '' ? [$this->target] : $this->targets as $target) {
             $arguments[] = '--target';
-            $arguments[] = $this->target;
+            $arguments[] = $target;
         }
 
         if ($this->bootstrap !== null) {

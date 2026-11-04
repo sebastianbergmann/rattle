@@ -9,6 +9,7 @@
  */
 namespace SebastianBergmann\Rattle;
 
+use function array_keys;
 use function array_map;
 use function count;
 use function dirname;
@@ -45,12 +46,14 @@ use SebastianBergmann\Rattle\Fixture\Worker\Behaviour;
 #[Large]
 final class ProcessExecutorTest extends TestCase
 {
-    private const string FIXTURES      = __DIR__ . '/../../fixtures/worker';
-    private ?ProcessExecutor $executor = null;
+    private const string FIXTURES             = __DIR__ . '/../../fixtures/worker';
+    private ?ProcessExecutor $executor        = null;
+    private ?ProcessExecutor $targetsExecutor = null;
 
     protected function tearDown(): void
     {
         $this->executor?->shutdown();
+        $this->targetsExecutor?->shutdown();
     }
 
     public function testDescribesTheTargetThatTheWorkersLoaded(): void
@@ -365,6 +368,95 @@ final class ProcessExecutorTest extends TestCase
         $this->expectExceptionMessageIsOrContains('The bootstrap file "/does/not/exist.php" does not exist');
 
         (new ProcessExecutor(new WorkerConfiguration(self::FIXTURES . '/target.php', '/does/not/exist.php', [], 1, 100, null, false, 100), 1))->start();
+    }
+
+    public function testDescribesTheTargetsOfSeveralTargetFiles(): void
+    {
+        $executor = $this->targetsExecutor();
+        $targets  = $executor->targets();
+
+        $this->assertNotNull($targets);
+        $this->assertSame(['worker', 'bytes'], array_keys($targets));
+        $this->assertFalse($this->targetNamed($targets, 'worker')->isBytesTarget());
+        $this->assertSame(16, $this->targetNamed($targets, 'bytes')->maximumLength());
+        $this->assertSame(8192, $this->targetNamed($targets, 'bytes')->maximumNumberOfChoices());
+        $this->assertSame(['worker' => self::FIXTURES . '/target.php', 'bytes' => self::FIXTURES . '/bytes-target.php'], $executor->targetFiles());
+        $this->assertSame('targets', $executor->target()->name());
+        $this->assertNull($this->executor()->targets());
+        $this->assertSame([], $this->executor()->targetFiles());
+    }
+
+    public function testExecutesTheInputsOfEveryTargetOfSeveralTargetFilesAndKeepsTheirFeaturesApart(): void
+    {
+        $executor = $this->targetsExecutor();
+
+        $first  = $executor->execute(Job::replay(0, [Behaviour::PASS, 0])->withTarget('worker'));
+        $again  = $executor->execute(Job::replay(1, [Behaviour::PASS, 0])->withTarget('worker'));
+        $bytes  = $executor->execute(Job::replay(2, [0])->withTarget('bytes'));
+        $failed = $executor->execute(Job::replay(3, [1, 112, 1, 97, 1, 115, 1, 115, 0])->withTarget('bytes'));
+
+        $this->assertSame(Outcome::Passed, $first->outcome());
+        $this->assertNotSame([], $first->features());
+        $this->assertSame([], $again->features());
+        $this->assertSame(Outcome::Passed, $bytes->outcome());
+        $this->assertNotSame([], $bytes->features());
+        $this->assertSame(Outcome::Failed, $failed->outcome());
+        $this->assertStringStartsWith('LogicException', $failed->failure()?->describe() ?? '');
+    }
+
+    public function testReportsTheConstantOperandsOfComparisonsThatWereFoundWhileAWorkerWithSeveralTargetsStartedWithTheFirstResultOfEveryTarget(): void
+    {
+        $executor = $this->targetsExecutor();
+
+        $first  = $executor->execute(Job::replay(0, [Behaviour::PASS, 0])->withTarget('worker'));
+        $second = $executor->execute(Job::replay(1, [Behaviour::PASS, 0])->withTarget('worker'));
+        $bytes  = $executor->execute(Job::replay(2, [0])->withTarget('bytes'));
+
+        // bytes-target.php creates a Behaviour, whose code is instrumented
+        // while the worker starts
+        $this->assertSame(['pass'], $first->tokens());
+        $this->assertSame([], $second->tokens());
+        $this->assertSame(['pass'], $bytes->tokens());
+    }
+
+    public function testAWorkerThatServesSeveralTargetsRejectsAnInputThatNamesNoneOfThem(): void
+    {
+        $this->expectException(WorkerException::class);
+        $this->expectExceptionMessageIsOrContains('An input does not name one of the targets of the worker');
+
+        $this->targetsExecutor()->execute(Job::replay(0, [0])->withTarget('other'));
+    }
+
+    public function testCannotStartAWorkerForTwoTargetFilesWhoseTargetsHaveTheSameName(): void
+    {
+        $this->expectException(WorkerException::class);
+        $this->expectExceptionMessageIsOrContains(sprintf('The target files "%s" and "%s" both return a target named "worker"', self::FIXTURES . '/target.php', self::FIXTURES . '/duplicate-target.php'));
+
+        $this->targetsExecutor([self::FIXTURES . '/target.php', self::FIXTURES . '/duplicate-target.php'])->start();
+    }
+
+    /**
+     * An executor whose workers load several target files of the fixture.
+     *
+     * @param ?non-empty-list<string> $files
+     */
+    private function targetsExecutor(?array $files = null): ProcessExecutor
+    {
+        $this->targetsExecutor = new ProcessExecutor($this->configuration()->withTargets($files ?? [self::FIXTURES . '/target.php', self::FIXTURES . '/bytes-target.php']), 1);
+
+        return $this->targetsExecutor;
+    }
+
+    /**
+     * @param array<non-empty-string, TargetDescription> $targets
+     */
+    private function targetNamed(array $targets, string $name): TargetDescription
+    {
+        $target = $targets[$name] ?? null;
+
+        $this->assertNotNull($target);
+
+        return $target;
     }
 
     /**
