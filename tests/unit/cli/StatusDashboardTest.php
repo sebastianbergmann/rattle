@@ -22,7 +22,7 @@ use PHPUnit\Framework\TestCase;
 #[Small]
 final class StatusDashboardTest extends TestCase
 {
-    public function testShowsATableAndAChartOfTheFeaturesOverTheExecutionsOfEveryPropertyInOneFile(): void
+    public function testShowsATableAndAChartOfTheFeaturesOverTheExecutionsOfEveryTargetInOneFile(): void
     {
         $history = new TargetHistory('ParserTest::testRoundTrip<script>');
 
@@ -35,7 +35,8 @@ final class StatusDashboardTest extends TestCase
 
         $this->assertStringStartsWith('<!doctype html>', $html);
         $this->assertStringContainsString('<title>rattle status</title>', $html);
-        $this->assertStringContainsString('2 properties of a PHPUnit test suite, as of 1970-01-01 00:18:20 UTC', $html);
+        $this->assertStringContainsString('2 targets, as of 1970-01-01 00:18:20 UTC', $html);
+        $this->assertStringContainsString('<th>Target</th>', $html);
         $this->assertStringContainsString('<tr><td>ParserTest::testRoundTrip&lt;script&gt;</td><td>1</td><td>2,500</td><td>10s</td><td>7</td><td>1</td><td>1m38s ago</td></tr>', $html);
         $this->assertStringContainsString('<tr><td>LexerTest::testTokens</td><td>0</td><td>0</td><td>0s</td><td>0</td><td>0</td><td>never</td></tr>', $html);
         $this->assertStringNotContainsString('<script>', $html);

@@ -30,7 +30,7 @@ Usage:
   rattle minimize [options] --phpunit <test-id> <input>
   rattle regress  [options] <target.php|directory>...
   rattle regress  [options] --phpunit
-  rattle status   [options] --phpunit
+  rattle status   [options]
 
   rattle --help
   rattle --version
@@ -42,7 +42,7 @@ Commands:
   run                         Run one input once and show what happened
   minimize                    Minimize one input and write it to <input>.minimized
   regress                     Replay every input in the corpus and findings directories once
-  status                      Show what the runs found out about the properties of a test suite
+  status                      Show what the runs found out about the targets
 
 Options for "rattle fuzz":
 

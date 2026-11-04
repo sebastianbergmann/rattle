@@ -356,10 +356,6 @@ final readonly class ArgumentsBuilder
             throw new ArgumentsBuilderException('The options --configuration and --filter can only be used with --phpunit');
         }
 
-        if ($command === 'status' && !$phpunit) {
-            throw new ArgumentsBuilderException('The "status" command shows the properties of a PHPUnit test suite and needs --phpunit');
-        }
-
         if ($json && $htmlFile !== null) {
             throw new ArgumentsBuilderException('The options --json and --html cannot be used together');
         }

@@ -59,7 +59,6 @@ final class ArgumentsBuilderTest extends TestCase
             'negative maximum number of shrinking attempts' => [['rattle', 'fuzz', 'target.php', '--max-shrink-attempts', '-1']],
             'seed with run'                                 => [['rattle', 'run', 'target.php', 'input', '--seed', '1']],
             'SARIF with run'                                => [['rattle', 'run', 'target.php', 'input', '--sarif', 'findings.sarif']],
-            'status without --phpunit'                      => [['rattle', 'status']],
             'status with an argument'                       => [['rattle', 'status', '--phpunit', 'target.php']],
             'status in JSON and HTML'                       => [['rattle', 'status', '--phpunit', '--json', '--html', 'status.html']],
             'empty SARIF file'                              => [['rattle', 'regress', 'target.php', '--sarif', '']],
@@ -216,6 +215,7 @@ final class ArgumentsBuilderTest extends TestCase
         $this->assertNull($arguments->htmlFile());
         $this->assertFalse((new ArgumentsBuilder)->build(['rattle', 'status', '--phpunit'])->json());
         $this->assertSame('status.html', (new ArgumentsBuilder)->build(['rattle', 'status', '--phpunit', '--html', 'status.html'])->htmlFile());
+        $this->assertFalse((new ArgumentsBuilder)->build(['rattle', 'status', '--json'])->phpunit());
     }
 
     public function testParsesTheArgumentsOfTheMinimizeCommandForAProperty(): void

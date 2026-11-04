@@ -155,10 +155,10 @@ A run starts by replaying the corpora of all targets, which reaches the features
 This needs no configuration. To fuzz continuously in CI, run `rattle fuzz --max-time <duration> fuzz/`, or `rattle fuzz --phpunit --max-time <duration>`, regularly, for instance every night, and keep the cache directory from one run to the next, with the cache of your CI system, for instance. At the end of every run, rattle writes the status of all targets that were fuzzed with the cache directory to `status.json` in it. A target that is no longer fuzzed, a property that is no longer in the test suite, for instance, is shown until you remove its directory from the cache directory.
 
 ```
-rattle status --phpunit [--cache-directory <dir>] [--json | --html <file>]
+rattle status [--cache-directory <dir>] [--json | --html <file>]
 ```
 
-shows the status without running the test suite: as a table, in JSON with `--json`, which is what `status.json` has, or with `--html <file>` as a dashboard in one HTML file that needs nothing else, with a chart of the features of every property over its executions, which you can keep as an artifact of CI. In JSON, times are seconds since the Unix epoch, and the points of a series are the time, the number of executions, and the number of features.
+shows the status without loading the targets or running a test suite: as a table, in JSON with `--json`, which is what `status.json` has, or with `--html <file>` as a dashboard in one HTML file that needs nothing else, with a chart of the features of every target over its executions, which you can keep as an artifact of CI. It shows the fuzz targets and the properties of PHPUnit test suites that were fuzzed with the cache directory alike, a fuzz target by its name and a property by its test ID, which in JSON is the `property` of a target, too. In JSON, times are seconds since the Unix epoch, and the points of a series are the time, the number of executions, and the number of features.
 
 ## Differences between versions of PHP
 
@@ -187,7 +187,7 @@ rattle fuzz     [options] <target.php|directory>...
 rattle run      [options] <target.php> <input>
 rattle minimize [options] <target.php> <input>
 rattle regress  [options] <target.php|directory>...
-rattle status   [options] --phpunit
+rattle status   [options]
 ```
 
 With `--phpunit`, these commands work on the properties of a PHPUnit test suite instead of a fuzz target, see [Properties of a PHPUnit test suite](#properties-of-a-phpunit-test-suite).
@@ -200,7 +200,7 @@ With `--phpunit`, these commands work on the properties of a PHPUnit test suite 
 
 `rattle regress` replays every input in the corpus and findings directories of the target, or of every target, once. Its exit code is 1 when any of them fails.
 
-`rattle status --phpunit` shows what the runs found out about the properties of a PHPUnit test suite, see [Continuous fuzzing](#continuous-fuzzing).
+`rattle status` shows what the runs found out about the targets that were fuzzed with the cache directory, see [Continuous fuzzing](#continuous-fuzzing).
 
 With `--php <binary>`, `rattle fuzz`, `rattle run`, and `rattle regress` compare the outcomes of inputs on other versions of PHP, see [Differences between versions of PHP](#differences-between-versions-of-php).
 

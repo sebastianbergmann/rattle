@@ -191,6 +191,31 @@ final class TargetsTest extends TestCase
         $this->assertIsArray($status);
         $this->assertIsArray($status['properties'] ?? null);
         $this->assertSame($targets, array_column($status['properties'], 'property'));
+
+        // "rattle status" shows what the runs found out without fuzzing
+        [$exit, $output] = $this->rattle(['status', '--cache-directory', $this->directory . '/cache']);
+
+        $this->assertSame(0, $exit, $output);
+        $this->assertMatchesRegularExpression('/^Target +Runs +Executions +Time +Features +Findings +Last new feature$/m', $output);
+        $this->assertMatchesRegularExpression('/^csv +2 +1,000 /m', $output);
+        $this->assertMatchesRegularExpression('/^magic-header +2 +1,000 /m', $output);
+
+        // ... also in JSON, without anything else
+        [$exit, $output] = $this->rattle(['status', '--cache-directory', $this->directory . '/cache', '--json']);
+
+        $this->assertSame(0, $exit, $output);
+
+        $json = json_decode($output, true);
+
+        $this->assertIsArray($json);
+        $this->assertIsArray($json['properties'] ?? null);
+        $this->assertSame($targets, array_column($json['properties'], 'property'));
+
+        // ... and as a dashboard
+        [$exit, $output] = $this->rattle(['status', '--cache-directory', $this->directory . '/cache', '--html', $this->directory . '/status.html']);
+
+        $this->assertSame(0, $exit, $output);
+        $this->assertStringContainsString('<h2>magic-header</h2>', (string) file_get_contents($this->directory . '/status.html'));
     }
 
     public function testFuzzesTheTargetFilesOfADirectoryWithoutTheBootstrapFile(): void

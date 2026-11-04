@@ -22,10 +22,10 @@ use function number_format;
 use function sprintf;
 
 /**
- * The status of the properties of a PHPUnit test suite (see SuiteStatus) as
- * one HTML file that needs nothing else, so that it can be kept as an
- * artifact of CI and opened without a network: a table with a row for every
- * property, and a chart for every property that shows the number of its
+ * The status of the targets that were fuzzed with a cache directory (see
+ * SuiteStatus) as one HTML file that needs nothing else, so that it can be
+ * kept as an artifact of CI and opened without a network: a table with a row
+ * for every target, and a chart for every target that shows the number of its
  * features over the number of its executions in all runs, on a logarithmic
  * scale, as progress in fuzzing slows down over time.
  *
@@ -128,10 +128,10 @@ CSS;
 </head>
 <body>
 <h1>rattle status</h1>
-<p class="meta">%d propert%s of a PHPUnit test suite, as of %s UTC</p>
+<p class="meta">%d target%s, as of %s UTC</p>
 <div class="table">
 <table>
-<thead><tr><th>Property</th><th>Runs</th><th>Executions</th><th>Time</th><th>Features</th><th>Findings</th><th>Last new feature</th></tr></thead>
+<thead><tr><th>Target</th><th>Runs</th><th>Executions</th><th>Time</th><th>Features</th><th>Findings</th><th>Last new feature</th></tr></thead>
 <tbody>
 %s</tbody>
 </table>
@@ -142,7 +142,7 @@ CSS;
 HTML,
             self::STYLESHEET,
             count($histories),
-            count($histories) === 1 ? 'y' : 'ies',
+            count($histories) === 1 ? '' : 's',
             gmdate('Y-m-d H:i:s', (int) $now),
             $rows,
             $charts,
@@ -150,7 +150,7 @@ HTML,
     }
 
     /**
-     * The number of features of a property over its executions, as steps,
+     * The number of features of a target over its executions, as steps,
      * with the executions on a logarithmic scale.
      */
     private function chart(TargetHistory $history): string

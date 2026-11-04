@@ -65,13 +65,13 @@ final class SuiteStatusTest extends TestCase
         $this->assertTrue(SuiteStatus::fromCacheDirectory($this->directory . '/does-not-exist')->isEmpty());
     }
 
-    public function testShowsTheStatusOfEveryPropertyInATable(): void
+    public function testShowsTheStatusOfEveryTargetInATable(): void
     {
         $status = new SuiteStatus([$this->history(null, 'ParserTest::testRoundTrip'), new TargetHistory('LexerTest::testTokens')]);
 
         $this->assertSame(
             <<<'EOT'
-Property                   Runs    Executions        Time  Features  Findings  Last new feature
+Target                     Runs    Executions        Time  Features  Findings  Last new feature
 LexerTest::testTokens         0             0          0s         0         0  never
 ParserTest::testRoundTrip     1         1,500       1m05s        12         1  1m40s ago
 

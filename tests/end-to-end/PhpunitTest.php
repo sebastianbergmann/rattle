@@ -127,7 +127,7 @@ final class PhpunitTest extends TestCase
         [$exit, $output] = $this->rattle(['status', '--phpunit', '--cache-directory', $this->directory . '/cache']);
 
         $this->assertSame(0, $exit, $output);
-        $this->assertMatchesRegularExpression('/^Property +Runs +Executions +Time +Features +Findings +Last new feature$/m', $output);
+        $this->assertMatchesRegularExpression('/^Target +Runs +Executions +Time +Features +Findings +Last new feature$/m', $output);
         $this->assertMatchesRegularExpression('/^' . preg_quote(self::OTHER, '/') . ' +2 +2,000 +[0-9hms]+ +0 +0 +never$/m', $output);
 
         // ... also in JSON, without anything else
@@ -145,12 +145,12 @@ final class PhpunitTest extends TestCase
         $this->assertStringContainsString('<h2>' . self::OTHER . '</h2>', (string) file_get_contents($this->directory . '/status.html'));
     }
 
-    public function testStatusTellsWhenNoPropertyWasFuzzedWithTheCacheDirectory(): void
+    public function testStatusTellsWhenNothingWasFuzzedWithTheCacheDirectory(): void
     {
         [$exit, $output] = $this->rattle(['status', '--phpunit', '--cache-directory', $this->directory . '/cache']);
 
         $this->assertSame(2, $exit, $output);
-        $this->assertStringContainsString('No property of a PHPUnit test suite was fuzzed with the cache directory ' . $this->directory . '/cache', $output);
+        $this->assertStringContainsString('Nothing was fuzzed with the cache directory ' . $this->directory . '/cache', $output);
     }
 
     public function testInterleavesThePropertiesUntilTheTimeOfMaxTimeIsUp(): void

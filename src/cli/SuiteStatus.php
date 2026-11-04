@@ -26,13 +26,16 @@ use function usort;
 use JsonException;
 
 /**
- * The status of the properties of a PHPUnit test suite that were fuzzed with
- * a cache directory, from the histories that the runs kept next to the
- * corpora of the properties (see TargetHistory). It is written to status.json
- * in the cache directory at the end of every run, and "rattle status" shows it.
+ * The status of the targets that were fuzzed with a cache directory, fuzz
+ * targets and properties of a PHPUnit test suite, from the histories that the
+ * runs kept next to the corpora of the targets (see TargetHistory). It is
+ * written to status.json in the cache directory at the end of every run, and
+ * "rattle status" shows it. A fuzz target is described by its name, and a
+ * property by its test ID.
  *
- * A property that is no longer in the test suite is shown until the
- * directory of its corpus is removed from the cache directory.
+ * A target that is no longer fuzzed, a property that is no longer in the
+ * test suite, for instance, is shown until the directory of its corpus is
+ * removed from the cache directory.
  *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
@@ -64,7 +67,7 @@ final readonly class SuiteStatus
     }
 
     /**
-     * How long ago a property last discovered features.
+     * How long ago a target last discovered features.
      */
     public static function lastNewFeature(TargetHistory $history, float $now): string
     {
@@ -88,7 +91,7 @@ final readonly class SuiteStatus
     }
 
     /**
-     * The histories of the properties, ordered by their test IDs.
+     * The histories of the targets, ordered by their names and test IDs.
      *
      * @return list<TargetHistory>
      */
@@ -134,18 +137,18 @@ final readonly class SuiteStatus
     }
 
     /**
-     * The status as a table with a row for every property.
+     * The status as a table with a row for every target.
      */
     public function asTable(float $now): string
     {
-        $width = strlen('Property');
+        $width = strlen('Target');
 
         foreach ($this->histories as $history) {
             $width = max($width, strlen($history->target()));
         }
 
         $format = '%-' . $width . 's  %4s  %12s  %10s  %8s  %8s  %s' . PHP_EOL;
-        $table  = sprintf($format, 'Property', 'Runs', 'Executions', 'Time', 'Features', 'Findings', 'Last new feature');
+        $table  = sprintf($format, 'Target', 'Runs', 'Executions', 'Time', 'Features', 'Findings', 'Last new feature');
 
         foreach ($this->histories as $history) {
             $table .= sprintf(
