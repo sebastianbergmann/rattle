@@ -44,7 +44,8 @@ use JsonException;
 use SebastianBergmann\ChoiceSequence\ChoiceSource;
 
 /**
- * Fuzzes a target until a limit is reached or Ctrl+C is pressed.
+ * Fuzzes a target, several targets together, or the properties of a PHPUnit
+ * test suite together, until a limit is reached or Ctrl+C is pressed.
  *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
@@ -87,8 +88,12 @@ final readonly class FuzzCommand implements Command
         $isInterrupted = static fn (): bool => $interrupted;
         $phpunit       = $configuration->phpunit();
 
+        if ($phpunit === null && $configuration->targets() === []) {
+            return $this->fuzz($arguments, $configuration, $this->executionOptions($arguments) . $configuration->target(), $arguments->maximumTime(), $stderr, $jobs, $seed, $dictionary, $isInterrupted, $phpBinaries);
+        }
+
         if ($phpunit === null) {
-            return $this->fuzz($arguments, $configuration, $this->executionOptions($arguments) . $arguments->target(), $arguments->maximumTime(), $stderr, $jobs, $seed, $dictionary, $isInterrupted, $phpBinaries);
+            return $this->fuzzTargets($arguments, $configuration, $stderr, $jobs, $seed, $dictionary, $isInterrupted, $phpBinaries);
         }
 
         return $this->fuzzTestSuite($arguments, $configuration, $phpunit, $stderr, $jobs, $seed, $dictionary, $isInterrupted, $phpBinaries);
@@ -338,6 +343,84 @@ final readonly class FuzzCommand implements Command
     }
 
     /**
+     * Fuzzes the targets of several target files together (see
+     * fuzzTogether()). Every target has a dictionary of its own, because the
+     * targets of a project exercise different code: the constant operands of
+     * the comparisons in the code that is instrumented while an input of a
+     * target is executed are added to the dictionary of that target, and the
+     * ones in the code that is instrumented while a worker starts to the
+     * dictionaries of all targets (see Worker).
+     *
+     * @param ?Closure(int, string): void $stderr
+     * @param positive-int                $jobs
+     * @param list<non-empty-string>      $tokens        the tokens of the dictionary file
+     * @param Closure(): bool             $isInterrupted
+     * @param list<PhpBinary>             $phpBinaries   the versions of PHP that the corpus and the findings are compared on
+     *
+     * @return 0|1|2
+     */
+    private function fuzzTargets(Arguments $arguments, WorkerConfiguration $configuration, ?Closure $stderr, int $jobs, int $seed, array $tokens, Closure $isInterrupted, array $phpBinaries): int
+    {
+        // the inputs of a corpus directory, raw seed files, and the log of
+        // the inputs belong to one target
+        if ($arguments->corpusDirectories() !== [] || $arguments->seedsDirectory() !== null || $arguments->inputLog() !== null) {
+            print 'The options --corpus, --seeds, and --log-inputs can only be used when one target is fuzzed' . PHP_EOL;
+
+            return 2;
+        }
+
+        $executor = new ProcessExecutor($configuration, $jobs, $stderr);
+
+        try {
+            $descriptions = $executor->targets() ?? [];
+            $files        = $executor->targetFiles();
+        } catch (WorkerException $e) {
+            $executor->shutdown();
+
+            print $e->getMessage() . PHP_EOL;
+
+            return 2;
+        }
+
+        $targets = [];
+
+        foreach ($descriptions as $name => $description) {
+            $file = $files[$name] ?? $name;
+
+            $targets[] = new FuzzedTarget(
+                $name,
+                $name,
+                $description,
+                $this->executionOptions($arguments) . $file,
+                $configuration->withTarget($file),
+                new Dictionary($tokens, Sentinels::tokens()),
+            );
+        }
+
+        if ($targets === []) {
+            // @codeCoverageIgnoreStart
+            $executor->shutdown();
+
+            return 2;
+            // @codeCoverageIgnoreEnd
+        }
+
+        return $this->fuzzTogether(
+            $arguments,
+            $configuration,
+            $executor,
+            $targets,
+            false,
+            sprintf('%d fuzz targets (%s)', count($targets), implode(', ', array_keys($descriptions))),
+            $stderr,
+            $jobs,
+            $seed,
+            $isInterrupted,
+            $phpBinaries,
+        );
+    }
+
+    /**
      * Fuzzes several targets together, with one pool of workers that serves
      * all of them (see TargetScheduler). Every target has an engine, a
      * corpus, findings, and a history of its own.
@@ -413,7 +496,7 @@ final readonly class FuzzCommand implements Command
                     $this->findingListener($status, $name),
                 );
 
-                $differences = new DifferenceFinder($differential, $report === null ? $handler : new FindingRecorder($handler, $report, $name));
+                $differences = new DifferenceFinder($differential, $report === null ? $handler : $this->findingRecorder($handler, $report, $name, $properties));
             }
 
             $corpus = new Corpus($corpusDirectory);
@@ -423,7 +506,7 @@ final readonly class FuzzCommand implements Command
                 $corpus,
                 $target->dictionary(),
                 Mutator::create($corpus, $target->dictionary(), $target->description()->maximumNumberOfChoices()),
-                $report === null ? $findings : new FindingRecorder($findings, $report, $name),
+                $report === null ? $findings : $this->findingRecorder($findings, $report, $name, $properties),
                 // every target draws from a random number generator of its
                 // own, so that the targets are not mutated in lockstep
                 new EngineConfiguration(Engine::seedOf($seed, $index), $arguments->maximumNumberOfExecutions(), null, $arguments->stopOnFinding(), EngineConfiguration::DEFAULT_BATCH_SIZE, $name),
@@ -459,6 +542,17 @@ final readonly class FuzzCommand implements Command
 
         if ($comparison !== null) {
             printf('Versions: %s, which the corpus and the findings are compared on' . PHP_EOL, implode(', ', $comparison->labels()));
+        }
+
+        foreach ($targets as $target) {
+            if ($target->description()->maximumNumberOfChoices() > $arguments->maximumNumberOfChoices()) {
+                printf(
+                    'The maximum number of choices was raised from %d to %d for %s, which it needs.' . PHP_EOL,
+                    $arguments->maximumNumberOfChoices(),
+                    $target->description()->maximumNumberOfChoices(),
+                    $target->name(),
+                );
+            }
         }
 
         print PHP_EOL;
@@ -586,6 +680,18 @@ final readonly class FuzzCommand implements Command
         }
 
         return $options;
+    }
+
+    /**
+     * Records the findings of a target in SARIF, with the property or the
+     * fuzz target whose findings they are.
+     *
+     * @param non-empty-string $name       the test ID of the property or the name of the fuzz target
+     * @param bool             $properties whether the target is a property of a PHPUnit test suite
+     */
+    private function findingRecorder(FindingHandler $handler, SarifReport $report, string $name, bool $properties): FindingRecorder
+    {
+        return $properties ? new FindingRecorder($handler, $report, $name) : new FindingRecorder($handler, $report, null, $name);
     }
 
     /**

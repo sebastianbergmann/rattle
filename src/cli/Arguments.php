@@ -21,6 +21,11 @@ final readonly class Arguments
      */
     private ?string $command;
     private ?string $target;
+
+    /**
+     * @var list<string>
+     */
+    private array $targets;
     private ?string $input;
 
     /**
@@ -121,11 +126,13 @@ final readonly class Arguments
      * @param ?non-empty-string      $sarifFile
      * @param ?non-empty-string      $htmlFile
      * @param list<non-empty-string> $phpBinaries
+     * @param list<string>           $targets                          the targets that the command is given, which are target files or directories of target files for "fuzz"
      */
-    public function __construct(?string $command, ?string $target, ?string $input, ?int $jobs, ?int $seed, int $timeout, ?string $memoryLimit, ?float $maximumTime, ?int $maximumNumberOfExecutions, int $maximumNumberOfChoices, int $maximumNumberOfShrinkingAttempts, int $numberOfExecutionsPerWorker, array $corpusDirectories, ?string $seedsDirectory, ?string $dictionary, string $cacheDirectory, string $findingsDirectory, ?string $bootstrap, array $sources, bool $ignoreDeprecations, bool $stopOnFinding, bool $verbose, bool $raw, ?string $inputLog, bool $help, bool $version, bool $phpunit = false, ?string $phpunitConfiguration = null, ?string $phpunitFilter = null, ?string $sarifFile = null, bool $json = false, ?string $htmlFile = null, array $phpBinaries = [], bool $opcache = false)
+    public function __construct(?string $command, ?string $target, ?string $input, ?int $jobs, ?int $seed, int $timeout, ?string $memoryLimit, ?float $maximumTime, ?int $maximumNumberOfExecutions, int $maximumNumberOfChoices, int $maximumNumberOfShrinkingAttempts, int $numberOfExecutionsPerWorker, array $corpusDirectories, ?string $seedsDirectory, ?string $dictionary, string $cacheDirectory, string $findingsDirectory, ?string $bootstrap, array $sources, bool $ignoreDeprecations, bool $stopOnFinding, bool $verbose, bool $raw, ?string $inputLog, bool $help, bool $version, bool $phpunit = false, ?string $phpunitConfiguration = null, ?string $phpunitFilter = null, ?string $sarifFile = null, bool $json = false, ?string $htmlFile = null, array $phpBinaries = [], bool $opcache = false, array $targets = [])
     {
         $this->command                          = $command;
         $this->target                           = $target;
+        $this->targets                          = $targets;
         $this->input                            = $input;
         $this->jobs                             = $jobs;
         $this->seed                             = $seed;
@@ -168,9 +175,24 @@ final readonly class Arguments
         return $this->command;
     }
 
+    /**
+     * The target that the command is given, the first one when it is given
+     * several.
+     */
     public function target(): ?string
     {
         return $this->target;
+    }
+
+    /**
+     * The targets that the command is given, which are target files or
+     * directories of target files for "fuzz".
+     *
+     * @return list<string>
+     */
+    public function targets(): array
+    {
+        return $this->targets;
     }
 
     public function input(): ?string

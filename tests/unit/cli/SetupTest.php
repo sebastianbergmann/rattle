@@ -53,6 +53,49 @@ final class SetupTest extends TestCase
         $this->assertSame([realpath(__DIR__ . '/../../../src')], $configuration->sources());
     }
 
+    public function testConfiguresWorkersThatLoadTheTargetFilesOfADirectoryWithoutTheBootstrapFileAndTheTargetFilesThatAreGivenOnce(): void
+    {
+        $worker        = __DIR__ . '/../../fixtures/worker';
+        $configuration = (new Setup)->workerConfiguration(
+            (new ArgumentsBuilder)->build(['rattle', 'fuzz', $worker . '/target.php', $worker . '/', '--bootstrap', $worker . '/bootstrap.php']),
+        );
+
+        $this->assertSame('', $configuration->target());
+        $this->assertSame(
+            [
+                $worker . '/target.php',
+                $worker . '/bytes-target.php',
+                $worker . '/duplicate-target.php',
+                $worker . '/not-a-target.php',
+            ],
+            $configuration->targets(),
+        );
+    }
+
+    public function testConfiguresWorkersThatLoadOneTargetFileWhenADirectoryHasOne(): void
+    {
+        $configuration = (new Setup)->workerConfiguration((new ArgumentsBuilder)->build(['rattle', 'fuzz', self::FIXTURES . '/exit']));
+
+        $this->assertSame(self::FIXTURES . '/exit/target.php', $configuration->target());
+        $this->assertSame([], $configuration->targets());
+    }
+
+    public function testRejectsADirectoryWithoutTargetFiles(): void
+    {
+        $this->expectException(ConfigurationException::class);
+        $this->expectExceptionMessageIsOrContains('The directory "' . __DIR__ . '/../../fixtures/engine/seeds" contains no target files');
+
+        (new Setup)->workerConfiguration((new ArgumentsBuilder)->build(['rattle', 'fuzz', __DIR__ . '/../../fixtures/engine/seeds']));
+    }
+
+    public function testRejectsADirectoryForACommandThatRunsOneTarget(): void
+    {
+        $this->expectException(ConfigurationException::class);
+        $this->expectExceptionMessageIsOrContains('The target file "' . self::FIXTURES . '/exit" does not exist');
+
+        (new Setup)->workerConfiguration((new ArgumentsBuilder)->build(['rattle', 'run', self::FIXTURES . '/exit', 'input']));
+    }
+
     public function testRejectsATargetFileThatDoesNotExist(): void
     {
         $this->expectException(ConfigurationException::class);

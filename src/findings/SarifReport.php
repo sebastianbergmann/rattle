@@ -100,8 +100,9 @@ final class SarifReport
 
     /**
      * @param ?non-empty-string $property the test ID of the property whose example failed, null for a fuzz target
+     * @param ?non-empty-string $target   the name of the fuzz target whose input failed, when several fuzz targets are fuzzed or replayed together
      */
-    public function add(Failure $failure, ?string $property): void
+    public function add(Failure $failure, ?string $property, ?string $target = null): void
     {
         $id = FindingStore::idOf($failure->signature());
 
@@ -118,6 +119,8 @@ final class SarifReport
 
         if ($property !== null) {
             $message = sprintf('The property %s fails. %s', $property, $message);
+        } elseif ($target !== null) {
+            $message = sprintf('The target %s fails. %s', $target, $message);
         }
 
         $result = [
@@ -148,6 +151,8 @@ final class SarifReport
 
         if ($property !== null) {
             $result['properties'] = ['property' => $property];
+        } elseif ($target !== null) {
+            $result['properties'] = ['target' => $target];
         }
 
         $this->results[$id] = $result;

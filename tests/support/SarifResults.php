@@ -20,7 +20,7 @@ use function is_string;
 final readonly class SarifResults
 {
     /**
-     * @return list<array{ruleId: ?string, ruleIndex: ?int, level: ?string, message: ?string, fingerprint: ?string, uri: ?string, uriBaseId: ?string, startLine: ?int, property: ?string, frames: list<array{0: ?string, 1: ?int, 2: ?string}>}>
+     * @return list<array{ruleId: ?string, ruleIndex: ?int, level: ?string, message: ?string, fingerprint: ?string, uri: ?string, uriBaseId: ?string, startLine: ?int, property: ?string, target: ?string, frames: list<array{0: ?string, 1: ?int, 2: ?string}>}>
      */
     public static function inFile(string $file): array
     {
@@ -28,7 +28,7 @@ final readonly class SarifResults
     }
 
     /**
-     * @return list<array{ruleId: ?string, ruleIndex: ?int, level: ?string, message: ?string, fingerprint: ?string, uri: ?string, uriBaseId: ?string, startLine: ?int, property: ?string, frames: list<array{0: ?string, 1: ?int, 2: ?string}>}>
+     * @return list<array{ruleId: ?string, ruleIndex: ?int, level: ?string, message: ?string, fingerprint: ?string, uri: ?string, uriBaseId: ?string, startLine: ?int, property: ?string, target: ?string, frames: list<array{0: ?string, 1: ?int, 2: ?string}>}>
      */
     public static function in(string $json): array
     {
@@ -55,6 +55,7 @@ final readonly class SarifResults
                 'uriBaseId'   => self::stringAt($result, 'locations', 0, 'physicalLocation', 'artifactLocation', 'uriBaseId'),
                 'startLine'   => self::intAt($result, 'locations', 0, 'physicalLocation', 'region', 'startLine'),
                 'property'    => self::stringAt($result, 'properties', 'property'),
+                'target'      => self::stringAt($result, 'properties', 'target'),
                 'frames'      => $frames,
             ];
         }

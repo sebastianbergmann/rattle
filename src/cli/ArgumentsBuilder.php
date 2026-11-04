@@ -61,7 +61,7 @@ final readonly class ArgumentsBuilder
                 'configuration=',
                 'filter=',
             ],
-            'arguments' => ['target'],
+            'arguments' => ['targets'],
         ],
         'run' => [
             'longOptions' => [
@@ -126,6 +126,7 @@ final readonly class ArgumentsBuilder
         }
 
         $target  = null;
+        $targets = [];
         $input   = null;
         $phpunit = in_array('--phpunit', array_column($options[0], 0), true);
 
@@ -136,22 +137,28 @@ final readonly class ArgumentsBuilder
             // fuzz target
             $expected = $phpunit && ($command === 'fuzz' || $command === 'regress') ? [] : self::COMMANDS[$command]['arguments'];
 
+            // several targets are fuzzed together: target files, directories
+            // of target files, or both
+            $several = $expected === ['targets'];
+
             foreach ($expected as $position => $name) {
                 if (!isset($positional[$position])) {
                     throw new ArgumentsBuilderException(sprintf('The "%s" command needs a%s', $command, match (true) {
-                        $name !== 'target' => 'n input file',
-                        $phpunit           => ' test ID of a property',
-                        default            => ' target file',
+                        $name === 'input'   => 'n input file',
+                        $phpunit            => ' test ID of a property',
+                        $name === 'targets' => ' target file or a directory of target files',
+                        default             => ' target file',
                     }));
                 }
             }
 
-            if (count($positional) > count($expected)) {
+            if (!$several && count($positional) > count($expected)) {
                 throw new ArgumentsBuilderException(sprintf('Too many arguments for the "%s" command', $command));
             }
 
-            $target = $positional[0] ?? null;
-            $input  = $positional[1] ?? null;
+            $target  = $positional[0] ?? null;
+            $input   = $several ? null : ($positional[1] ?? null);
+            $targets = $several ? $positional : ($target === null ? [] : [$target]);
         } elseif (isset($options[1][0])) {
             throw new ArgumentsBuilderException(sprintf('Unknown command "%s"', $options[1][0]));
         }
@@ -400,6 +407,7 @@ final readonly class ArgumentsBuilder
             $htmlFile,
             $phpBinaries,
             $opcache,
+            $targets,
         );
     }
 

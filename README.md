@@ -106,6 +106,23 @@ The values are drawn from choices in the same way as PHPUnit's generators draw t
 
 The target file is loaded after the bootstrap file, by default `vendor/autoload.php`, so it can use the classes of your project.
 
+### Fuzzing many targets
+
+A project often has a fuzz target for each of its parsers, decoders, and validators. `rattle fuzz` fuzzes several targets together when you give it several target files, a directory of target files, or both:
+
+```
+rattle fuzz fuzz/csv-parser.php fuzz/image-decoder.php
+rattle fuzz fuzz/
+```
+
+A directory stands for the PHP files directly in it, in the order of their names, except the bootstrap file. Every one of them must return a target, and no two of them a target with the same name. With one target file, a target is fuzzed on its own, as described above.
+
+The targets are fuzzed together as the properties of a PHPUnit test suite are, see [Properties of a PHPUnit test suite](#properties-of-a-phpunit-test-suite): the worker processes load the bootstrap file and every target file once and execute the inputs of all targets, and the time goes to the targets that are still finding new features. The status line shows how many targets are still fuzzed, and a table shows how fuzzing went for every target when fuzzing ends. `--max-time` is the time for all targets together, `--max-executions` applies to every target, and so does `--stop-on-finding`: a target that found a defect is no longer fuzzed, while the others go on. `--corpus`, `--seeds`, and `--log-inputs` belong to one target, so they can only be used when one target is fuzzed. The source directories, `--dictionary`, `--php`, `--sarif`, and `--opcache` apply to all targets, and a finding in SARIF names its target.
+
+Every target has a corpus, findings, and a dictionary of its own. The tokens that rattle finds in the comparisons of the code that it instruments while an input of a target is executed are added to the dictionary of that target, and the ones in the code that it instruments while a worker process starts are added to the dictionaries of all targets.
+
+The `README.txt` of a finding shows how to reproduce it with its own target file, which `rattle run` loads on its own, as rattle does when it minimizes the finding. Because the worker processes load every target file, a target file should do nothing but return its target: what a target file changes when it is loaded, an error handler or a setting, for instance, changes how the inputs of the other targets are executed as well.
+
 ## Properties of a PHPUnit test suite
 
 rattle also fuzzes the properties (`#[Property]`) of a PHPUnit test suite:
@@ -126,7 +143,7 @@ Unlike for a fuzz target, a warning, notice, or deprecation that a property trig
 
 ## Continuous fuzzing
 
-A run of `rattle fuzz --phpunit` continues where the runs before it with the same cache directory stopped. Next to its corpus, rattle keeps what it learned about every property in `statistics.json`:
+A run of `rattle fuzz --phpunit`, or of `rattle fuzz` with several targets, continues where the runs before it with the same cache directory stopped. Next to its corpus, rattle keeps what it learned about every property in `statistics.json`:
 
 * how many new features the property found recently, relative to how often its inputs were executed, so that the next run chooses the properties with the weights that the runs before it arrived at, instead of with the same weight for every property
 * the number of its features at the end of the last run
@@ -166,7 +183,7 @@ Every binary must meet rattle's requirements, because the worker processes run r
 ## Commands
 
 ```
-rattle fuzz     [options] <target.php>
+rattle fuzz     [options] <target.php|directory>...
 rattle run      [options] <target.php> <input>
 rattle minimize [options] <target.php> <input>
 rattle regress  [options] <target.php>
@@ -175,7 +192,7 @@ rattle status   [options] --phpunit
 
 With `--phpunit`, these commands work on the properties of a PHPUnit test suite instead of a fuzz target, see [Properties of a PHPUnit test suite](#properties-of-a-phpunit-test-suite).
 
-`rattle fuzz` fuzzes the target until a limit is reached (`--max-time`, `--max-executions`, `--stop-on-finding`) or until you press Ctrl+C. The seed of the run is always printed: with `--jobs 1` and `--seed <n>`, a run executes the same inputs in the same order every time. By default, rattle starts as many worker processes as your machine has cores.
+`rattle fuzz` fuzzes the target, or several targets together, see [Fuzzing many targets](#fuzzing-many-targets), until a limit is reached (`--max-time`, `--max-executions`, `--stop-on-finding`) or until you press Ctrl+C. The seed of the run is always printed: with `--jobs 1` and `--seed <n>`, a run executes the same inputs in the same order every time. By default, rattle starts as many worker processes as your machine has cores.
 
 `rattle run` runs one input once and shows its outcome, how it failed, the stack trace, and the values it drew. The input is a choice-sequence file, or a raw file with `--raw` for a bytes target.
 
@@ -256,7 +273,7 @@ The constant operands are taken from:
 
 A constant operand is a string, an integer, which becomes its decimal representation, an array whose keys and values are, or a class constant whose value is one of these. A class constant is only resolved when it is declared in the same file and fetched through `self`, `static`, or the name of its class. Operands that are shorter than three bytes, which are generated easily, and operands that are longer than 64 bytes are left out, and at most 4,096 tokens are found. Every comparison in a file that is instrumented counts, whether an input reached it or not.
 
-The status line shows how many tokens the dictionary has (`tokens`). When fuzzing ends, the tokens that were found in comparisons are written to `dictionary.txt` next to the corpus of the target, in the format of `--dictionary`, so that you can look at them and pass them to another fuzzer. When no tokens were found, the `dictionary.txt` of an earlier run is removed.
+The status line shows how many tokens the dictionary has (`tokens`), or the dictionaries of all targets that are fuzzed together. When fuzzing ends, the tokens that were found in comparisons are written to `dictionary.txt` next to the corpus of the target, in the format of `--dictionary`, so that you can look at them and pass them to another fuzzer. When no tokens were found, the `dictionary.txt` of an earlier run is removed.
 
 ## Detecting vulnerabilities
 
@@ -286,8 +303,8 @@ The detectors run in rattle's worker processes, so `rattle run` and `rattle regr
 ├── <target>/
 │   ├── corpus/<sha256>           the corpus: inputs that reached code that no input before them reached
 │   ├── dictionary.txt            the tokens that were found in comparisons, in the format of --dictionary
-│   └── statistics.json           what the runs learned about a property of a PHPUnit test suite
-└── status.json                   the status of the properties of a PHPUnit test suite
+│   └── statistics.json           what the runs learned about the target
+└── status.json                   the status of the targets that were fuzzed with the cache directory
 
 fuzz/findings/                    --findings-directory
 └── <target>/<id>/

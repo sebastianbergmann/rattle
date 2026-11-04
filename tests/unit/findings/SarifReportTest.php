@@ -162,6 +162,20 @@ final class SarifReportTest extends TestCase
         $this->assertSame('https://json.schemastore.org/sarif-2.1.0.json', SarifResults::value($json, '$schema'));
     }
 
+    public function testNamesTheFuzzTargetOfAFindingWhenSeveralFuzzTargetsAreFuzzedTogether(): void
+    {
+        $report = new SarifReport('/project');
+
+        $report->add(Failure::throwable(PathTraversal::class, 'src/TemplateLoader.php:30', 'first', ''), null, 'template-loader');
+
+        $result = SarifResults::in($report->asJson())[0] ?? null;
+
+        $this->assertNotNull($result);
+        $this->assertSame('The target template-loader fails. ' . PathTraversal::class . ' at src/TemplateLoader.php:30: first', $result['message']);
+        $this->assertSame('template-loader', $result['target']);
+        $this->assertNull($result['property']);
+    }
+
     public function testWritesTheReportToAFile(): void
     {
         $file   = sys_get_temp_dir() . '/rattle-sarif-' . uniqid() . '.sarif';

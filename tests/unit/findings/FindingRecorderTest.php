@@ -56,6 +56,27 @@ final class FindingRecorderTest extends TestCase
         $this->assertSame(['ParserTest::testRoundTrip', 'ParserTest::testRoundTrip'], array_column($results, 'property'));
     }
 
+    public function testAddsTheFindingsOfAFuzzTargetThatIsFuzzedTogetherWithOthersWithItsName(): void
+    {
+        $handler = new class implements FindingHandler
+        {
+            public function handle(Result $result, Job $job): bool
+            {
+                return true;
+            }
+        };
+
+        $report   = new SarifReport('/project');
+        $recorder = new FindingRecorder($handler, $report, null, 'csv-parser');
+
+        $recorder->handle($this->failedResult(Failure::timeout('timeout', '')), Job::replay(1, []));
+
+        $results = SarifResults::in($report->asJson());
+
+        $this->assertSame(['csv-parser'], array_column($results, 'target'));
+        $this->assertSame([null], array_column($results, 'property'));
+    }
+
     private function failedResult(Failure $failure): Result
     {
         return new Result(1, Outcome::Failed, $failure, new ChoiceSequence([]), [], null);

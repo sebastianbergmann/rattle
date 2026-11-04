@@ -31,13 +31,20 @@ final readonly class FindingRecorder implements FindingHandler
     private ?string $property;
 
     /**
-     * @param ?non-empty-string $property the test ID of the property, null for a fuzz target
+     * @var ?non-empty-string
      */
-    public function __construct(FindingHandler $handler, SarifReport $report, ?string $property)
+    private ?string $target;
+
+    /**
+     * @param ?non-empty-string $property the test ID of the property, null for a fuzz target
+     * @param ?non-empty-string $target   the name of the fuzz target when several are fuzzed together
+     */
+    public function __construct(FindingHandler $handler, SarifReport $report, ?string $property, ?string $target = null)
     {
         $this->handler  = $handler;
         $this->report   = $report;
         $this->property = $property;
+        $this->target   = $target;
     }
 
     public function handle(Result $result, Job $job): bool
@@ -48,7 +55,7 @@ final readonly class FindingRecorder implements FindingHandler
 
         assert($failure !== null);
 
-        $this->report->add($failure, $this->property);
+        $this->report->add($failure, $this->property, $this->target);
 
         return $new;
     }
