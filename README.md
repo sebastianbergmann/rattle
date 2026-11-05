@@ -341,6 +341,69 @@ Every kind of finding is a rule. The vulnerabilities that the detectors find are
 
 For code scanning, report what `rattle regress` replays: a finding that is fixed is no longer in the report, so its alert is closed. A run of `rattle fuzz` does not necessarily find every known finding again.
 
+## Bugs that rattle found
+
+rattle found these defects in widely used libraries. For each library, a fuzz target of a few lines was fuzzed for 30 minutes with 8 worker processes, with the library installed with Composer, and instrumented because its directory in `vendor/` was given with `--source`:
+
+```
+rattle fuzz fuzz/<target>.php --source vendor/<vendor>/<package> --jobs 8 --max-time 30m
+```
+
+### Exponential parse times in `symfony/yaml`
+
+#### `fuzz/yaml.php`
+```php
+<?php declare(strict_types=1);
+use SebastianBergmann\Rattle\Target;
+use Symfony\Component\Yaml\Exception\ParseException;
+use Symfony\Component\Yaml\Yaml;
+
+return Target::bytes(
+    'yaml',
+    static function (string $bytes): void {
+        Yaml::parse($bytes);
+    },
+    2048,
+)->expect(ParseException::class);
+```
+
+The parser rejects a document that is not valid YAML with a `ParseException`, so the target expects it. Anything else is a finding, and so is an input that takes longer than the time limit of one second to parse. After about two minutes of fuzzing version 8.1.10, rattle had found an input of 1,051 bytes that exceeded the time limit, and had minimized it to 156 bytes. Each repetition of a part of 19 bytes in it made parsing take about five times as long: without instrumentation, 137 bytes took 0.3 seconds, 156 bytes 1.8 seconds, 175 bytes 10 seconds, and 194 bytes 49 seconds.
+
+The defect was reported to the Symfony security team, which fixed it together with related cases whose parse times grow quadratically, and published [GHSA-hwfg-qwvh-2wfx](https://github.com/symfony/symfony/security/advisories/GHSA-hwfg-qwvh-2wfx), "Exponential and Quadratic Parse Times in the YAML Parser Let a Single Document Hold a Process". It is fixed in `symfony/yaml` 5.4.56, 6.4.50, 7.4.23, and 8.1.11.
+
+### A `col` element in a list in HTML Purifier
+
+#### `fuzz/html-purifier.php`
+```php
+<?php declare(strict_types=1);
+use SebastianBergmann\Rattle\Target;
+
+return Target::bytes(
+    'html-purifier',
+    static function (string $bytes): void {
+        // the purifier is created once per worker process, with its first
+        // input, and does not cache its definitions in files
+        static $purifier = null;
+
+        if ($purifier === null) {
+            $configuration = HTMLPurifier_Config::createDefault();
+            $configuration->set('Cache.DefinitionImpl', null);
+
+            $purifier = new HTMLPurifier($configuration);
+        }
+
+        $purified = $purifier->purify($bytes);
+
+        if ($purifier->purify($purified) !== $purified) {
+            throw new UnexpectedValueException('Purifying the output of HTML Purifier again changed it');
+        }
+    },
+    2048,
+);
+```
+
+What fails is up to the target. HTML Purifier promises output that is standards compliant, so purifying its output again must not change it, and this target throws when it does. Fuzzing version 4.19.1, rattle found an input that HTML Purifier does not purify in one pass and minimized it to 8 bytes: `<ol><col`. HTML Purifier turns it into `<ol><li><col /></li></ol>`, which is not valid HTML, because `col` is only allowed in `table` and `colgroup`, and purifying that again removes the `col` element. The defect was reported, with a fix, as [ezyang/htmlpurifier#496](https://github.com/ezyang/htmlpurifier/issues/496).
+
 ## Backward compatibility
 
 rattle follows [Semantic Versioning](https://semver.org/). Within a major version, these do not change in a way that breaks what uses them:
