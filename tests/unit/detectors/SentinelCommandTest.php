@@ -20,6 +20,7 @@ use function putenv;
 use function shell_exec;
 use function strrpos;
 use function substr;
+use function substr_count;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Medium;
 use PHPUnit\Framework\TestCase;
@@ -117,5 +118,21 @@ final class SentinelCommandTest extends TestCase
         SentinelCommand::removeDirectoryOfWorkers();
 
         $this->assertDirectoryDoesNotExist($workers);
+    }
+
+    public function testIsInstalledOnlyOnce(): void
+    {
+        $runs = 0;
+
+        SentinelCommand::install(static function () use (&$runs): void
+        {
+            $runs++;
+        });
+
+        exec(Sentinels::NAME);
+
+        $this->assertSame(1, $this->runs);
+        $this->assertSame(0, $runs);
+        $this->assertSame(1, substr_count((string) getenv('PATH'), '/rattle-sentinel-'));
     }
 }
