@@ -83,6 +83,17 @@ final class LocationTest extends TestCase
         }
     }
 
+    public function testTheLocationOfAThrowableWithoutFramesWhoseFileIsAFileIsItsOwnFileAndLine(): void
+    {
+        $error = new Error;
+
+        (new ReflectionProperty(Error::class, 'file'))->setValue($error, '/does/not/exist.php');
+        (new ReflectionProperty(Error::class, 'line'))->setValue($error, 3);
+        (new ReflectionProperty(Error::class, 'trace'))->setValue($error, []);
+
+        $this->assertSame('/does/not/exist.php:3', $this->location()->of($error));
+    }
+
     public function testFramesThatAreRepeatedAreRenderedOnce(): void
     {
         $this->assertSame(
