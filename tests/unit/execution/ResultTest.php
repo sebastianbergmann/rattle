@@ -47,6 +47,9 @@ final class ResultTest extends TestCase
             'token that is not a string'       => [['id' => 1, 'outcome' => 'passed', 'sequence' => ['choices' => [], 'spans' => [], 'maxima' => []], 'features' => [], 'tokens' => [1]]],
             'negative number of files'         => [['id' => 1, 'outcome' => 'passed', 'sequence' => ['choices' => [], 'spans' => [], 'maxima' => []], 'features' => [], 'instrumentedFiles' => -1]],
             'number of files that is not int'  => [['id' => 1, 'outcome' => 'passed', 'sequence' => ['choices' => [], 'spans' => [], 'maxima' => []], 'features' => [], 'instrumentedFiles' => '1']],
+            'empty path'                       => [['id' => 1, 'outcome' => 'passed', 'features' => [], 'path' => '']],
+            'features of a path without it'    => [['id' => 1, 'outcome' => 'passed', 'features' => [], 'pathFeatures' => [1]]],
+            'feature of a path that is no int' => [['id' => 1, 'outcome' => 'passed', 'features' => [], 'path' => 'abc', 'pathFeatures' => ['a']]],
         ];
     }
 
@@ -93,6 +96,30 @@ final class ResultTest extends TestCase
 
         $this->assertSame(3, Result::fromArray($result->asArray())->instrumentedFiles());
         $this->assertSame(3, $result->withTokens(['GET'])->withFailure(Failure::exit())->instrumentedFiles());
+    }
+
+    public function testIdentifiesThePathThatTheInputTookWithItsFeaturesWhenTheyWereNotReportedBefore(): void
+    {
+        $result = new Result(1, Outcome::Passed, null, null, [], null);
+
+        $this->assertNull($result->path());
+        $this->assertNull($result->pathFeatures());
+        $this->assertArrayNotHasKey('path', $result->asArray());
+        $this->assertArrayNotHasKey('pathFeatures', $result->asArray());
+
+        $new      = $result->withPath('abc', [1 << 56 | 7, 3]);
+        $reported = $result->withPath('def', null);
+        $empty    = $result->withPath('ghi', []);
+
+        $this->assertEquals($new, Result::fromArray($new->asArray()));
+        $this->assertEquals($reported, Result::fromArray($reported->asArray()));
+        $this->assertEquals($empty, Result::fromArray($empty->asArray()));
+        $this->assertSame('abc', $new->path());
+        $this->assertSame([1 << 56 | 7, 3], $new->pathFeatures());
+        $this->assertNull($reported->pathFeatures());
+        $this->assertSame([], $empty->pathFeatures());
+        $this->assertSame([1 << 56 | 7, 3], $new->withTokens(['GET'])->withInstrumentedFiles(2)->withFailure(Failure::exit())->pathFeatures());
+        $this->assertSame('abc', $new->withTokens(['GET'])->withInstrumentedFiles(2)->withFailure(Failure::exit())->path());
     }
 
     public function testTellsWhetherTheInputProducedTheFeaturesThatItRequired(): void

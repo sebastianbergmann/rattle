@@ -39,6 +39,12 @@ use SebastianBergmann\ChoiceSequence\SpanKind;
  * The result of a terse input (see Job) has its choice sequence only when it
  * failed, produced features, or produced the features that it required.
  *
+ * The result of an input that asked for its coverage identifies the path
+ * that the input took through the code that is instrumented, by a hash of
+ * the features of the execution in the order in which their edges were first
+ * taken, whatever its outcome. It has these features when the process that
+ * executed the input had not reported the path before (see CoveredPaths).
+ *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
  * @internal This class is not covered by the backward compatibility promise for sebastian/rattle
@@ -73,6 +79,16 @@ final readonly class Result
      * @var non-negative-int
      */
     private int $instrumentedFiles;
+
+    /**
+     * @var ?non-empty-string
+     */
+    private ?string $path;
+
+    /**
+     * @var ?list<int>
+     */
+    private ?array $pathFeatures;
 
     /**
      * The result of an input during which the process of a worker ended
@@ -133,6 +149,12 @@ final readonly class Result
             throw new ProtocolException('Invalid number of instrumented files');
         }
 
+        $path = isset($data['path']) ? ProtocolData::nonEmptyString($data['path']) : null;
+
+        if ($path === null && isset($data['pathFeatures'])) {
+            throw new ProtocolException('Invalid path');
+        }
+
         return new self(
             $id,
             $outcome,
@@ -143,6 +165,8 @@ final readonly class Result
             $tokens,
             ($data['producedRequiredFeatures'] ?? false) === true,
             $instrumentedFiles,
+            $path,
+            isset($data['pathFeatures']) ? ProtocolData::listOfIntegers($data['pathFeatures']) : null,
         );
     }
 
@@ -153,9 +177,13 @@ final readonly class Result
      * @param list<non-empty-string> $tokens
      * @param bool                   $producedRequiredFeatures whether the input produced all the features that it required
      * @param non-negative-int       $instrumentedFiles        the number of files that the process instrumented since its previous result
+     * @param ?non-empty-string      $path                     the hash of the path that the input took, when it asked for its coverage
+     * @param ?list<int>             $pathFeatures             the features of the path, when the process had not reported it before
      */
-    public function __construct(int $id, Outcome $outcome, ?Failure $failure, ?ChoiceSequence $sequence, array $features, ?array $drawnValues, array $tokens = [], bool $producedRequiredFeatures = false, int $instrumentedFiles = 0)
+    public function __construct(int $id, Outcome $outcome, ?Failure $failure, ?ChoiceSequence $sequence, array $features, ?array $drawnValues, array $tokens = [], bool $producedRequiredFeatures = false, int $instrumentedFiles = 0, ?string $path = null, ?array $pathFeatures = null)
     {
+        assert($path !== null || $pathFeatures === null);
+
         assert(($failure !== null) === $outcome->isFinding());
 
         $this->id          = $id;
@@ -168,6 +196,8 @@ final readonly class Result
 
         $this->producedRequiredFeatures = $producedRequiredFeatures;
         $this->instrumentedFiles        = $instrumentedFiles;
+        $this->path                     = $path;
+        $this->pathFeatures             = $pathFeatures;
     }
 
     /**
@@ -258,9 +288,32 @@ final readonly class Result
         return $this->instrumentedFiles;
     }
 
+    /**
+     * The hash of the path that the input took through the code that is
+     * instrumented, when it asked for its coverage.
+     *
+     * @return ?non-empty-string
+     */
+    public function path(): ?string
+    {
+        return $this->path;
+    }
+
+    /**
+     * The features of the path that the input took, in the order in which
+     * their edges were first taken, when the process that executed it had not
+     * reported the path before.
+     *
+     * @return ?list<int>
+     */
+    public function pathFeatures(): ?array
+    {
+        return $this->pathFeatures;
+    }
+
     public function withFailure(Failure $failure): self
     {
-        return new self($this->id, Outcome::Failed, $failure, $this->sequence, $this->features, $this->drawnValues, $this->tokens, $this->producedRequiredFeatures, $this->instrumentedFiles);
+        return new self($this->id, Outcome::Failed, $failure, $this->sequence, $this->features, $this->drawnValues, $this->tokens, $this->producedRequiredFeatures, $this->instrumentedFiles, $this->path, $this->pathFeatures);
     }
 
     /**
@@ -268,7 +321,7 @@ final readonly class Result
      */
     public function withTokens(array $tokens): self
     {
-        return new self($this->id, $this->outcome, $this->failure, $this->sequence, $this->features, $this->drawnValues, $tokens, $this->producedRequiredFeatures, $this->instrumentedFiles);
+        return new self($this->id, $this->outcome, $this->failure, $this->sequence, $this->features, $this->drawnValues, $tokens, $this->producedRequiredFeatures, $this->instrumentedFiles, $this->path, $this->pathFeatures);
     }
 
     /**
@@ -276,7 +329,16 @@ final readonly class Result
      */
     public function withInstrumentedFiles(int $instrumentedFiles): self
     {
-        return new self($this->id, $this->outcome, $this->failure, $this->sequence, $this->features, $this->drawnValues, $this->tokens, $this->producedRequiredFeatures, $instrumentedFiles);
+        return new self($this->id, $this->outcome, $this->failure, $this->sequence, $this->features, $this->drawnValues, $this->tokens, $this->producedRequiredFeatures, $instrumentedFiles, $this->path, $this->pathFeatures);
+    }
+
+    /**
+     * @param non-empty-string $path     the hash of the path that the input took
+     * @param ?list<int>       $features the features of the path, when the process had not reported it before
+     */
+    public function withPath(string $path, ?array $features): self
+    {
+        return new self($this->id, $this->outcome, $this->failure, $this->sequence, $this->features, $this->drawnValues, $this->tokens, $this->producedRequiredFeatures, $this->instrumentedFiles, $path, $features);
     }
 
     /**
@@ -327,6 +389,14 @@ final readonly class Result
 
         if ($this->instrumentedFiles > 0) {
             $data['instrumentedFiles'] = $this->instrumentedFiles;
+        }
+
+        if ($this->path !== null) {
+            $data['path'] = $this->path;
+        }
+
+        if ($this->pathFeatures !== null) {
+            $data['pathFeatures'] = $this->pathFeatures;
         }
 
         return $data;

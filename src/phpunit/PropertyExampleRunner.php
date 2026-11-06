@@ -26,6 +26,9 @@ use SebastianBergmann\Rattle\Instrumentation\Features;
  * a detector finds that an example controls a dangerous sink (see Detectors),
  * the detection is how the example fails, whatever PHPUnit determined.
  *
+ * The result of an example that asks for its coverage identifies the path
+ * that it took, whatever its outcome (see CoveredPaths).
+ *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
  * @internal This class is not covered by the backward compatibility promise for sebastian/rattle
@@ -51,6 +54,7 @@ final class PropertyExampleRunner implements InputRunner
     private readonly int $maximumNumberOfChoices;
     private readonly Location $location;
     private readonly NewFeatures $newFeatures;
+    private readonly CoveredPaths $paths;
     private ?Job $job = null;
 
     /**
@@ -71,6 +75,7 @@ final class PropertyExampleRunner implements InputRunner
         $this->maximumNumberOfChoices = $maximumNumberOfChoices;
         $this->location               = new Location($workingDirectory);
         $this->newFeatures            = new NewFeatures;
+        $this->paths                  = new CoveredPaths;
     }
 
     /**
@@ -106,11 +111,11 @@ final class PropertyExampleRunner implements InputRunner
         $outcome = $example->outcome();
 
         if ($detection !== null) {
-            return new Result($job->id(), Outcome::Failed, $detection, $example->sequence(), [], $example->values());
+            return $this->withPath($job, new Result($job->id(), Outcome::Failed, $detection, $example->sequence(), [], $example->values()), $edges);
         }
 
         if ($outcome->isFinding()) {
-            return new Result($job->id(), $outcome, $example->failure(), $example->sequence(), [], $example->values());
+            return $this->withPath($job, new Result($job->id(), $outcome, $example->failure(), $example->sequence(), [], $example->values()), $edges);
         }
 
         $features                 = [];
@@ -124,7 +129,7 @@ final class PropertyExampleRunner implements InputRunner
         // the sequence of a terse input is only reported when it is needed
         $sequence = $job->isTerse() && $features === [] && !$producedRequiredFeatures ? null : $example->sequence();
 
-        return new Result($job->id(), $outcome, null, $sequence, $features, $example->values(), [], $producedRequiredFeatures);
+        return $this->withPath($job, new Result($job->id(), $outcome, null, $sequence, $features, $example->values(), [], $producedRequiredFeatures), $edges);
     }
 
     /**
@@ -153,7 +158,7 @@ final class PropertyExampleRunner implements InputRunner
             }
         }
 
-        return new Result($this->job->id(), Outcome::Failed, $failure, $this->job->sequence(), [], null);
+        return $this->withPath($this->job, new Result($this->job->id(), Outcome::Failed, $failure, $this->job->sequence(), [], null), Edges::hits());
     }
 
     /**
@@ -170,5 +175,17 @@ final class PropertyExampleRunner implements InputRunner
     public function maximumNumberOfChoices(): int
     {
         return $this->maximumNumberOfChoices;
+    }
+
+    /**
+     * @param array<int, positive-int> $edges
+     */
+    private function withPath(Job $job, Result $result, array $edges): Result
+    {
+        if (!$job->reportCoverage()) {
+            return $result;
+        }
+
+        return $this->paths->addTo($result, $edges);
     }
 }

@@ -223,14 +223,15 @@ final class Worker
      */
     public function shutdown(): void
     {
+        // after the memory limit was exceeded, reporting the result needs
+        // memory, and so does counting the edges of its path
+        ini_set('memory_limit', '-1');
+
         $result = $this->runner?->resultOfInterruptedExecution();
 
         if ($result === null) {
             return;
         }
-
-        // after the memory limit was exceeded, reporting the result needs memory
-        ini_set('memory_limit', '-1');
 
         $this->stream->write(['type' => 'result', 'result' => $result->withTokens($this->tokensFor($this->target))->asArray(), 'last' => true]);
     }

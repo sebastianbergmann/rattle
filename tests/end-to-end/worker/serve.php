@@ -121,6 +121,12 @@ function describe(array $frame): string
             $description .= sprintf(', %d tokens', count($result['tokens']));
         }
 
+        if (is_string($result['path'] ?? null)) {
+            $description .= is_array($result['pathFeatures'] ?? null)
+                ? sprintf(', path %s with %d features', $result['path'], count($result['pathFeatures']))
+                : sprintf(', path %s', $result['path']);
+        }
+
         foreach (['retire', 'last'] as $flag) {
             if (($frame[$flag] ?? false) === true) {
                 $description .= ', ' . $flag;

@@ -35,6 +35,7 @@ use Throwable;
 #[CoversClass(Runner::class)]
 #[CoversClass(Outcome::class)]
 #[CoversClass(TimeoutError::class)]
+#[UsesClass(CoveredPaths::class)]
 #[UsesClass(Detectors::class)]
 #[UsesClass(Failure::class)]
 #[UsesClass(Job::class)]
@@ -180,6 +181,45 @@ final class RunnerTest extends TestCase
         $this->assertSame([1, 1 << 28 | 2], $first->features());
         $this->assertSame([1, 1 << 28 | 2], $all->features());
         $this->assertSame([], $again->features());
+    }
+
+    public function testIdentifiesThePathThatAnInputTookWhateverItsOutcomeWhenTheInputAsksForItsCoverage(): void
+    {
+        $runner = $this->runner(static function (Input $input): void
+        {
+            Edges::through(1, null);
+
+            $choice = $input->int(0, 2);
+
+            Edges::through(2, null);
+
+            if ($choice === 1) {
+                throw new LogicException;
+            }
+
+            if ($choice === 2) {
+                $input->reject();
+            }
+        });
+
+        $passed   = $runner->run(Job::replay(1, [0])->withCoverage());
+        $again    = $runner->run(Job::replay(2, [0])->withCoverage()->terse());
+        $failed   = $runner->run(Job::replay(3, [1])->withCoverage());
+        $rejected = $runner->run(Job::replay(4, [2])->withCoverage());
+        $other    = $runner->run(Job::replay(5, [0]));
+
+        $this->assertNotNull($passed->path());
+        $this->assertSame([1, 1 << 28 | 2], $passed->pathFeatures());
+        $this->assertSame($passed->path(), $again->path());
+        $this->assertNull($again->pathFeatures());
+        $this->assertSame([], $again->features());
+        $this->assertFalse($again->hasSequence());
+        $this->assertSame($passed->path(), $failed->path());
+        $this->assertTrue($failed->isFinding());
+        $this->assertSame($passed->path(), $rejected->path());
+        $this->assertSame(Outcome::Rejected, $rejected->outcome());
+        $this->assertNull($other->path());
+        $this->assertNull($other->pathFeatures());
     }
 
     public function testAnInputThatEndsWithAnExpectedThrowableIsNotAFinding(): void
@@ -494,6 +534,26 @@ final class RunnerTest extends TestCase
 
         $this->assertInstanceOf(Result::class, $interrupted);
         $this->assertSame('a detection', $interrupted->failure()?->message());
+    }
+
+    public function testIdentifiesThePathThatTheInputThatWasExecutedWhenTheProcessEndedTookWhenItAsksForItsCoverage(): void
+    {
+        $interrupted = null;
+        $runner      = null;
+
+        $runner = $this->runner(static function (Input $input) use (&$runner, &$interrupted): void
+        {
+            Edges::through(1, null);
+
+            /** @var Runner $runner */
+            $interrupted = $runner->resultOfInterruptedExecution();
+        });
+
+        $runner->run(Job::replay(1, [])->withCoverage());
+
+        $this->assertInstanceOf(Result::class, $interrupted);
+        $this->assertNotNull($interrupted->path());
+        $this->assertSame([1], $interrupted->pathFeatures());
     }
 
     /**

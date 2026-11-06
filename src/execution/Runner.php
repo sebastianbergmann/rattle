@@ -60,6 +60,10 @@ use Throwable;
  * features of a rejected input and of an input that fails are not reported,
  * and are not remembered as seen.
  *
+ * The result of an input that asks for its coverage identifies the path that
+ * it took, whatever its outcome, also when the process ends while it is
+ * executed (see CoveredPaths).
+ *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
  * @internal This class is not covered by the backward compatibility promise for sebastian/rattle
@@ -81,6 +85,7 @@ final class Runner implements InputRunner
     private readonly bool $ignoreDeprecations;
     private readonly Location $location;
     private readonly NewFeatures $newFeatures;
+    private readonly CoveredPaths $paths;
     private ?Job $job = null;
     private ChoiceSource $source;
     private Input $input;
@@ -102,6 +107,7 @@ final class Runner implements InputRunner
     {
         $this->location               = new Location($workingDirectory ?? (string) getcwd());
         $this->newFeatures            = new NewFeatures;
+        $this->paths                  = new CoveredPaths;
         $this->target                 = $target;
         $this->maximumNumberOfChoices = max($maximumNumberOfChoices, $target->requiredNumberOfChoices() ?? 1);
         $this->timeout                = $timeout;
@@ -192,7 +198,7 @@ final class Runner implements InputRunner
         $outcome = $this->outcomeOf($input, $throwable);
 
         if ($outcome->isFinding()) {
-            return new Result($job->id(), $outcome, $this->failure ?? $this->failureOf($throwable), $source->sequence(), [], $drawnValues);
+            return $this->withPath($job, new Result($job->id(), $outcome, $this->failure ?? $this->failureOf($throwable), $source->sequence(), [], $drawnValues), $edges);
         }
 
         $features                 = [];
@@ -206,7 +212,7 @@ final class Runner implements InputRunner
         // the sequence of a terse input is only reported when it is needed
         $sequence = $job->isTerse() && $features === [] && !$producedRequiredFeatures ? null : $source->sequence();
 
-        return new Result($job->id(), $outcome, null, $sequence, $features, $drawnValues, [], $producedRequiredFeatures);
+        return $this->withPath($job, new Result($job->id(), $outcome, null, $sequence, $features, $drawnValues, [], $producedRequiredFeatures), $edges);
     }
 
     /**
@@ -245,7 +251,19 @@ final class Runner implements InputRunner
             $drawnValues = $this->input->drawnValues();
         }
 
-        return new Result($this->job->id(), Outcome::Failed, $failure, $this->source->sequence(), [], $drawnValues);
+        return $this->withPath($this->job, new Result($this->job->id(), Outcome::Failed, $failure, $this->source->sequence(), [], $drawnValues), Edges::hits());
+    }
+
+    /**
+     * @param array<int, positive-int> $edges
+     */
+    private function withPath(Job $job, Result $result, array $edges): Result
+    {
+        if (!$job->reportCoverage()) {
+            return $result;
+        }
+
+        return $this->paths->addTo($result, $edges);
     }
 
     private function outcomeOf(Input $input, ?Throwable $throwable): Outcome
