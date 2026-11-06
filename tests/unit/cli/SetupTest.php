@@ -11,7 +11,12 @@ namespace SebastianBergmann\Rattle;
 
 use const PHP_BINARY;
 use function array_map;
+use function getcwd;
+use function is_file;
 use function realpath;
+use function sys_get_temp_dir;
+use function uniqid;
+use function unlink;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Small;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -22,9 +27,14 @@ use SebastianBergmann\Rattle\Instrumentation\SourceResolver;
 #[CoversClass(ProcessorCount::class)]
 #[CoversClass(ConfigurationException::class)]
 #[CoversClass(PhpunitTestSuite::class)]
+#[UsesClass(Application::class)]
 #[UsesClass(Arguments::class)]
 #[UsesClass(ArgumentsBuilder::class)]
+#[UsesClass(Failure::class)]
+#[UsesClass(FindingException::class)]
+#[UsesClass(FindingStore::class)]
 #[UsesClass(PhpBinary::class)]
+#[UsesClass(SarifReport::class)]
 #[UsesClass(SourceResolver::class)]
 #[UsesClass(WorkerConfiguration::class)]
 #[Small]
@@ -159,6 +169,44 @@ final class SetupTest extends TestCase
         $this->expectException(ConfigurationException::class);
 
         (new Setup)->phpBinaries((new ArgumentsBuilder)->build(['rattle', 'fuzz', 'target.php', '--php', '/does/not/exist']));
+    }
+
+    public function testWritesNoSarifReportWithoutAFile(): void
+    {
+        $this->expectOutputString('');
+
+        $this->assertTrue((new Setup)->writeSarifReport(null, null));
+        $this->assertTrue((new Setup)->writeSarifReport(new SarifReport((string) getcwd()), null));
+    }
+
+    public function testWritesTheFindingsInSarif(): void
+    {
+        $file   = sys_get_temp_dir() . '/rattle-setup-' . uniqid() . '.sarif';
+        $report = new SarifReport((string) getcwd());
+
+        $report->add(Failure::timeout('message', ''), null, 'target');
+
+        $this->expectOutputString('1 finding was written to ' . $file . ' in SARIF.' . "\n" . '2 findings were written to ' . $file . ' in SARIF.' . "\n");
+
+        try {
+            $this->assertTrue((new Setup)->writeSarifReport($report, $file));
+            $this->assertFileExists($file);
+
+            $report->add(Failure::description('Warning at file.php:1', 'message', ''), null, 'target');
+
+            $this->assertTrue((new Setup)->writeSarifReport($report, $file));
+        } finally {
+            if (is_file($file)) {
+                unlink($file);
+            }
+        }
+    }
+
+    public function testReportsThatTheFindingsCannotBeWrittenInSarif(): void
+    {
+        $this->expectOutputString('Cannot write the SARIF report to "/dev/null/findings.sarif"' . "\n");
+
+        $this->assertFalse((new Setup)->writeSarifReport(new SarifReport((string) getcwd()), '/dev/null/findings.sarif'));
     }
 
     public function testForwardsTheStandardErrorStreamsOfTheWorkersOnlyWhenVerbose(): void
