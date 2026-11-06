@@ -464,6 +464,29 @@ final class MutationTest extends TestCase
         $this->assertTrue($mutation->apply(Candidate::from(Sequences::ofBytes('ab')), $this->randomizer()));
     }
 
+    public function testInsertsATokenOnlyWhenASentinelIsDrawnWhileTheDictionaryHasNoOtherTokens(): void
+    {
+        $mutation   = new AddToken(new Dictionary([], ['SENTINEL']));
+        $randomizer = $this->randomizer();
+        $applied    = [];
+
+        for ($i = 0; $i < 1000; $i++) {
+            $candidate = Candidate::from(Sequences::ofBytes('ab'));
+
+            if ($mutation->apply($candidate, $randomizer)) {
+                $this->assertStringContainsString('SENTINEL', BytesEncoding::bytesFor($candidate->choices(), 100));
+
+                $applied['applied'] = true;
+            } else {
+                $this->assertSame([1, 0x61, 1, 0x62, 0], $candidate->choices());
+
+                $applied['not applied'] = true;
+            }
+        }
+
+        $this->assertEqualsCanonicalizing(['applied', 'not applied'], array_keys($applied));
+    }
+
     private function randomizer(): Randomizer
     {
         return new Randomizer(new Xoshiro256StarStar(1));
