@@ -19,6 +19,7 @@ use SebastianBergmann\Rattle\Instrumentation\SourceResolver;
 #[CoversClass(Setup::class)]
 #[CoversClass(ProcessorCount::class)]
 #[CoversClass(ConfigurationException::class)]
+#[CoversClass(PhpunitTestSuite::class)]
 #[UsesClass(Arguments::class)]
 #[UsesClass(ArgumentsBuilder::class)]
 #[UsesClass(SourceResolver::class)]
@@ -115,6 +116,28 @@ final class SetupTest extends TestCase
         $this->expectException(ConfigurationException::class);
 
         (new Setup)->workerConfiguration((new ArgumentsBuilder)->build(['rattle', 'fuzz', self::FIXTURES . '/exit/target.php', '--source', '/does/not/exist']));
+    }
+
+    public function testConfiguresWorkersThatServeThePropertiesOfAPhpunitTestSuite(): void
+    {
+        $phpunit       = __DIR__ . '/../../fixtures/phpunit';
+        $configuration = (new Setup)->workerConfiguration(
+            (new ArgumentsBuilder)->build(['rattle', 'fuzz', '--phpunit', '--configuration', $phpunit . '/phpunit.xml', '--filter', 'PropertyTest']),
+        );
+
+        $this->assertSame('', $configuration->target());
+        $this->assertSame([], $configuration->targets());
+        $this->assertSame([realpath($phpunit . '/src')], $configuration->sources());
+        $this->assertSame($phpunit . '/phpunit.xml', $configuration->phpunit()?->configurationFile());
+        $this->assertSame('PropertyTest', $configuration->phpunit()->filter());
+    }
+
+    public function testRejectsAPhpunitConfigurationFileThatDoesNotExist(): void
+    {
+        $this->expectException(ConfigurationException::class);
+        $this->expectExceptionMessageIsOrContains('The PHPUnit configuration file "/does/not/exist.xml" does not exist');
+
+        (new Setup)->workerConfiguration((new ArgumentsBuilder)->build(['rattle', 'fuzz', '--phpunit', '--configuration', '/does/not/exist.xml']));
     }
 
     public function testForwardsTheStandardErrorStreamsOfTheWorkersOnlyWhenVerbose(): void
