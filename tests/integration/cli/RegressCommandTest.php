@@ -211,6 +211,14 @@ final class RegressCommandTest extends TestCase
         $this->assertSame("The worker process ended before it listed the properties\n\nThe test suite cannot be booted\n", $output);
     }
 
+    public function testReportsThatThePropertiesOfAPhpunitTestSuiteCannotBeListedWhenTheWorkerWritesWhatIsNotAFrame(): void
+    {
+        [$exit, $output] = $this->regress(['--phpunit', '--configuration', self::PHPUNIT . '/stdout.xml']);
+
+        $this->assertSame(2, $exit);
+        $this->assertStringStartsWith('The properties cannot be listed: Invalid frame: ', $output);
+    }
+
     /**
      * @return list<string>
      */
