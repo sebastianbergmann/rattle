@@ -147,10 +147,12 @@ final class FileStreamWrapperTest extends TestCase
 
         $wrapper->stream_close();
 
+        $size = strlen("<?php return 'transformed from ' . __FILE__;\n");
+
         $this->assertIsArray($stat);
         $this->assertSame(1000000000, $stat['mtime'] ?? null);
-        $this->assertSame(strlen("<?php return 'transformed from ' . __FILE__;\n"), $stat['size'] ?? null);
-        $this->assertSame($stat['size'], $stat[7] ?? null);
+        $this->assertSame($size, $stat['size'] ?? null);
+        $this->assertSame($size, $stat[7] ?? null);
     }
 
     public function testDoesNotTransformFilesThatAreReadButNotIncluded(): void

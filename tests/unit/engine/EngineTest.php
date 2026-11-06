@@ -637,7 +637,7 @@ final class EngineTest extends TestCase
 
         $statistics = $engine->run();
 
-        $this->assertSame($corpus->numberOfEntries() + $statistics->findings - 1, count($checked));
+        $this->assertCount($corpus->numberOfEntries() + $statistics->findings - 1, $checked);
         $this->assertContains(Outcome::Failed, $checked);
         $this->assertSame(2, $statistics->findings);
         $this->assertGreaterThanOrEqual(1, $statistics->duplicateFindings);

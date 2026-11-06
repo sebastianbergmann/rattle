@@ -9,7 +9,6 @@
  */
 namespace SebastianBergmann\Rattle\Instrumentation;
 
-use function count;
 use function realpath;
 use function SebastianBergmann\Rattle\Fixture\IncludeHook\classify;
 use function SebastianBergmann\Rattle\Fixture\IncludeHook\excluded;
@@ -121,7 +120,7 @@ final class IncludeHookTest extends TestCase
             $hook->unregister();
         }
 
-        $this->assertSame(1, count($hook->failures()));
+        $this->assertCount(1, $hook->failures());
         $this->assertSame(0, $hook->numberOfInstrumentedFiles());
         $this->assertStringStartsWith('Cannot instrument', $hook->failures()[(string) realpath(self::FIXTURES . '/source/broken.php')] ?? '');
     }

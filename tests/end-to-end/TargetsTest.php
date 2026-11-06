@@ -114,7 +114,7 @@ final class TargetsTest extends TestCase
             $this->assertCount(1, $findings, $name);
             $this->assertStringContainsString('Finding: ' . $description . "\n         " . $name . "\n", $output);
 
-            $finding = $findings[0] ?? '';
+            $finding = $findings[0];
             $readme  = (string) file_get_contents($finding . '/README.txt');
 
             // the minimal input failed in the same way when it was replayed

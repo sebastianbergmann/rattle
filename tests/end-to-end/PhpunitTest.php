@@ -79,7 +79,7 @@ final class PhpunitTest extends TestCase
         $this->assertIsArray($findings);
         $this->assertCount(1, $findings);
 
-        $finding = $findings[0] ?? '';
+        $finding = $findings[0];
 
         // the minimal input is the list 7, 3, 9
         $this->assertStringEqualsFile($finding . '/input', "choice-sequence v1\n1\n7\n1\n3\n1\n9\n0\n");
@@ -256,7 +256,7 @@ final class PhpunitTest extends TestCase
 
         $this->assertIsArray($findings);
         $this->assertCount(1, $findings);
-        $this->assertStringContainsString('"$command = \'SHUTDOWN\';"', (string) file_get_contents(($findings[0] ?? '') . '/finding.json'));
+        $this->assertStringContainsString('"$command = \'SHUTDOWN\';"', (string) file_get_contents($findings[0] . '/finding.json'));
     }
 
     public function testInsertsATokenIntoAStringWithAMinimumLengthAfterTheCharactersThatItRequires(): void

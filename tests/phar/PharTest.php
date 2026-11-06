@@ -154,7 +154,7 @@ final class PharTest extends TestCase
 
         $this->assertIsArray($findings);
         $this->assertCount(1, $findings);
-        $this->assertStringEqualsFile(($findings[0] ?? '') . '/input.bin', '<?');
+        $this->assertStringEqualsFile($findings[0] . '/input.bin', '<?');
     }
 
     public function testLeavesItsOwnCodeOutOfStackTraces(): void

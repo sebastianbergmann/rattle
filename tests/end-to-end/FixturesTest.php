@@ -195,7 +195,7 @@ final class FixturesTest extends TestCase
         $this->assertIsArray($findings);
         $this->assertCount(1, $findings);
 
-        $finding = $findings[0] ?? '';
+        $finding = $findings[0];
 
         foreach (['input', 'original', 'input.bin', 'finding.json', 'README.txt'] as $file) {
             $this->assertFileExists($finding . '/' . $file);
@@ -409,7 +409,7 @@ final class FixturesTest extends TestCase
         $this->assertIsArray($findings);
         $this->assertCount(1, $findings);
 
-        $finding = $findings[0] ?? '';
+        $finding = $findings[0];
 
         // a string of one character is the smallest that is shown with too
         // few digits on the other version

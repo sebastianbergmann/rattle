@@ -27,7 +27,7 @@ final class InputLoaderTest extends TestCase
 
         $this->assertSame([[1, 82, 0], [0]], $loader->choiceSequencesIn(self::FIXTURES . '/corpus'));
         $this->assertCount(1, $loader->warnings());
-        $this->assertStringContainsString('invalid is not a valid choice sequence', $loader->warnings()[0] ?? '');
+        $this->assertStringContainsString('invalid is not a valid choice sequence', $loader->warnings()[0]);
     }
 
     public function testLoadsRawFilesAsTheChoicesOfTheirBytes(): void

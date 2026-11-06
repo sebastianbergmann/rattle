@@ -295,7 +295,7 @@ final class ProcessExecutorTest extends TestCase
 
         $choices[] = 0;
 
-        $result = $executor->execute(Job::replay(0, $choices)->withTarget($properties[0] ?? 'missing'));
+        $result = $executor->execute(Job::replay(0, $choices)->withTarget($properties[0]));
         $source = str_replace(realpath((string) getcwd()) . '/', '', (string) realpath(dirname(__DIR__, 2) . '/fixtures/phpunit/src/Templates.php'));
 
         $this->assertSame(Outcome::Failed, $result->outcome());
