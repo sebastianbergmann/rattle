@@ -188,4 +188,14 @@ final class SentinelCommandTest extends TestCase
             }
         }
     }
+
+    public function testRemovingTheDirectoryOfTheWorkersAgainDoesNothing(): void
+    {
+        $workers = SentinelCommand::environmentOfWorkers()['RATTLE_SENTINEL_DIRECTORY'] ?? '';
+
+        SentinelCommand::removeDirectoryOfWorkers();
+        SentinelCommand::removeDirectoryOfWorkers();
+
+        $this->assertDirectoryDoesNotExist($workers);
+    }
 }
