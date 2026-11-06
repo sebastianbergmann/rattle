@@ -341,6 +341,35 @@ final class TargetSchedulerTest extends TestCase
         }
     }
 
+    public function testStopsWaitingForTheResultsOfTheInputsThatWereSubmittedWhenInterrupted(): void
+    {
+        $engines     = $this->engines($this->twoTargets(), 4, false);
+        $interrupted = false;
+        $executor    = $this->executorWithoutResults(
+            $engines['executor'],
+            static function () use (&$interrupted): void
+            {
+                $interrupted = true;
+            },
+        );
+
+        (new TargetScheduler(
+            $executor,
+            $engines['engines'],
+            1,
+            null,
+            static function () use (&$interrupted): bool
+            {
+                return $interrupted;
+            },
+        ))->run();
+
+        foreach ($engines['engines'] as $engine) {
+            $this->assertSame(0, $engine->statistics()->executions);
+            $this->assertTrue($engine->hasPendingInputs());
+        }
+    }
+
     /**
      * Two targets that take one edge for every input.
      *
@@ -395,6 +424,56 @@ final class TargetSchedulerTest extends TestCase
                 $job = array_shift($this->pending);
 
                 return $job === null ? [] : [$this->executor->execute($job)];
+            }
+
+            public function execute(Job $job): Result
+            {
+                return $this->executor->execute($job);
+            }
+
+            public function shutdown(): void
+            {
+            }
+        };
+    }
+
+    /**
+     * An executor that accepts inputs and never returns their results, as
+     * workers that hang, and that calls a closure when its results are
+     * collected.
+     *
+     * @param Closure(): void $collected
+     */
+    private function executorWithoutResults(Executor $executor, Closure $collected): Executor
+    {
+        return new readonly class($executor, $collected) implements Executor
+        {
+            /**
+             * @param Closure(): void $collected
+             */
+            public function __construct(private Executor $executor, private Closure $collected)
+            {
+            }
+
+            public function target(): TargetDescription
+            {
+                return $this->executor->target();
+            }
+
+            public function capacity(): int
+            {
+                return 1;
+            }
+
+            public function submit(array $jobs): void
+            {
+            }
+
+            public function collect(): array
+            {
+                ($this->collected)();
+
+                return [];
             }
 
             public function execute(Job $job): Result
