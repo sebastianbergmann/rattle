@@ -48,4 +48,27 @@ final class SentinelsTest extends TestCase
     {
         $this->assertSame($expected, Sentinels::isPath($path, '/project/working/directory'));
     }
+
+    public function testHasTheTokensThatBringTheSentinelsIntoTheStringsOfInputs(): void
+    {
+        $this->assertSame(
+            [
+                str_repeat('../', 16) . 'rattle-sentinel',
+                'rattle-sentinel',
+                '$(rattle-sentinel)',
+                'O:33:"SebastianBergmann\\Rattle\\Sentinel":0:{}',
+                'new \\SebastianBergmann\\Rattle\\Sentinel;',
+            ],
+            Sentinels::tokens(),
+        );
+    }
+
+    public function testThePathAmongTheTokensLeadsToTheSentinelOfTheFileSystemFromEveryDirectoryThatIsUpTo16LevelsBelowTheRoot(): void
+    {
+        $path = Sentinels::tokens()[0];
+
+        $this->assertTrue(Sentinels::isPath($path, '/'));
+        $this->assertTrue(Sentinels::isPath($path, str_repeat('/directory', 16)));
+        $this->assertFalse(Sentinels::isPath($path, str_repeat('/directory', 17)));
+    }
 }
