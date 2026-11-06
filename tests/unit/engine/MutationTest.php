@@ -275,6 +275,18 @@ final class MutationTest extends TestCase
         $this->assertSame('XYZ', BytesEncoding::bytesFor($candidate->choices(), 100));
     }
 
+    public function testReplacesNoSpanWhenNoOtherCorpusEntryHasASpanWithTheSameLabel(): void
+    {
+        $corpus = new Corpus;
+
+        $corpus->add(new ChoiceSequence([7], [new Span(0, 1, 'other', null)], []), [1]);
+
+        $candidate = Candidate::from(new ChoiceSequence([1], [new Span(0, 1, 'label', null)], []));
+
+        $this->assertFalse((new CrossOver($corpus))->apply($candidate, $this->randomizer()));
+        $this->assertSame([1], $candidate->choices());
+    }
+
     public function testInsertsBytesAtTheBoundaryBetweenBytes(): void
     {
         $randomizer    = $this->randomizer();
