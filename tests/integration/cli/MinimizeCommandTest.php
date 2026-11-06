@@ -91,6 +91,23 @@ final class MinimizeCommandTest extends TestCase
         $this->assertSame($this->encoded("RATL\x00"), file_get_contents($this->input . '.minimized'));
     }
 
+    public function testKeepsAnInputThatDidNotFailInTheSameWayAgainWhenItWasReplayed(): void
+    {
+        // the target fails for the input once
+        $this->write("\x01");
+
+        [$exit, $output] = $this->minimize('flaky');
+
+        $this->assertSame(0, $exit);
+        $this->assertSame(
+            'Failure: LogicException at ' . self::FIXTURES . '/flaky/target.php:22' . "\n" .
+            'The input did not fail in the same way again when it was replayed, and was not minimized.' . "\n" .
+            'Wrote ' . $this->input . '.minimized' . "\n",
+            $output,
+        );
+        $this->assertSame($this->encoded("\x01"), file_get_contents($this->input . '.minimized'));
+    }
+
     public function testDoesNotMinimizeAnInputThatDoesNotMakeTheTargetFail(): void
     {
         $this->write("RATL\x01");
@@ -123,7 +140,7 @@ final class MinimizeCommandTest extends TestCase
     /**
      * @return array{0: int, 1: string}
      */
-    private function minimize(): array
+    private function minimize(string $fixture = 'magic'): array
     {
         ob_start();
 
@@ -132,12 +149,12 @@ final class MinimizeCommandTest extends TestCase
                 [
                     'rattle',
                     'minimize',
-                    self::FIXTURES . '/magic/target.php',
+                    self::FIXTURES . '/' . $fixture . '/target.php',
                     $this->input,
                     '--bootstrap',
                     self::FIXTURES . '/bootstrap.php',
                     '--source',
-                    self::FIXTURES . '/magic/src',
+                    self::FIXTURES . '/' . $fixture,
                 ],
             ),
         );
