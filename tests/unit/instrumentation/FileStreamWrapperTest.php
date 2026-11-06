@@ -267,6 +267,30 @@ final class FileStreamWrapperTest extends TestCase
         $this->assertFalse((new FileStreamWrapper)->stream_open('does-not-exist.php', 'rb', 0x80 | STREAM_USE_PATH, $openedPath));
     }
 
+    public function testRejectsOperationsThatAreNotValid(): void
+    {
+        $wrapper    = new FileStreamWrapper;
+        $openedPath = null;
+
+        $this->assertTrue($wrapper->stream_open($this->directory . '/untouched.php', 'rb', 0, $openedPath));
+        $this->assertSame('', $wrapper->stream_read(0));
+        $this->assertFalse($wrapper->stream_lock(0));
+        $this->assertFalse($wrapper->stream_set_option(99, 0, null));
+
+        $wrapper->stream_close();
+
+        $this->assertFalse($wrapper->stream_cast(0));
+        $this->assertFalse((new FileStreamWrapper)->dir_rewinddir());
+    }
+
+    public function testCannotReadFromAStreamThatIsNotOpen(): void
+    {
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessageIsOrContains('The stream is not open');
+
+        (new FileStreamWrapper)->stream_read(1);
+    }
+
     public function testManagesFilesAndDirectories(): void
     {
         $this->assertTrue(mkdir($this->directory . '/a/b', 0o777, true));
