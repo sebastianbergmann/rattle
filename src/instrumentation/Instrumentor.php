@@ -10,6 +10,9 @@
 namespace SebastianBergmann\Rattle\Instrumentation;
 
 use function crc32;
+use function ksort;
+use function str_ends_with;
+use function substr_count;
 use Closure;
 use PhpParser\Error as ParseError;
 use PhpParser\NodeTraverser;
@@ -34,6 +37,10 @@ use PhpParser\PhpVersion;
  * the same traversal of the code (see ComparisonOperandFinder), which does
  * not change the code.
  *
+ * When the blocks of the files are collected, the lines on which they start
+ * are recorded for every file that is instrumented (see BlockMap), so that
+ * the edges that inputs take can be located in the code.
+ *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
  * @internal This class is not covered by the backward compatibility promise for sebastian/rattle
@@ -42,14 +49,17 @@ final readonly class Instrumentor
 {
     private Parser $parser;
     private ?ComparisonOperands $operands;
+    private ?BlockMaps $blockMaps;
 
     /**
-     * @param ?ComparisonOperands $operands collects the constant operands of the comparisons in the code that is instrumented, null to not look for them
+     * @param ?ComparisonOperands $operands  collects the constant operands of the comparisons in the code that is instrumented, null to not look for them
+     * @param ?BlockMaps          $blockMaps collects the blocks of the files that are instrumented, null to not record them
      */
-    public function __construct(?ComparisonOperands $operands = null)
+    public function __construct(?ComparisonOperands $operands = null, ?BlockMaps $blockMaps = null)
     {
-        $this->parser   = (new ParserFactory)->createForVersion(PhpVersion::getHostVersion());
-        $this->operands = $operands;
+        $this->parser    = (new ParserFactory)->createForVersion(PhpVersion::getHostVersion());
+        $this->operands  = $operands;
+        $this->blockMaps = $blockMaps;
     }
 
     /**
@@ -85,13 +95,45 @@ final readonly class Instrumentor
             $this->operands->add($operandFinder->operands());
         }
 
-        $edits = new SourceEdits($code);
+        $edits  = new SourceEdits($code);
+        $blocks = [];
 
         foreach ($finder->blockStarts() as $blockStart) {
-            $blockStart->addTo($edits, $blockIndex($blockStart->offset()));
+            $index = $blockIndex($blockStart->offset());
+
+            $blockStart->addTo($edits, $index);
+
+            $blocks[$blockStart->offset()] ??= $index;
+        }
+
+        if ($this->blockMaps !== null && $path !== '') {
+            $this->blockMaps->add(self::blockMapOf($code, $path, $blocks));
         }
 
         return $edits->apply();
+    }
+
+    /**
+     * @param non-empty-string                      $path
+     * @param array<non-negative-int, positive-int> $blocks the index of the block that starts at each offset
+     */
+    private static function blockMapOf(string $code, string $path, array $blocks): BlockMap
+    {
+        ksort($blocks);
+
+        $lines    = [];
+        $line     = 1;
+        $previous = 0;
+
+        foreach ($blocks as $offset => $index) {
+            $line += substr_count($code, "\n", $previous, $offset - $previous);
+            $previous = $offset;
+            $lines[]  = [$index, $line];
+        }
+
+        $numberOfLines = $code === '' ? 0 : substr_count($code, "\n") + (str_ends_with($code, "\n") ? 0 : 1);
+
+        return new BlockMap($path, $numberOfLines, $lines);
     }
 
     /**

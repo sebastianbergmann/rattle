@@ -9,6 +9,7 @@
  */
 namespace SebastianBergmann\Rattle\Instrumentation;
 
+use function array_map;
 use function count;
 use function explode;
 use function file_get_contents;
@@ -33,6 +34,8 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(Edges::class)]
 #[CoversClass(ComparisonOperandFinder::class)]
 #[CoversClass(ComparisonOperands::class)]
+#[CoversClass(BlockMap::class)]
+#[CoversClass(BlockMaps::class)]
 #[Small]
 final class InstrumentorTest extends TestCase
 {
@@ -214,6 +217,51 @@ final class InstrumentorTest extends TestCase
         (new Instrumentor($operands))->instrument('<?php $a === "ccc";', 'b.php');
 
         $this->assertSame(['aaa', 'bbb', 'ccc'], $operands->takeUnreported());
+    }
+
+    public function testRecordsTheBlocksOfTheFileInTheOrderOfTheirOffsetsWithTheLinesOnWhichTheyStartWithoutChangingTheInstrumentedCode(): void
+    {
+        $code = <<<'CODE'
+<?php
+function f($a)
+{
+    if ($a) {
+        return 1;
+    }
+
+    return 2;
+}
+
+CODE;
+        $maps = new BlockMaps;
+
+        $this->assertSame(
+            (new Instrumentor)->instrument($code, 'a.php', $this->counter()),
+            (new Instrumentor(null, $maps))->instrument($code, 'a.php', $this->counter()),
+        );
+
+        $map = $maps->takeUnreported()[0] ?? null;
+
+        $this->assertNotNull($map);
+        $this->assertSame('a.php', $map->file());
+        $this->assertSame(9, $map->numberOfLines());
+        $this->assertSame([[3, 3], [1, 4], [2, 6]], $map->blocks());
+    }
+
+    public function testRecordsTheBlocksOfAFileWhoseLastLineDoesNotEndWithANewline(): void
+    {
+        $maps = new BlockMaps;
+
+        (new Instrumentor(null, $maps))->instrument("<?php\nfunction f() { a(); }", 'a.php', $this->counter());
+        (new Instrumentor(null, $maps))->instrument('', 'b.php', $this->counter());
+
+        $this->assertSame(
+            [
+                ['file' => 'a.php', 'lines' => 2, 'blocks' => [[1, 2]]],
+                ['file' => 'b.php', 'lines' => 0, 'blocks' => []],
+            ],
+            array_map(static fn (BlockMap $map): array => $map->asArray(), $maps->takeUnreported()),
+        );
     }
 
     public function testCannotInstrumentCodeThatCannotBeParsed(): void
