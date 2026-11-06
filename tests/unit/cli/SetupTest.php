@@ -120,16 +120,18 @@ final class SetupTest extends TestCase
 
     public function testConfiguresWorkersThatServeThePropertiesOfAPhpunitTestSuite(): void
     {
-        $phpunit       = __DIR__ . '/../../fixtures/phpunit';
+        $fixtures      = __DIR__ . '/../../fixtures/phpunit';
         $configuration = (new Setup)->workerConfiguration(
-            (new ArgumentsBuilder)->build(['rattle', 'fuzz', '--phpunit', '--configuration', $phpunit . '/phpunit.xml', '--filter', 'PropertyTest']),
+            (new ArgumentsBuilder)->build(['rattle', 'fuzz', '--phpunit', '--configuration', $fixtures . '/phpunit.xml', '--filter', 'PropertyTest']),
         );
+        $phpunit = $configuration->phpunit();
 
+        $this->assertNotNull($phpunit);
+        $this->assertSame($fixtures . '/phpunit.xml', $phpunit->configurationFile());
+        $this->assertSame('PropertyTest', $phpunit->filter());
         $this->assertSame('', $configuration->target());
         $this->assertSame([], $configuration->targets());
-        $this->assertSame([realpath($phpunit . '/src')], $configuration->sources());
-        $this->assertSame($phpunit . '/phpunit.xml', $configuration->phpunit()?->configurationFile());
-        $this->assertSame('PropertyTest', $configuration->phpunit()->filter());
+        $this->assertSame([realpath($fixtures . '/src')], $configuration->sources());
     }
 
     public function testRejectsAPhpunitConfigurationFileThatDoesNotExist(): void
