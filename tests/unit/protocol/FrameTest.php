@@ -123,4 +123,29 @@ final class FrameTest extends TestCase
 
         (new FrameStream($stream, $stream))->read();
     }
+
+    public function testRejectsAnEmptyFrameOnAStream(): void
+    {
+        $stream = fopen('php://memory', 'w+');
+
+        $this->assertIsResource($stream);
+
+        fwrite($stream, pack('N', 0));
+        rewind($stream);
+
+        $this->expectException(ProtocolException::class);
+
+        (new FrameStream($stream, $stream))->read();
+    }
+
+    public function testStopsWritingAFrameWhenTheStreamCannotBeWritten(): void
+    {
+        $stream = fopen('php://memory', 'r');
+
+        $this->assertIsResource($stream);
+
+        (new FrameStream($stream, $stream))->write(['n' => 1]);
+
+        $this->assertNull((new FrameStream($stream, $stream))->read());
+    }
 }
