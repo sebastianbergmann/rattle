@@ -65,6 +65,8 @@ final class ResultTest extends TestCase
         $this->assertEquals($failed, Result::fromArray($failed->asArray()));
         $this->assertTrue($failed->isFinding());
         $this->assertFalse($passed->isFinding());
+        $this->assertSame(["'a'"], $passed->drawnValues());
+        $this->assertNull($failed->drawnValues());
     }
 
     public function testHasTheTokensThatWereFoundWhileTheInputWasExecuted(): void
