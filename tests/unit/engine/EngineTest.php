@@ -215,6 +215,32 @@ final class EngineTest extends TestCase
         }
     }
 
+    public function testTellsWhetherTheInputsToStartWithWereSubmittedAndWhetherTheirResultsWereProcessed(): void
+    {
+        $executor = $this->executor($this->magicHeader());
+        $engine   = $this->engine($this->magicHeader(), $this->findings(), new EngineConfiguration(1, null, null, false, 1), [], null, null, $executor);
+
+        $engine->start([[1, 0x41, 0]]);
+
+        $this->assertTrue($engine->hasInputsToStartWith());
+        $this->assertFalse($engine->hasReplayedInputsToStartWith());
+
+        $batch = $engine->nextBatch();
+        $job   = $batch[0] ?? null;
+
+        $this->assertCount(1, $batch);
+        $this->assertNotNull($job);
+
+        $executor->submit([$job]);
+
+        $this->assertFalse($engine->hasInputsToStartWith());
+        $this->assertFalse($engine->hasReplayedInputsToStartWith());
+
+        $engine->process($executor->collect());
+
+        $this->assertTrue($engine->hasReplayedInputsToStartWith());
+    }
+
     public function testComposesBatchesForThePropertyThatItFuzzesWithIdsFromTheIdsThatItShares(): void
     {
         $ids    = new JobIds;
