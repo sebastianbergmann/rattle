@@ -163,6 +163,16 @@ final readonly class FuzzCommand implements Command
             }
         }
 
+        $coverage = $this->openCoverageLog($arguments);
+
+        if ($coverage === false) {
+            $executor->shutdown();
+
+            printf('Cannot write the coverage log "%s"' . PHP_EOL, (string) $arguments->coverageLog());
+
+            return 2;
+        }
+
         $status               = new StatusLine(STDOUT, stream_isatty(STDOUT), static fn (): float => microtime(true));
         $minimizationExecutor = new ProcessExecutor($configuration, 1, $stderr);
         $store                = new FindingStore($findingsDirectory);
@@ -205,6 +215,8 @@ final readonly class FuzzCommand implements Command
             $log = fopen($arguments->inputLog(), 'w');
         }
 
+        $executionLog = $this->executionLog($coverage, $name, $seed, $jobs);
+
         $engine = new Engine(
             $executor,
             $corpus     = new Corpus($corpusDirectory),
@@ -217,6 +229,7 @@ final readonly class FuzzCommand implements Command
             $isInterrupted,
             null,
             $differences === null ? null : $differences->check(...),
+            $executionLog,
         );
 
         // the scheduler keeps what the run learned about the target for later
@@ -240,6 +253,8 @@ final readonly class FuzzCommand implements Command
             if (is_resource($log)) {
                 fclose($log);
             }
+
+            $this->closeCoverageLog($coverage, $executionLog, $engine->statistics());
         }
 
         $statistics = $engine->statistics();
@@ -305,10 +320,10 @@ final readonly class FuzzCommand implements Command
 
         if ($properties === []) {
             $error = 'The PHPUnit test suite has no properties' . ($phpunit->filter() === null ? '' : ' that match the filter');
-        } elseif (count($properties) > 1 && ($arguments->corpusDirectories() !== [] || $arguments->inputLog() !== null)) {
-            // the inputs of a corpus directory and the log of the inputs
+        } elseif (count($properties) > 1 && ($arguments->corpusDirectories() !== [] || $arguments->inputLog() !== null || $arguments->coverageLog() !== null)) {
+            // the inputs of a corpus directory and the logs of the inputs
             // belong to one target
-            $error = 'The options --corpus and --log-inputs can only be used with --phpunit when the filter selects one property';
+            $error = 'The options --corpus, --log-inputs, and --log-coverage can only be used with --phpunit when the filter selects one property';
         }
 
         foreach ($arguments->corpusDirectories() as $directory) {
@@ -373,10 +388,10 @@ final readonly class FuzzCommand implements Command
      */
     private function fuzzTargets(Arguments $arguments, WorkerConfiguration $configuration, ?Closure $stderr, int $jobs, int $seed, array $tokens, Closure $isInterrupted, array $phpBinaries): int
     {
-        // the inputs of a corpus directory, raw seed files, and the log of
+        // the inputs of a corpus directory, raw seed files, and the logs of
         // the inputs belong to one target
-        if ($arguments->corpusDirectories() !== [] || $arguments->seedsDirectory() !== null || $arguments->inputLog() !== null) {
-            print 'The options --corpus, --seeds, and --log-inputs can only be used when one target is fuzzed' . PHP_EOL;
+        if ($arguments->corpusDirectories() !== [] || $arguments->seedsDirectory() !== null || $arguments->inputLog() !== null || $arguments->coverageLog() !== null) {
+            print 'The options --corpus, --seeds, --log-inputs, and --log-coverage can only be used when one target is fuzzed' . PHP_EOL;
 
             return 2;
         }
@@ -451,6 +466,18 @@ final readonly class FuzzCommand implements Command
      */
     private function fuzzTogether(Arguments $arguments, WorkerConfiguration $configuration, ProcessExecutor $executor, array $targets, bool $properties, string $description, ?Closure $stderr, int $jobs, int $seed, Closure $isInterrupted, array $phpBinaries): int
     {
+        // the log of the coverage belongs to one target, the only one
+        $coverage = $this->openCoverageLog($arguments);
+
+        if ($coverage === false) {
+            $executor->shutdown();
+
+            printf('Cannot write the coverage log "%s"' . PHP_EOL, (string) $arguments->coverageLog());
+
+            return 2;
+        }
+
+        $executionLog          = $this->executionLog($coverage, $targets[0]->name(), $seed, $jobs);
         $status                = new StatusLine(STDOUT, stream_isatty(STDOUT), static fn (): float => microtime(true));
         $report                = $arguments->sarifFile() === null ? null : new SarifReport((string) getcwd());
         $ids                   = new JobIds;
@@ -527,6 +554,7 @@ final readonly class FuzzCommand implements Command
                 $isInterrupted,
                 $ids,
                 $differences === null ? null : $differences->check(...),
+                $executionLog,
             );
 
             $engines[$name]->start($initialInputs);
@@ -604,6 +632,12 @@ final readonly class FuzzCommand implements Command
 
             if (is_resource($log)) {
                 fclose($log);
+            }
+
+            $first = $engines[$targets[0]->name()] ?? null;
+
+            if ($first !== null) {
+                $this->closeCoverageLog($coverage, $executionLog, $first->statistics());
             }
         }
 
@@ -940,6 +974,56 @@ final readonly class FuzzCommand implements Command
         {
             fwrite($log, $job->isReplay() ? 'replay ' . implode(',', $job->choices()) . "\n" : 'generate ' . $job->seed() . "\n");
         };
+    }
+
+    /**
+     * Opens the file of the coverage log, when it is asked for, and returns
+     * false when the file cannot be written.
+     *
+     * @return null|false|resource
+     */
+    private function openCoverageLog(Arguments $arguments): mixed
+    {
+        if ($arguments->coverageLog() === null) {
+            return null;
+        }
+
+        return @fopen($arguments->coverageLog(), 'w');
+    }
+
+    /**
+     * The execution log that is written to the file of the coverage log,
+     * which has started, when the coverage is logged.
+     *
+     * @param null|resource    $coverage
+     * @param non-empty-string $target
+     * @param positive-int     $jobs
+     */
+    private function executionLog(mixed $coverage, string $target, int $seed, int $jobs): ?JsonLinesExecutionLog
+    {
+        if (!is_resource($coverage)) {
+            return null;
+        }
+
+        $log = new JsonLinesExecutionLog($coverage);
+
+        $log->start($target, $seed, $jobs);
+
+        return $log;
+    }
+
+    /**
+     * @param null|resource $coverage
+     */
+    private function closeCoverageLog(mixed $coverage, ?JsonLinesExecutionLog $log, Statistics $statistics): void
+    {
+        if (!is_resource($coverage)) {
+            return;
+        }
+
+        $log?->end($statistics);
+
+        fclose($coverage);
     }
 
     /**

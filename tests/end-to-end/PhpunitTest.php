@@ -183,7 +183,7 @@ final class PhpunitTest extends TestCase
         [$exit, $output] = $this->fuzz(['--corpus', $this->directory . '/corpus']);
 
         $this->assertSame(2, $exit, $output);
-        $this->assertStringContainsString('The options --corpus and --log-inputs can only be used with --phpunit when the filter selects one property', $output);
+        $this->assertStringContainsString('The options --corpus, --log-inputs, and --log-coverage can only be used with --phpunit when the filter selects one property', $output);
     }
 
     public function testRegressFailsWhileAFindingOfAPropertyStillFailsAndPassesOnceItIsFixed(): void

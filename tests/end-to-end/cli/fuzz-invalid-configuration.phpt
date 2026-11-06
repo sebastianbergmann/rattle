@@ -41,7 +41,7 @@ Line 2 of the dictionary is not valid
 int(2)
 The worker could not be started: The target file "tests/fixtures/worker/not-a-target.php" must return an instance of SebastianBergmann\Rattle\Target, string returned
 int(2)
-The options --corpus, --seeds, and --log-inputs can only be used when one target is fuzzed
+The options --corpus, --seeds, --log-inputs, and --log-coverage can only be used when one target is fuzzed
 int(2)
 The worker could not be started: The target files "tests/fixtures/worker/target.php" and "tests/fixtures/worker/duplicate-target.php" both return a target named "worker"
 int(2)

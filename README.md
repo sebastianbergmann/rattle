@@ -259,6 +259,34 @@ These constructs are not instrumented:
 * `xor`, which always evaluates both operands, a `match` without a matching arm, and expressions that are aborted by an exception: these do not lead to edges of their own
 * code that is not loaded from a file below your source directories, or from a `vendor/` directory below one, code that is passed to `eval()`, and files that are loaded before rattle registers its include hook, such as the files that Composer's autoloader includes eagerly (`autoload.files`)
 
+## Logging the coverage of a run
+
+With `--log-coverage <file>`, `rattle fuzz` writes every input whose result it processed, the code that the input reached, and what rattle learned from it to a file in [JSON Lines](https://jsonlines.org/), one event per line. A tool can use the file to visualize how fuzzing went, as an animation that shows which code every input reaches and which code the inputs reached so far, for instance. The log belongs to one target, so `--log-coverage` can only be used when one target is fuzzed, or when `--filter` selects one property of a PHPUnit test suite.
+
+These are some of the lines that `rattle fuzz tests/fixtures/targets/magic/target.php --bootstrap tests/fixtures/targets/bootstrap.php --source tests/fixtures/targets/magic/src --jobs 1 --seed 1 --stop-on-finding --log-coverage coverage.jsonl` writes for a fixture of rattle's own tests: the generated input `'k'` enters the corpus, input 24 gets past the magic header with the token `RATL`, which rattle found in a comparison, and input 31 finds the division by zero behind it:
+
+```
+{"event":"start","version":1,"rattle":"1.0.0","target":"magic-header","seed":1,"jobs":1,"time":1793983392.291253}
+{"event":"file","file":"tests/fixtures/targets/magic/src/ParseException.php","lines":16,"blocks":[]}
+{"event":"file","file":"tests/fixtures/targets/magic/src/ImageDecoder.php","lines":41,"blocks":[[209277362,28],[238515770,29],[63819485,32],[47389696,33],[261536118,36]]}
+{"event":"path","path":0,"edges":[[0,209277362,0],[209277362,238515770,0]]}
+{"event":"execution","id":0,"t":0.029246,"origin":"generated","outcome":"expected","path":0,"values":["'k'"],"newFeatures":2,"corpus":{"added":0}}
+{"event":"execution","id":16,"t":0.033235,"origin":"mutated","parent":0,"mutations":["BoundaryChoice","ArithmeticChoice","InsertChoices","DuplicateSpan","DeleteChoices"],"outcome":"expected","path":0,"values":["''"],"corpus":{"replaced":0}}
+{"event":"path","path":1,"edges":[[0,209277362,0],[209277362,63819485,0],[63819485,47389696,0]]}
+{"event":"execution","id":24,"t":0.034205,"origin":"mutated","parent":0,"mutations":["BoundaryChoice","RandomChoice","AddToken"],"outcome":"expected","path":1,"values":["'RATL'"],"newFeatures":2,"corpus":{"added":1}}
+{"event":"path","path":2,"edges":[[0,209277362,0],[209277362,63819485,0],[63819485,261536118,0]]}
+{"event":"execution","id":31,"t":0.195168,"origin":"mutated","parent":0,"mutations":["AddToken","DuplicateSpan","DeleteChoices","CrossOver"],"outcome":"failed","path":2,"values":["\"RATL\\x00\""],"finding":{"new":true,"failure":"DivisionByZeroError at tests/fixtures/targets/magic/src/ImageDecoder.php:37"}}
+{"event":"end","t":0.240386,"executions":32,"features":4,"corpusEntries":2,"findings":1}
+```
+
+* `start` has the version of the format, which is raised when the format changes in a way that tools that read it must know about, the version of rattle, the target, the seed, the number of worker processes, and the time at which the run started, in seconds since the Unix epoch
+* `file` has a file that was instrumented, with its path relative to the working directory, its number of lines, and its basic blocks, each as its index and the line on which its code starts. Every file is written once, before the first path that takes an edge into one of its blocks
+* `path` has a path that inputs took through the code that is instrumented, with an ID, and its edges in the order in which they were first taken, each as the index of the block that the edge leaves, which is 0 where an execution starts, the index of the block that it enters, and the bucket of how often it was taken, from 0 for once to 7 for 128 times or more (see [How coverage is measured](#how-coverage-is-measured)). Every path is written once, before the first execution that took it, so that the many inputs that take the same path share it
+* `execution` has an input whose result rattle processed, in the order in which it processed them: its ID, the seconds since the run started, where it came from, which is `initial` for an input of the corpus that is replayed when fuzzing starts, `generated` for an input that was generated from a fresh seed, and `mutated` for an input that was mutated from the corpus entry with the index `parent` with the `mutations` that are named, its outcome (`passed`, `expected`, `rejected`, or `failed`), its path, the values that it drew, each cut off after 256 bytes, and, when the input entered the corpus, the number of features that it added and the index of the corpus entry that it was added as (`added`) or that it replaced (`replaced`), and when it is a finding, whether it is a new one and how it failed. The path of an input that failed or was rejected is the code that it reached, even though rattle does not learn from it
+* `end` has the seconds since the run started, and the numbers of executions, features, corpus entries, and new findings of the run
+
+All numbers in the log can be read exactly by JavaScript: the index of a block has 28 bits and is derived from the path of its file and its offset in the file, so that a block has the same index in every run of the same checkout. Logging the coverage does not change which inputs rattle executes: with `--jobs 1` and `--seed <n>`, a run executes the same inputs in the same order with and without `--log-coverage`, so that a run can be recorded again. It makes fuzzing a little slower, by 10 to 20 percent for the CSV parser of rattle's own tests with one worker process, and the log takes about 200 bytes per execution.
+
 ## The dictionary
 
 A string that your code compares its data with, the magic header of a file format or a keyword, for instance, is unlikely to be generated byte by byte. rattle therefore adds tokens to the strings of inputs: to the bytes of a bytes target, the binary strings that a structured target draws with `bytes()`, the binary strings that a property draws with PHPUnit's `Generators::bytes()`, and the strings of Unicode characters that PHPUnit generates for a parameter of the type `string` or `non-empty-string`, for instance. The tokens are the ones of a dictionary file that you pass with `--dictionary`, which has one token per line in double quotes, and the constant operands of comparisons that rattle finds in your code while it instruments it. This needs no configuration: a defect behind a check such as `substr($data, 0, 4) !== 'RATL'` is found without a dictionary file.

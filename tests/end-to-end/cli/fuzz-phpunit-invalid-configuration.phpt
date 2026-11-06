@@ -28,7 +28,7 @@ exec('rm -rf ' . escapeshellarg($directory));
 --EXPECTF--
 The PHPUnit test suite has no properties that match the filter
 int(2)
-The options --corpus and --log-inputs can only be used with --phpunit when the filter selects one property
+The options --corpus, --log-inputs, and --log-coverage can only be used with --phpunit when the filter selects one property
 int(2)
 The corpus directory "/does/not/exist" does not exist
 int(2)

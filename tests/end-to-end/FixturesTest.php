@@ -295,6 +295,18 @@ final class FixturesTest extends TestCase
         $this->assertNotSame($first, file_get_contents($this->directory . '/other.log'));
     }
 
+    public function testARunThatLogsTheCoverageExecutesTheSameInputsAsARunThatDoesNot(): void
+    {
+        $this->fuzz('csv', ['--seed', '42', '--max-executions', '3000', '--log-inputs', $this->directory . '/without.log', '--cache-directory', $this->directory . '/without-cache', '--findings-directory', $this->directory . '/without-findings']);
+        $this->fuzz('csv', ['--seed', '42', '--max-executions', '3000', '--log-inputs', $this->directory . '/with.log', '--log-coverage', $this->directory . '/coverage.jsonl', '--cache-directory', $this->directory . '/with-cache', '--findings-directory', $this->directory . '/with-findings']);
+
+        $without = (string) file_get_contents($this->directory . '/without.log');
+
+        $this->assertSame(3000, substr_count($without, "\n"));
+        $this->assertSame($without, file_get_contents($this->directory . '/with.log'));
+        $this->assertSame(3000, substr_count((string) file_get_contents($this->directory . '/coverage.jsonl'), '"event":"execution"'));
+    }
+
     public function testAWorkerThatDiesIsReplacedAndFuzzingContinues(): void
     {
         [$exit, $output] = $this->fuzz('exit', ['--seed', '1', '--max-executions', '20000']);

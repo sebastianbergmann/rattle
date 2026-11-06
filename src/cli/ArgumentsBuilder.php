@@ -55,6 +55,7 @@ final readonly class ArgumentsBuilder
                 'findings-directory=',
                 'stop-on-finding',
                 'log-inputs=',
+                'log-coverage=',
                 'sarif=',
                 'php=',
                 'phpunit',
@@ -184,6 +185,7 @@ final readonly class ArgumentsBuilder
         $verbose                          = false;
         $raw                              = false;
         $inputLog                         = null;
+        $coverageLog                      = null;
         $sarifFile                        = null;
         $phpBinaries                      = [];
         $opcache                          = false;
@@ -308,6 +310,11 @@ final readonly class ArgumentsBuilder
 
                     break;
 
+                case '--log-coverage':
+                    $coverageLog = $this->nonEmptyString($option, $value);
+
+                    break;
+
                 case '--sarif':
                     $sarifFile = $this->nonEmptyString($option, $value);
 
@@ -404,6 +411,7 @@ final readonly class ArgumentsBuilder
             $phpBinaries,
             $opcache,
             $targets,
+            $coverageLog,
         );
     }
 

@@ -80,6 +80,11 @@ final readonly class Arguments
     private bool $verbose;
     private bool $raw;
     private ?string $inputLog;
+
+    /**
+     * @var ?non-empty-string
+     */
+    private ?string $coverageLog;
     private bool $help;
     private bool $version;
     private bool $phpunit;
@@ -127,8 +132,9 @@ final readonly class Arguments
      * @param ?non-empty-string      $htmlFile
      * @param list<non-empty-string> $phpBinaries
      * @param list<string>           $targets                          the targets that the command is given, which are target files or directories of target files for "fuzz" and "regress"
+     * @param ?non-empty-string      $coverageLog                      the file to which the execution log is written
      */
-    public function __construct(?string $command, ?string $target, ?string $input, ?int $jobs, ?int $seed, int $timeout, ?string $memoryLimit, ?float $maximumTime, ?int $maximumNumberOfExecutions, int $maximumNumberOfChoices, int $maximumNumberOfShrinkingAttempts, int $numberOfExecutionsPerWorker, array $corpusDirectories, ?string $seedsDirectory, ?string $dictionary, string $cacheDirectory, string $findingsDirectory, ?string $bootstrap, array $sources, bool $ignoreDeprecations, bool $stopOnFinding, bool $verbose, bool $raw, ?string $inputLog, bool $help, bool $version, bool $phpunit = false, ?string $phpunitConfiguration = null, ?string $phpunitFilter = null, ?string $sarifFile = null, bool $json = false, ?string $htmlFile = null, array $phpBinaries = [], bool $opcache = false, array $targets = [])
+    public function __construct(?string $command, ?string $target, ?string $input, ?int $jobs, ?int $seed, int $timeout, ?string $memoryLimit, ?float $maximumTime, ?int $maximumNumberOfExecutions, int $maximumNumberOfChoices, int $maximumNumberOfShrinkingAttempts, int $numberOfExecutionsPerWorker, array $corpusDirectories, ?string $seedsDirectory, ?string $dictionary, string $cacheDirectory, string $findingsDirectory, ?string $bootstrap, array $sources, bool $ignoreDeprecations, bool $stopOnFinding, bool $verbose, bool $raw, ?string $inputLog, bool $help, bool $version, bool $phpunit = false, ?string $phpunitConfiguration = null, ?string $phpunitFilter = null, ?string $sarifFile = null, bool $json = false, ?string $htmlFile = null, array $phpBinaries = [], bool $opcache = false, array $targets = [], ?string $coverageLog = null)
     {
         $this->command                          = $command;
         $this->target                           = $target;
@@ -155,6 +161,7 @@ final readonly class Arguments
         $this->verbose                          = $verbose;
         $this->raw                              = $raw;
         $this->inputLog                         = $inputLog;
+        $this->coverageLog                      = $coverageLog;
         $this->help                             = $help;
         $this->version                          = $version;
         $this->phpunit                          = $phpunit;
@@ -337,6 +344,19 @@ final readonly class Arguments
     public function inputLog(): ?string
     {
         return $this->inputLog;
+    }
+
+    /**
+     * The file to which every input whose result was processed is written,
+     * with the path that it took through the code that is instrumented and
+     * what rattle learned from it, in JSON Lines (see JsonLinesExecutionLog),
+     * so that a run can be visualized.
+     *
+     * @return ?non-empty-string
+     */
+    public function coverageLog(): ?string
+    {
+        return $this->coverageLog;
     }
 
     public function help(): bool

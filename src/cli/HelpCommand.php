@@ -61,6 +61,8 @@ Options for "rattle fuzz":
   --findings-directory <dir>  Directory for the findings (default: fuzz/findings)
   --stop-on-finding           Stop fuzzing a target after its first new finding
   --sarif <file>              Write the findings of the run to this file in SARIF
+  --log-coverage <file>       Write every input, the code that it reached, and what rattle learned
+                              from it to this file in JSON Lines, to visualize the run (one target only)
   --php <binary>              Run the corpus and the findings on the PHP of this binary as well,
                               and report the inputs whose outcomes differ; can be repeated
   --phpunit                   Fuzz the properties of the PHPUnit test suite together instead

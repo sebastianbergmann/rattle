@@ -62,6 +62,8 @@ final class ArgumentsBuilderTest extends TestCase
             'status with an argument'                       => [['rattle', 'status', '--phpunit', 'target.php']],
             'status in JSON and HTML'                       => [['rattle', 'status', '--phpunit', '--json', '--html', 'status.html']],
             'empty SARIF file'                              => [['rattle', 'regress', 'target.php', '--sarif', '']],
+            'empty coverage log'                            => [['rattle', 'fuzz', 'target.php', '--log-coverage', '']],
+            'coverage log with run'                         => [['rattle', 'run', 'target.php', 'input', '--log-coverage', 'coverage.jsonl']],
         ];
     }
 
@@ -93,6 +95,7 @@ final class ArgumentsBuilderTest extends TestCase
         $this->assertFalse($arguments->verbose());
         $this->assertFalse($arguments->raw());
         $this->assertNull($arguments->inputLog());
+        $this->assertNull($arguments->coverageLog());
         $this->assertNull($arguments->sarifFile());
         $this->assertSame([], $arguments->phpBinaries());
         $this->assertFalse($arguments->opcache());
@@ -111,7 +114,7 @@ final class ArgumentsBuilderTest extends TestCase
                 '--corpus', 'a', '--corpus', 'b', '--seeds', 'seeds', '--dictionary', 'dictionary.txt',
                 '--cache-directory', 'cache', '--findings-directory', 'findings',
                 '--bootstrap', 'bootstrap.php', '--source', 'src', '--source', 'lib',
-                '--ignore-deprecations', '--stop-on-finding', '--verbose', '--log-inputs', 'inputs.log',
+                '--ignore-deprecations', '--stop-on-finding', '--verbose', '--log-inputs', 'inputs.log', '--log-coverage', 'coverage.jsonl',
                 '--sarif', 'findings.sarif', '--php', '/usr/bin/php8.6', '--php', '/usr/bin/php8.7', '--opcache',
             ],
         );
@@ -136,6 +139,7 @@ final class ArgumentsBuilderTest extends TestCase
         $this->assertTrue($arguments->stopOnFinding());
         $this->assertTrue($arguments->verbose());
         $this->assertSame('inputs.log', $arguments->inputLog());
+        $this->assertSame('coverage.jsonl', $arguments->coverageLog());
         $this->assertSame('findings.sarif', $arguments->sarifFile());
         $this->assertSame(['/usr/bin/php8.6', '/usr/bin/php8.7'], $arguments->phpBinaries());
         $this->assertTrue($arguments->opcache());

@@ -326,7 +326,7 @@ final class TargetsTest extends TestCase
         [$exit, $output] = $this->rattle(['fuzz', self::FIXTURES . '/csv/target.php', self::FIXTURES . '/magic/target.php', '--corpus', $this->directory]);
 
         $this->assertSame(2, $exit, $output);
-        $this->assertStringContainsString('The options --corpus, --seeds, and --log-inputs can only be used when one target is fuzzed', $output);
+        $this->assertStringContainsString('The options --corpus, --seeds, --log-inputs, and --log-coverage can only be used when one target is fuzzed', $output);
 
         [$exit, $output] = $this->rattle(['fuzz', 'tests/fixtures/engine/seeds']);
 
