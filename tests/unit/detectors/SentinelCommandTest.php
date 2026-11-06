@@ -135,4 +135,29 @@ final class SentinelCommandTest extends TestCase
         $this->assertSame(0, $runs);
         $this->assertSame(1, substr_count((string) getenv('PATH'), '/rattle-sentinel-'));
     }
+
+    public function testUnsetsThePathWhenItIsUninstalledWhenThePathWasNotSetWhenItWasInstalled(): void
+    {
+        SentinelCommand::uninstall();
+
+        $path = (string) getenv('PATH');
+
+        putenv('PATH');
+
+        try {
+            SentinelCommand::install(static function (): void
+            {
+            });
+
+            $directory = (string) getenv('PATH');
+
+            $this->assertTrue(is_executable($directory . '/' . Sentinels::NAME));
+
+            SentinelCommand::uninstall();
+
+            $this->assertFalse(getenv('PATH'));
+        } finally {
+            putenv('PATH=' . $path);
+        }
+    }
 }
