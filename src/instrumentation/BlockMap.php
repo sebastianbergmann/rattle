@@ -11,8 +11,9 @@ namespace SebastianBergmann\Rattle\Instrumentation;
 
 /**
  * The basic blocks of a file that was instrumented, with the lines on which
- * they start, in the order of their offsets, and the number of lines of the
- * file, so that the edges that inputs take can be located in the code.
+ * their code starts, in the order of their offsets, and the number of lines
+ * of the file, so that the edges that inputs take can be located in the
+ * code.
  *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
@@ -38,7 +39,7 @@ final readonly class BlockMap
     /**
      * @param non-empty-string                              $file
      * @param non-negative-int                              $numberOfLines
-     * @param list<array{0: positive-int, 1: positive-int}> $blocks        the index of each block and the line on which it starts
+     * @param list<array{0: positive-int, 1: positive-int}> $blocks        the index of each block and the line on which its code starts
      */
     public function __construct(string $file, int $numberOfLines, array $blocks)
     {
@@ -64,7 +65,7 @@ final readonly class BlockMap
     }
 
     /**
-     * The index of each block and the line on which it starts.
+     * The index of each block and the line on which its code starts.
      *
      * @return list<array{0: positive-int, 1: positive-int}>
      */

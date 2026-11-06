@@ -34,8 +34,8 @@ use Closure;
  *   the Unix epoch
  * - file: a file that was instrumented, with its path relative to the
  *   working directory, its number of lines, and its blocks, each as its
- *   index and the line on which it starts, written once, before the first
- *   path that can take an edge into one of its blocks
+ *   index and the line on which its code starts, written once, before the
+ *   first path that can take an edge into one of its blocks
  * - path: a path that inputs took, with the ID that the log gives it, and
  *   its edges, in the order in which they were first taken, each as the
  *   index of the block that the edge leaves, which is 0 for the entry point,

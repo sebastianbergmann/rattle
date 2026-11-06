@@ -12,6 +12,7 @@ namespace SebastianBergmann\Rattle\Instrumentation;
 use function crc32;
 use function ksort;
 use function str_ends_with;
+use function strspn;
 use function substr_count;
 use Closure;
 use PhpParser\Error as ParseError;
@@ -37,9 +38,9 @@ use PhpParser\PhpVersion;
  * the same traversal of the code (see ComparisonOperandFinder), which does
  * not change the code.
  *
- * When the blocks of the files are collected, the lines on which they start
- * are recorded for every file that is instrumented (see BlockMap), so that
- * the edges that inputs take can be located in the code.
+ * When the blocks of the files are collected, the lines on which their code
+ * starts are recorded for every file that is instrumented (see BlockMap), so
+ * that the edges that inputs take can be located in the code.
  *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
@@ -114,6 +115,10 @@ final readonly class Instrumentor
     }
 
     /**
+     * The blocks of the file, each with the line on which its code starts:
+     * a block that starts after an opening brace, for instance, starts on
+     * the line of its first statement, not on the line of the brace.
+     *
      * @param non-empty-string                      $path
      * @param array<non-negative-int, positive-int> $blocks the index of the block that starts at each offset
      */
@@ -128,7 +133,7 @@ final readonly class Instrumentor
         foreach ($blocks as $offset => $index) {
             $line += substr_count($code, "\n", $previous, $offset - $previous);
             $previous = $offset;
-            $lines[]  = [$index, $line];
+            $lines[]  = [$index, $line + substr_count($code, "\n", $offset, strspn($code, " \t\r\n", $offset))];
         }
 
         $numberOfLines = $code === '' ? 0 : substr_count($code, "\n") + (str_ends_with($code, "\n") ? 0 : 1);

@@ -219,7 +219,7 @@ final class InstrumentorTest extends TestCase
         $this->assertSame(['aaa', 'bbb', 'ccc'], $operands->takeUnreported());
     }
 
-    public function testRecordsTheBlocksOfTheFileInTheOrderOfTheirOffsetsWithTheLinesOnWhichTheyStartWithoutChangingTheInstrumentedCode(): void
+    public function testRecordsTheBlocksOfTheFileInTheOrderOfTheirOffsetsWithTheLinesOnWhichTheirCodeStartsWithoutChangingTheInstrumentedCode(): void
     {
         $code = <<<'CODE'
 <?php
@@ -245,7 +245,7 @@ CODE;
         $this->assertNotNull($map);
         $this->assertSame('a.php', $map->file());
         $this->assertSame(9, $map->numberOfLines());
-        $this->assertSame([[3, 3], [1, 4], [2, 6]], $map->blocks());
+        $this->assertSame([[3, 4], [1, 5], [2, 8]], $map->blocks());
     }
 
     public function testRecordsTheBlocksOfAFileWhoseLastLineDoesNotEndWithANewline(): void
