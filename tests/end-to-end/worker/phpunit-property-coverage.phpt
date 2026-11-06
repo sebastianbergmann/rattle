@@ -1,5 +1,5 @@
 --TEST--
-A worker for one property of a PHPUnit test suite identifies the paths that the examples that ask for their coverage took
+A worker for one property of a PHPUnit test suite identifies the paths that the examples that ask for their coverage took, and reports the blocks of the files that it instrumented
 --FILE--
 <?php declare(strict_types=1);
 require __DIR__ . '/../../../vendor/autoload.php';
@@ -19,6 +19,6 @@ SebastianBergmann\Rattle\EndToEnd\Worker\serve(
 --EXPECTF--
 Exit: 0
 ready, name: SebastianBergmann\Rattle\Fixture\Phpunit\ClassifierTest::testClassifiesEveryList, maximumNumberOfChoices: 8192
-result 1: failed (LogicException at tests/fixtures/phpunit/src/Classifier.php:38)%Spath %s with %d features
+result 1: failed (LogicException at tests/fixtures/phpunit/src/Classifier.php:38)%S, blocks of tests/fixtures/phpunit/src/Classifier.php (%d lines, %d blocks), path %s with %d features
 result 2: passed%Spath %s with %d features
 result 3: passed, path %s

@@ -34,6 +34,8 @@ use function strtolower;
 use function substr;
 use function trim;
 use Closure;
+use SebastianBergmann\Rattle\Instrumentation\BlockMap;
+use SebastianBergmann\Rattle\Instrumentation\BlockMaps;
 use SebastianBergmann\Rattle\Instrumentation\ComparisonOperands;
 use SebastianBergmann\Rattle\Instrumentation\IncludeHook;
 use SebastianBergmann\Rattle\Instrumentation\Instrumentor;
@@ -58,6 +60,11 @@ use Throwable;
  * Output of the target is redirected to the standard error stream, so that it
  * does not interfere with the frames on the standard output stream.
  *
+ * The result of an input that asks for its coverage has the blocks of the
+ * files that the worker instrumented and did not report yet, with their paths
+ * relative to the working directory, also when the process ends while the
+ * input is executed.
+ *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
  * @internal This class is not covered by the backward compatibility promise for sebastian/rattle
@@ -68,7 +75,14 @@ final class Worker
     private readonly WorkerConfiguration $configuration;
     private readonly FrameStream $stream;
     private readonly ComparisonOperands $operands;
+    private readonly BlockMaps $blockMaps;
     private ?InputRunner $runner = null;
+    private ?Location $location  = null;
+
+    /**
+     * Whether the input that is executed asks for its coverage.
+     */
+    private bool $reportCoverage = false;
 
     /**
      * The target that the input that is executed names.
@@ -89,6 +103,7 @@ final class Worker
         $this->configuration = $configuration;
         $this->stream        = $stream;
         $this->operands      = new ComparisonOperands;
+        $this->blockMaps     = new BlockMaps;
     }
 
     /**
@@ -99,12 +114,13 @@ final class Worker
         // locations are relative to the working directory in which the
         // worker was started, whatever the code under test does with it
         $workingDirectory = (string) getcwd();
+        $this->location   = new Location($workingDirectory);
 
         $this->prepareProcess();
 
         $phpunit = $this->configuration->phpunit();
         $targets = $this->configuration->targets();
-        $hook    = new IncludeHook(new Instrumentor($this->operands), $this->configuration->sources(), $phpunit === null ? ($targets === [] ? [$this->configuration->target()] : $targets) : []);
+        $hook    = new IncludeHook(new Instrumentor($this->operands, $this->blockMaps), $this->configuration->sources(), $phpunit === null ? ($targets === [] ? [$this->configuration->target()] : $targets) : []);
 
         try {
             $hook->register();
@@ -233,7 +249,13 @@ final class Worker
             return;
         }
 
-        $this->stream->write(['type' => 'result', 'result' => $result->withTokens($this->tokensFor($this->target))->asArray(), 'last' => true]);
+        $result = $result->withTokens($this->tokensFor($this->target));
+
+        if ($this->reportCoverage) {
+            $result = $result->withBlockMaps($this->unreportedBlockMaps());
+        }
+
+        $this->stream->write(['type' => 'result', 'result' => $result->asArray(), 'last' => true]);
     }
 
     /**
@@ -316,6 +338,25 @@ final class Worker
     }
 
     /**
+     * The blocks of the files that were instrumented and were not reported
+     * yet, with the paths of the files relative to the working directory.
+     *
+     * @return list<BlockMap>
+     */
+    private function unreportedBlockMaps(): array
+    {
+        $maps = [];
+
+        foreach ($this->blockMaps->takeUnreported() as $map) {
+            $file = $this->location?->file($map->file()) ?? '';
+
+            $maps[] = $file === '' ? $map : $map->withFile($file);
+        }
+
+        return $maps;
+    }
+
+    /**
      * Executes the inputs that the supervisor sends, each with the runner
      * that is returned for it, until the supervisor shuts the worker down or
      * the worker retires.
@@ -351,8 +392,9 @@ final class Worker
                     $job    = Job::fromArray(ProtocolData::array($input));
                     $runner = $runnerFor($job);
 
-                    $this->runner = $runner;
-                    $this->target = $job->target();
+                    $this->runner         = $runner;
+                    $this->target         = $job->target();
+                    $this->reportCoverage = $job->reportCoverage();
 
                     if (ob_get_level() === 0) {
                         $this->redirectOutput();
@@ -369,7 +411,16 @@ final class Worker
                     assert($instrumentedFiles >= 0);
 
                     $numberOfInstrumentedFiles = $hook->numberOfInstrumentedFiles();
-                    $result                    = $result->withInstrumentedFiles($instrumentedFiles)->asArray();
+                    $result                    = $result->withInstrumentedFiles($instrumentedFiles);
+
+                    // the blocks of the files that were instrumented are
+                    // reported with the result of an input that asks for its
+                    // coverage
+                    if ($job->reportCoverage()) {
+                        $result = $result->withBlockMaps($this->unreportedBlockMaps());
+                    }
+
+                    $result = $result->asArray();
 
                     $numberOfExecutions++;
 

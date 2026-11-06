@@ -17,8 +17,10 @@ use PHPUnit\Framework\TestCase;
 use SebastianBergmann\ChoiceSequence\ChoiceSequence;
 use SebastianBergmann\ChoiceSequence\Span;
 use SebastianBergmann\ChoiceSequence\SpanKind;
+use SebastianBergmann\Rattle\Instrumentation\BlockMap;
 
 #[CoversClass(Result::class)]
+#[UsesClass(BlockMap::class)]
 #[UsesClass(Failure::class)]
 #[UsesClass(Job::class)]
 #[UsesClass(Outcome::class)]
@@ -50,6 +52,17 @@ final class ResultTest extends TestCase
             'empty path'                       => [['id' => 1, 'outcome' => 'passed', 'features' => [], 'path' => '']],
             'features of a path without it'    => [['id' => 1, 'outcome' => 'passed', 'features' => [], 'pathFeatures' => [1]]],
             'feature of a path that is no int' => [['id' => 1, 'outcome' => 'passed', 'features' => [], 'path' => 'abc', 'pathFeatures' => ['a']]],
+            'block maps that are not a list'   => [['id' => 1, 'outcome' => 'passed', 'features' => [], 'blockMaps' => 'a.php']],
+            'block map that is not an array'   => [['id' => 1, 'outcome' => 'passed', 'features' => [], 'blockMaps' => ['a.php']]],
+            'block map without a file'         => [['id' => 1, 'outcome' => 'passed', 'features' => [], 'blockMaps' => [['lines' => 1, 'blocks' => []]]]],
+            'block map without lines'          => [['id' => 1, 'outcome' => 'passed', 'features' => [], 'blockMaps' => [['file' => 'a.php', 'blocks' => []]]]],
+            'negative number of lines'         => [['id' => 1, 'outcome' => 'passed', 'features' => [], 'blockMaps' => [['file' => 'a.php', 'lines' => -1, 'blocks' => []]]]],
+            'block map without blocks'         => [['id' => 1, 'outcome' => 'passed', 'features' => [], 'blockMaps' => [['file' => 'a.php', 'lines' => 1]]]],
+            'block that is not an array'       => [['id' => 1, 'outcome' => 'passed', 'features' => [], 'blockMaps' => [['file' => 'a.php', 'lines' => 1, 'blocks' => [1]]]]],
+            'block without a line'             => [['id' => 1, 'outcome' => 'passed', 'features' => [], 'blockMaps' => [['file' => 'a.php', 'lines' => 1, 'blocks' => [[1]]]]]],
+            'block with index 0'               => [['id' => 1, 'outcome' => 'passed', 'features' => [], 'blockMaps' => [['file' => 'a.php', 'lines' => 1, 'blocks' => [[0, 1]]]]]],
+            'block on line 0'                  => [['id' => 1, 'outcome' => 'passed', 'features' => [], 'blockMaps' => [['file' => 'a.php', 'lines' => 1, 'blocks' => [[1, 0]]]]]],
+            'block index that is not an int'   => [['id' => 1, 'outcome' => 'passed', 'features' => [], 'blockMaps' => [['file' => 'a.php', 'lines' => 1, 'blocks' => [['1', 1]]]]]],
         ];
     }
 
@@ -120,6 +133,21 @@ final class ResultTest extends TestCase
         $this->assertSame([], $empty->pathFeatures());
         $this->assertSame([1 << 56 | 7, 3], $new->withTokens(['GET'])->withInstrumentedFiles(2)->withFailure(Failure::exit())->pathFeatures());
         $this->assertSame('abc', $new->withTokens(['GET'])->withInstrumentedFiles(2)->withFailure(Failure::exit())->path());
+    }
+
+    public function testHasTheBlocksOfTheFilesThatWereInstrumentedSinceThePreviousResultOfAnInputThatAskedForItsCoverage(): void
+    {
+        $result = new Result(1, Outcome::Passed, null, null, [], null);
+
+        $this->assertSame([], $result->blockMaps());
+        $this->assertArrayNotHasKey('blockMaps', $result->asArray());
+
+        $maps   = [new BlockMap('src/a.php', 12, [[17, 2], [4, 5]]), new BlockMap('src/b.php', 0, [])];
+        $result = $result->withBlockMaps($maps);
+
+        $this->assertEquals($maps, Result::fromArray($result->asArray())->blockMaps());
+        $this->assertEquals($result, Result::fromArray($result->asArray()));
+        $this->assertSame($maps, $result->withTokens(['GET'])->withInstrumentedFiles(2)->withPath('abc', [1])->withFailure(Failure::exit())->blockMaps());
     }
 
     public function testTellsWhetherTheInputProducedTheFeaturesThatItRequired(): void

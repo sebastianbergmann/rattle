@@ -19,6 +19,7 @@ use function is_string;
 use SebastianBergmann\ChoiceSequence\ChoiceSequence;
 use SebastianBergmann\ChoiceSequence\Span;
 use SebastianBergmann\ChoiceSequence\SpanKind;
+use SebastianBergmann\Rattle\Instrumentation\BlockMap;
 
 /**
  * What happened when an input was executed: its outcome, how it made the
@@ -44,6 +45,9 @@ use SebastianBergmann\ChoiceSequence\SpanKind;
  * the features of the execution in the order in which their edges were first
  * taken, whatever its outcome. It has these features when the process that
  * executed the input had not reported the path before (see CoveredPaths).
+ * And it has the blocks of the files that the process instrumented since
+ * its previous result of an input that asked for its coverage (see
+ * BlockMap), so that the edges of the paths can be located in the code.
  *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
@@ -89,6 +93,11 @@ final readonly class Result
      * @var ?list<int>
      */
     private ?array $pathFeatures;
+
+    /**
+     * @var list<BlockMap>
+     */
+    private array $blockMaps;
 
     /**
      * The result of an input during which the process of a worker ended
@@ -167,6 +176,7 @@ final readonly class Result
             $instrumentedFiles,
             $path,
             isset($data['pathFeatures']) ? ProtocolData::listOfIntegers($data['pathFeatures']) : null,
+            self::blockMapsFromArray($data['blockMaps'] ?? []),
         );
     }
 
@@ -179,8 +189,9 @@ final readonly class Result
      * @param non-negative-int       $instrumentedFiles        the number of files that the process instrumented since its previous result
      * @param ?non-empty-string      $path                     the hash of the path that the input took, when it asked for its coverage
      * @param ?list<int>             $pathFeatures             the features of the path, when the process had not reported it before
+     * @param list<BlockMap>         $blockMaps                the blocks of the files that the process instrumented since its previous result of an input that asked for its coverage
      */
-    public function __construct(int $id, Outcome $outcome, ?Failure $failure, ?ChoiceSequence $sequence, array $features, ?array $drawnValues, array $tokens = [], bool $producedRequiredFeatures = false, int $instrumentedFiles = 0, ?string $path = null, ?array $pathFeatures = null)
+    public function __construct(int $id, Outcome $outcome, ?Failure $failure, ?ChoiceSequence $sequence, array $features, ?array $drawnValues, array $tokens = [], bool $producedRequiredFeatures = false, int $instrumentedFiles = 0, ?string $path = null, ?array $pathFeatures = null, array $blockMaps = [])
     {
         assert($path !== null || $pathFeatures === null);
 
@@ -198,6 +209,7 @@ final readonly class Result
         $this->instrumentedFiles        = $instrumentedFiles;
         $this->path                     = $path;
         $this->pathFeatures             = $pathFeatures;
+        $this->blockMaps                = $blockMaps;
     }
 
     /**
@@ -311,9 +323,20 @@ final readonly class Result
         return $this->pathFeatures;
     }
 
+    /**
+     * The blocks of the files that the process instrumented since its
+     * previous result of an input that asked for its coverage.
+     *
+     * @return list<BlockMap>
+     */
+    public function blockMaps(): array
+    {
+        return $this->blockMaps;
+    }
+
     public function withFailure(Failure $failure): self
     {
-        return new self($this->id, Outcome::Failed, $failure, $this->sequence, $this->features, $this->drawnValues, $this->tokens, $this->producedRequiredFeatures, $this->instrumentedFiles, $this->path, $this->pathFeatures);
+        return new self($this->id, Outcome::Failed, $failure, $this->sequence, $this->features, $this->drawnValues, $this->tokens, $this->producedRequiredFeatures, $this->instrumentedFiles, $this->path, $this->pathFeatures, $this->blockMaps);
     }
 
     /**
@@ -321,7 +344,7 @@ final readonly class Result
      */
     public function withTokens(array $tokens): self
     {
-        return new self($this->id, $this->outcome, $this->failure, $this->sequence, $this->features, $this->drawnValues, $tokens, $this->producedRequiredFeatures, $this->instrumentedFiles, $this->path, $this->pathFeatures);
+        return new self($this->id, $this->outcome, $this->failure, $this->sequence, $this->features, $this->drawnValues, $tokens, $this->producedRequiredFeatures, $this->instrumentedFiles, $this->path, $this->pathFeatures, $this->blockMaps);
     }
 
     /**
@@ -329,7 +352,15 @@ final readonly class Result
      */
     public function withInstrumentedFiles(int $instrumentedFiles): self
     {
-        return new self($this->id, $this->outcome, $this->failure, $this->sequence, $this->features, $this->drawnValues, $this->tokens, $this->producedRequiredFeatures, $instrumentedFiles, $this->path, $this->pathFeatures);
+        return new self($this->id, $this->outcome, $this->failure, $this->sequence, $this->features, $this->drawnValues, $this->tokens, $this->producedRequiredFeatures, $instrumentedFiles, $this->path, $this->pathFeatures, $this->blockMaps);
+    }
+
+    /**
+     * @param list<BlockMap> $blockMaps
+     */
+    public function withBlockMaps(array $blockMaps): self
+    {
+        return new self($this->id, $this->outcome, $this->failure, $this->sequence, $this->features, $this->drawnValues, $this->tokens, $this->producedRequiredFeatures, $this->instrumentedFiles, $this->path, $this->pathFeatures, $blockMaps);
     }
 
     /**
@@ -338,7 +369,7 @@ final readonly class Result
      */
     public function withPath(string $path, ?array $features): self
     {
-        return new self($this->id, $this->outcome, $this->failure, $this->sequence, $this->features, $this->drawnValues, $this->tokens, $this->producedRequiredFeatures, $this->instrumentedFiles, $path, $features);
+        return new self($this->id, $this->outcome, $this->failure, $this->sequence, $this->features, $this->drawnValues, $this->tokens, $this->producedRequiredFeatures, $this->instrumentedFiles, $path, $features, $this->blockMaps);
     }
 
     /**
@@ -399,7 +430,46 @@ final readonly class Result
             $data['pathFeatures'] = $this->pathFeatures;
         }
 
+        if ($this->blockMaps !== []) {
+            $data['blockMaps'] = array_map(static fn (BlockMap $map): array => $map->asArray(), $this->blockMaps);
+        }
+
         return $data;
+    }
+
+    /**
+     * @throws ProtocolException
+     *
+     * @return list<BlockMap>
+     */
+    private static function blockMapsFromArray(mixed $data): array
+    {
+        $maps = [];
+
+        foreach (ProtocolData::array($data) as $map) {
+            $map    = ProtocolData::array($map);
+            $lines  = $map['lines'] ?? null;
+            $blocks = [];
+
+            if (!is_int($lines) || $lines < 0) {
+                throw new ProtocolException('Invalid number of lines of an instrumented file');
+            }
+
+            foreach (ProtocolData::array($map['blocks'] ?? null) as $block) {
+                if (!is_array($block) ||
+                    !isset($block[0], $block[1]) ||
+                    !is_int($block[0]) || $block[0] < 1 ||
+                    !is_int($block[1]) || $block[1] < 1) {
+                    throw new ProtocolException('Invalid block of an instrumented file');
+                }
+
+                $blocks[] = [$block[0], $block[1]];
+            }
+
+            $maps[] = new BlockMap(ProtocolData::nonEmptyString($map['file'] ?? null), $lines, $blocks);
+        }
+
+        return $maps;
     }
 
     /**

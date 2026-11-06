@@ -1,5 +1,5 @@
 --TEST--
-A worker identifies the path that the input during which the memory was exhausted took when the input asks for its coverage
+A worker identifies the path that the input during which the memory was exhausted took, and the blocks of the files that it instrumented, when the input asks for its coverage
 --FILE--
 <?php declare(strict_types=1);
 require __DIR__ . '/../../../vendor/autoload.php';
@@ -18,4 +18,4 @@ SebastianBergmann\Rattle\EndToEnd\Worker\serve(
 --EXPECTF--
 %A
 ready, name: worker, maximumNumberOfChoices: 8192
-result 1: failed (Fatal error at tests/fixtures/worker/src/Behaviour.php:%d), %d tokens, path %s with %d features, last
+result 1: failed (Fatal error at tests/fixtures/worker/src/Behaviour.php:%d), %d tokens, blocks of tests/fixtures/worker/src/Behaviour.php (%d lines, %d blocks), path %s with %d features, last

@@ -121,6 +121,18 @@ function describe(array $frame): string
             $description .= sprintf(', %d tokens', count($result['tokens']));
         }
 
+        if (is_array($result['blockMaps'] ?? null)) {
+            $files = [];
+
+            foreach ($result['blockMaps'] as $map) {
+                $files[] = is_array($map) && is_array($map['blocks'] ?? null)
+                    ? sprintf('%s (%s lines, %d blocks)', print_r($map['file'] ?? null, true), print_r($map['lines'] ?? null, true), count($map['blocks']))
+                    : print_r($map, true);
+            }
+
+            $description .= ', blocks of ' . implode(', ', $files);
+        }
+
         if (is_string($result['path'] ?? null)) {
             $description .= is_array($result['pathFeatures'] ?? null)
                 ? sprintf(', path %s with %d features', $result['path'], count($result['pathFeatures']))
