@@ -370,6 +370,21 @@ final class TargetSchedulerTest extends TestCase
         }
     }
 
+    public function testStopsWhenTheTimeIsUp(): void
+    {
+        $engines = $this->engines($this->twoTargets(), null, false);
+
+        (new TargetScheduler($engines['executor'], $engines['engines'], 1, 0.05))->run();
+
+        $executions = 0;
+
+        foreach ($engines['engines'] as $engine) {
+            $executions += $engine->statistics()->executions;
+        }
+
+        $this->assertGreaterThan(0, $executions);
+    }
+
     /**
      * Two targets that take one edge for every input.
      *
