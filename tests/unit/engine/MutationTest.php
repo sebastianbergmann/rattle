@@ -178,6 +178,14 @@ final class MutationTest extends TestCase
         $this->assertFalse((new SwapSpans)->apply(Candidate::from(new ChoiceSequence([1, 2], [new Span(0, 2, 'a', null), new Span(1, 2, 'a', 0)], [])), $randomizer));
     }
 
+    public function testSwapsTwoSpansWhenTheLaterOneComesFirstAmongTheSpans(): void
+    {
+        $candidate = Candidate::from(new ChoiceSequence([1, 2], [new Span(1, 2, 'a', null), new Span(0, 1, 'a', null)], []));
+
+        $this->assertTrue((new SwapSpans)->apply($candidate, $this->randomizer()));
+        $this->assertSame([2, 1], $candidate->choices());
+    }
+
     public function testSwapsTheElementsOfACollectionButNotTheSpanThatEndsIt(): void
     {
         $randomizer = $this->randomizer();
