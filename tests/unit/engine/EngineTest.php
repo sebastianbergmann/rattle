@@ -194,6 +194,27 @@ final class EngineTest extends TestCase
         }
     }
 
+    public function testRemovesStoredInputsThatAreRejected(): void
+    {
+        $directory = sys_get_temp_dir() . '/rattle-engine-' . uniqid();
+        $inputs    = ['A' => [1, 0x41, 0], 'R' => [1, 0x52, 0]];
+
+        foreach ($inputs as $choices) {
+            $this->store($directory, $choices);
+        }
+
+        $statistics = $this->engineWithStoredCorpus($directory)->run(array_values($inputs));
+
+        try {
+            $this->assertSame(1, $statistics->rejected);
+            $this->assertSame(1, $statistics->removedInputs);
+            $this->assertFileExists($this->pathOf($directory, $inputs['A']));
+            $this->assertFileDoesNotExist($this->pathOf($directory, $inputs['R']));
+        } finally {
+            $this->removeDirectory($directory);
+        }
+    }
+
     public function testComposesBatchesForThePropertyThatItFuzzesWithIdsFromTheIdsThatItShares(): void
     {
         $ids    = new JobIds;
@@ -500,7 +521,7 @@ final class EngineTest extends TestCase
      * An engine that only replays the inputs to start with, with an executor
      * that returns the results of each batch in reverse order. Its target
      * takes the same edges for every string that contains "A", throws for
-     * "C", and takes fewer edges for every other string.
+     * "C", rejects "R", and takes fewer edges for every other string.
      */
     private function engineWithStoredCorpus(string $directory, ?JobIds $ids = null): Engine
     {
@@ -517,6 +538,10 @@ final class EngineTest extends TestCase
 
                 if ($bytes === 'C') {
                     throw new LogicException;
+                }
+
+                if ($bytes === 'R') {
+                    throw InputRejectedException::byTarget();
                 }
             },
         );
