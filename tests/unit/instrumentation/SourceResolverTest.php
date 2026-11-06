@@ -70,6 +70,11 @@ final class SourceResolverTest extends TestCase
         $this->assertSame([$directory . '/src'], (new SourceResolver)->resolve([], $directory));
     }
 
+    public function testIgnoresAPhpUnitConfigurationThatCannotBeLoaded(): void
+    {
+        $this->assertSame([], (new SourceResolver)->resolve([], self::FIXTURES . '/with-invalid-phpunit-xml'));
+    }
+
     public function testFindsNoSourcesOtherwise(): void
     {
         $this->assertSame([], (new SourceResolver)->resolve([], self::FIXTURES . '/without-sources'));
