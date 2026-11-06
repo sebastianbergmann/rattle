@@ -53,6 +53,10 @@ use Random\Randomizer;
  * DifferentialExecutor). The check tells whether it found a new finding or a
  * known one, which counts as one.
  *
+ * With an execution log, every input asks for its coverage and its drawn
+ * values, and the log learns what the engine did with its result (see
+ * ExecutionLog). This does not change which inputs are submitted.
+ *
  * All decisions are made with one random number generator that is seeded
  * with the seed of the run. A new batch is only composed when an executor is
  * idle, after the results of the batches before were processed, so that with
@@ -94,6 +98,7 @@ final class Engine
      * @var ?Closure(Result, Job): ?bool
      */
     private readonly ?Closure $check;
+    private readonly ?ExecutionLog $log;
 
     /**
      * The inputs that were submitted and whose results were not processed.
@@ -109,6 +114,14 @@ final class Engine
      * @var array<non-negative-int, CorpusEntry>
      */
     private array $parents = [];
+
+    /**
+     * Where the inputs that were submitted came from, by their IDs, when
+     * there is an execution log.
+     *
+     * @var array<non-negative-int, Origin>
+     */
+    private array $origins = [];
     private readonly JobIds $ids;
 
     /**
@@ -179,8 +192,9 @@ final class Engine
      * @param ?Closure(): bool             $interrupted tells whether fuzzing was interrupted, by Ctrl+C for instance
      * @param ?JobIds                      $ids         hands out the IDs of the inputs, which an engine shares with the other engines that use the same executor
      * @param ?Closure(Result, Job): ?bool $check       checks an input that is added to the corpus or is a new finding further, and tells whether it found a new finding (true), a known one (false), or none (null)
+     * @param ?ExecutionLog                $log         learns what the engine did with the result of every input
      */
-    public function __construct(Executor $executor, Corpus $corpus, Dictionary $dictionary, Mutator $mutator, FindingHandler $findings, EngineConfiguration $configuration, ?Closure $progress = null, ?Closure $submitted = null, ?Closure $interrupted = null, ?JobIds $ids = null, ?Closure $check = null)
+    public function __construct(Executor $executor, Corpus $corpus, Dictionary $dictionary, Mutator $mutator, FindingHandler $findings, EngineConfiguration $configuration, ?Closure $progress = null, ?Closure $submitted = null, ?Closure $interrupted = null, ?JobIds $ids = null, ?Closure $check = null, ?ExecutionLog $log = null)
     {
         $this->executor      = $executor;
         $this->corpus        = $corpus;
@@ -196,6 +210,7 @@ final class Engine
         $this->interrupted   = $interrupted;
         $this->ids           = $ids ?? new JobIds;
         $this->check         = $check;
+        $this->log           = $log;
     }
 
     /**
@@ -325,6 +340,9 @@ final class Engine
 
         $batch = [];
 
+        // the drawn values of the inputs are shown in the execution log
+        $drawnValues = $this->log !== null;
+
         for ($i = 0; $i < $size; $i++) {
             $id = $this->ids->next();
 
@@ -333,16 +351,19 @@ final class Engine
             if ($this->initialInputs !== []) {
                 // all features of an input to start with are needed to tell
                 // whether a smaller input produced them all
-                $job = Job::replay($id, array_shift($this->initialInputs))->withAllFeatures();
+                $job    = Job::replay($id, array_shift($this->initialInputs), $drawnValues)->withAllFeatures();
+                $origin = Origin::initial();
 
                 $this->initialPositions[$id] = $this->numberOfSubmittedInitialInputs++;
             } elseif ($this->corpus->isEmpty() || $this->randomizer->nextFloat() < EngineConfiguration::PROBABILITY_OF_GENERATION) {
-                $job = Job::generate($id, self::seedOf($this->configuration->seed(), $this->numberOfGeneratedInputs++));
+                $job    = Job::generate($id, self::seedOf($this->configuration->seed(), $this->numberOfGeneratedInputs++), $drawnValues);
+                $origin = Origin::generated();
             } else {
                 $entry   = $this->scheduler->choose($this->randomizer);
                 $mutant  = $this->mutator->mutate($entry, $this->randomizer);
                 $choices = $mutant->choices();
-                $job     = Job::replay($id, $choices);
+                $job     = Job::replay($id, $choices, $drawnValues);
+                $origin  = Origin::mutated($entry->index(), $mutant->mutations());
 
                 // a mutation with fewer choices than the entry it was mutated
                 // from replaces the entry when it produces all the features
@@ -360,6 +381,12 @@ final class Engine
 
             // most results are of no interest, and their sequences are not needed
             $job = $job->terse();
+
+            if ($this->log !== null) {
+                $job = $job->withCoverage();
+
+                $this->origins[$id] = $origin;
+            }
 
             $this->pending[$id] = $job;
             $batch[]            = $job;
@@ -427,8 +454,9 @@ final class Engine
         assert($job !== null);
 
         $parent = $this->parents[$result->id()] ?? null;
+        $origin = $this->origins[$result->id()] ?? null;
 
-        unset($this->pending[$result->id()], $this->parents[$result->id()]);
+        unset($this->pending[$result->id()], $this->parents[$result->id()], $this->origins[$result->id()]);
 
         $this->statistics->executions++;
 
@@ -437,12 +465,16 @@ final class Engine
         $this->statistics->instrumentedFiles += $result->instrumentedFiles();
 
         if ($result->isFinding()) {
-            if ($this->findings->handle($result, $job)) {
+            $new = $this->findings->handle($result, $job);
+
+            if ($new) {
                 $this->countFinding(true);
                 $this->check($result, $job);
             } else {
                 $this->countFinding(false);
             }
+
+            $this->log($job, $result, $origin, null, null, $new);
 
             return;
         }
@@ -454,15 +486,18 @@ final class Engine
                 $this->removeStoredInput($job);
             }
 
+            $this->log($job, $result, $origin, null, null, null);
+
             return;
         }
 
         // an input that produced no feature that is new to the worker is not
         // added to the corpus, and its result has no sequence
-        $entry = $result->features() === [] ? null : $this->corpus->add($result->sequence(), $result->features());
+        $entry   = $result->features() === [] ? null : $this->corpus->add($result->sequence(), $result->features());
+        $finding = null;
 
         if ($entry !== null) {
-            $this->check($result, $job);
+            $finding = $this->check($result, $job);
         }
 
         // an input to start with that produced no feature that a smaller one
@@ -473,22 +508,31 @@ final class Engine
             $this->removeStoredInput($job);
         }
 
+        $replaced = null;
+
         if ($entry === null && $parent !== null && $result->producedRequiredFeatures() &&
             $this->corpus->replace($parent->index(), $result->sequence())) {
             $this->statistics->reducedEntries++;
+
+            $replaced = $this->corpus->entries()[$parent->index()] ?? null;
         }
+
+        $this->log($job, $result, $origin, $entry, $replaced, $finding);
     }
 
     /**
+     * Tells whether the check found a new finding (true), a known one
+     * (false), or none (null).
+     *
      * @throws CorpusException
      * @throws FindingException
      * @throws ProtocolException
      * @throws WorkerException
      */
-    private function check(Result $result, Job $job): void
+    private function check(Result $result, Job $job): ?bool
     {
         if ($this->check === null) {
-            return;
+            return null;
         }
 
         $new = ($this->check)($result, $job);
@@ -496,6 +540,17 @@ final class Engine
         if ($new !== null) {
             $this->countFinding($new);
         }
+
+        return $new;
+    }
+
+    private function log(Job $job, Result $result, ?Origin $origin, ?CorpusEntry $added, ?CorpusEntry $replaced, ?bool $finding): void
+    {
+        if ($this->log === null || $origin === null) {
+            return;
+        }
+
+        $this->log->executed($job, $result, $origin, $added, $replaced, $finding);
     }
 
     private function countFinding(bool $new): void

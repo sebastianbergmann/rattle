@@ -9,7 +9,9 @@
  */
 namespace SebastianBergmann\Rattle;
 
+use function array_keys;
 use function array_map;
+use function array_merge;
 use function array_reverse;
 use function array_shift;
 use function array_slice;
@@ -41,8 +43,12 @@ use SebastianBergmann\Rattle\Instrumentation\Features;
 #[CoversClass(Engine::class)]
 #[CoversClass(EngineConfiguration::class)]
 #[CoversClass(Statistics::class)]
+#[CoversClass(Origin::class)]
+#[UsesClass(CoveredPaths::class)]
 #[UsesClass(Detectors::class)]
+#[UsesClass(Mutant::class)]
 #[UsesClass(NewFeatures::class)]
+#[UsesClass(ValueExporter::class)]
 #[UsesClass(ArithmeticChoice::class)]
 #[UsesClass(BoundaryChoice::class)]
 #[UsesClass(BytesEncoding::class)]
@@ -122,6 +128,192 @@ final class EngineTest extends TestCase
         $this->assertCount(2000, $first);
         $this->assertSame($first, $second);
         $this->assertNotSame($first, $other);
+    }
+
+    public function testExecutesTheSameInputsInTheSameOrderWithAnExecutionLog(): void
+    {
+        $log = $this->log();
+
+        $this->assertSame($this->submittedInputs(42), $this->submittedInputs(42, $log));
+        $this->assertCount(2000, $log->executions);
+    }
+
+    public function testTellsTheExecutionLogWhereEveryInputCameFromAndWhatItDidWithItsResult(): void
+    {
+        $log        = $this->log();
+        $corpus     = new Corpus;
+        $dictionary = new Dictionary(['RATL']);
+        $engine     = new Engine(
+            $this->executor($this->magicHeader()),
+            $corpus,
+            $dictionary,
+            Mutator::create($corpus, $dictionary, 8192),
+            $this->findings(),
+            new EngineConfiguration(1, 3000, null, true),
+            null,
+            null,
+            null,
+            null,
+            null,
+            $log,
+        );
+
+        $statistics = $engine->run([BytesEncoding::choicesFor('x', 64)]);
+        $kinds      = [];
+        $added      = [];
+        $found      = false;
+
+        $this->assertSame(1, $statistics->findings);
+        $this->assertCount($statistics->executions, $log->executions);
+
+        foreach ($log->executions as [$job, $result, $origin, $entry, , $finding]) {
+            $this->assertSame($job->id(), $result->id());
+            $this->assertTrue($job->reportCoverage());
+            $this->assertTrue($job->reportDrawnValues());
+            $this->assertNotNull($result->path());
+            $this->assertNotNull($result->drawnValues());
+
+            $kinds[$origin->kind()] = true;
+
+            if ($origin->kind() === Origin::MUTATED) {
+                $this->assertArrayHasKey((int) $origin->parent(), $corpus->entries());
+            } else {
+                $this->assertNull($origin->parent());
+                $this->assertSame([], $origin->mutations());
+            }
+
+            if ($entry !== null) {
+                $added[] = $entry->index();
+            }
+
+            if ($result->isFinding()) {
+                // the finding handler knows every finding after the first
+                $this->assertSame(!$found, $finding);
+
+                $found = true;
+            } else {
+                $this->assertNull($finding);
+            }
+        }
+
+        $first = $log->executions[0] ?? null;
+
+        $this->assertTrue($found);
+
+        $this->assertNotNull($first);
+        $this->assertSame(Origin::INITIAL, $first[2]->kind());
+        $this->assertSame(["'x'"], $first[1]->drawnValues());
+        $this->assertSame([Origin::INITIAL => true, Origin::GENERATED => true, Origin::MUTATED => true], $kinds);
+        $this->assertSame(array_keys($corpus->entries()), $added);
+        $this->assertContains('AddToken', array_merge(...array_map(static fn (array $execution): array => $execution[2]->mutations(), $log->executions)));
+    }
+
+    public function testTellsTheExecutionLogWhichInputsWereRejectedAndWhichFindingsWereKnown(): void
+    {
+        $log    = $this->log();
+        $engine = new Engine(
+            new InProcessExecutor(
+                new Runner(
+                    Target::bytes('target', static function (string $bytes): void
+                    {
+                        if ($bytes === '') {
+                            throw new InputRejectedException;
+                        }
+
+                        throw new LogicException;
+                    }, 10),
+                    100,
+                    0,
+                    false,
+                ),
+            ),
+            $corpus     = new Corpus,
+            $dictionary = new Dictionary,
+            Mutator::create($corpus, $dictionary, 100),
+            $this->findings(),
+            new EngineConfiguration(1, 100),
+            null,
+            null,
+            null,
+            null,
+            null,
+            $log,
+        );
+
+        $statistics = $engine->run();
+        $findings   = [];
+        $rejected   = 0;
+
+        foreach ($log->executions as [, $result, , $entry, , $finding]) {
+            $this->assertNull($entry);
+
+            if ($result->outcome() === Outcome::Rejected) {
+                $this->assertNull($finding);
+
+                $rejected++;
+
+                continue;
+            }
+
+            $findings[] = $finding;
+        }
+
+        $this->assertSame($statistics->rejected, $rejected);
+        $this->assertSame([true], array_values(array_unique(array_slice($findings, 0, 1))));
+        $this->assertSame([false], array_values(array_unique(array_slice($findings, 1))));
+    }
+
+    public function testTellsTheExecutionLogWhichCorpusEntriesWereReplacedAndWhichFindingsTheCheckFound(): void
+    {
+        $log        = $this->log();
+        $corpus     = new Corpus;
+        $dictionary = new Dictionary;
+        $checks     = 0;
+        $engine     = new Engine(
+            $this->executor(
+                static function (string $bytes): void
+                {
+                    Edges::through(1, null);
+
+                    if (str_contains($bytes, 'Z')) {
+                        Edges::through(2, null);
+                    }
+                },
+            ),
+            $corpus,
+            $dictionary,
+            Mutator::create($corpus, $dictionary, 8192),
+            $this->findings(),
+            new EngineConfiguration(1, 3000),
+            null,
+            null,
+            null,
+            null,
+            static function (Result $result, Job $job) use (&$checks): ?bool
+            {
+                // the first check finds something new
+                return ++$checks === 1 ? true : null;
+            },
+            $log,
+        );
+
+        $statistics = $engine->run([BytesEncoding::choicesFor(str_repeat('x', 20) . 'Z', 64)]);
+        $replaced   = [];
+
+        foreach ($log->executions as [, $result, $origin, $entry, $replacedEntry, $finding]) {
+            if ($replacedEntry !== null) {
+                $this->assertSame(Origin::MUTATED, $origin->kind());
+                $this->assertSame($origin->parent(), $replacedEntry->index());
+                $this->assertSame($result->sequence()->choices(), $replacedEntry->sequence()->choices());
+
+                $replaced[] = $replacedEntry;
+            }
+
+            $this->assertSame($entry !== null && $entry->index() === 0 ? true : null, $finding);
+        }
+
+        $this->assertGreaterThan(0, $statistics->reducedEntries);
+        $this->assertCount($statistics->reducedEntries, $replaced);
     }
 
     public function testReplaysTheInitialInputsFirstAndSmallestFirst(): void
@@ -517,7 +709,7 @@ final class EngineTest extends TestCase
     /**
      * @return list<array{0: ?list<non-negative-int>, 1: ?int}>
      */
-    private function submittedInputs(int $seed): array
+    private function submittedInputs(int $seed, ?ExecutionLog $log = null): array
     {
         $submitted = [];
 
@@ -530,6 +722,9 @@ final class EngineTest extends TestCase
             {
                 $submitted[] = [$job->choices(), $job->seed()];
             },
+            null,
+            null,
+            $log,
         )->run();
 
         return $submitted;
@@ -568,7 +763,7 @@ final class EngineTest extends TestCase
      * @param ?Closure(Job): void    $submitted
      * @param ?Closure(): bool       $interrupted
      */
-    private function engine(Closure $target, FindingHandler $findings, EngineConfiguration $configuration, array $tokens = [], ?Closure $submitted = null, ?Closure $interrupted = null, ?Executor $executor = null): Engine
+    private function engine(Closure $target, FindingHandler $findings, EngineConfiguration $configuration, array $tokens = [], ?Closure $submitted = null, ?Closure $interrupted = null, ?Executor $executor = null, ?ExecutionLog $log = null): Engine
     {
         $corpus     = new Corpus;
         $dictionary = new Dictionary($tokens);
@@ -583,6 +778,9 @@ final class EngineTest extends TestCase
             null,
             $submitted,
             $interrupted,
+            null,
+            null,
+            $log,
         );
     }
 
@@ -857,6 +1055,25 @@ final class EngineTest extends TestCase
             public function shutdown(): void
             {
                 $this->executor->shutdown();
+            }
+        };
+    }
+
+    /**
+     * @return ExecutionLog&object{executions: list<array{0: Job, 1: Result, 2: Origin, 3: ?CorpusEntry, 4: ?CorpusEntry, 5: ?bool}>}
+     */
+    private function log(): ExecutionLog
+    {
+        return new class implements ExecutionLog
+        {
+            /**
+             * @var list<array{0: Job, 1: Result, 2: Origin, 3: ?CorpusEntry, 4: ?CorpusEntry, 5: ?bool}>
+             */
+            public array $executions = [];
+
+            public function executed(Job $job, Result $result, Origin $origin, ?CorpusEntry $added, ?CorpusEntry $replaced, ?bool $finding): void
+            {
+                $this->executions[] = [$job, $result, $origin, $added, $replaced, $finding];
             }
         };
     }
