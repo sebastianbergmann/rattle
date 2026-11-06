@@ -75,6 +75,8 @@ final class Edges
      * which the edges were taken first.
      *
      * @return array<int, positive-int>
+     *
+     * @phpstan-impure
      */
     public static function hits(): array
     {
