@@ -34,6 +34,11 @@ use SebastianBergmann\ChoiceSequence\ChoiceSource;
  * engine sends terse inputs, as most of their results are of no interest, and
  * encoding, sending, and decoding their sequences takes time.
  *
+ * An input can ask for its coverage: its result then identifies the path
+ * that the input took through the code that is instrumented, whatever its
+ * outcome, and has the blocks of the files that were instrumented since the
+ * previous result (see Result).
+ *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
  * @internal This class is not covered by the backward compatibility promise for sebastian/rattle
@@ -63,6 +68,7 @@ final readonly class Job
      */
     private ?string $target;
     private bool $terse;
+    private bool $reportCoverage;
 
     /**
      * @param non-negative-int       $id
@@ -94,16 +100,17 @@ final readonly class Job
         $requiredFeatures  = ProtocolData::listOfIntegers($data['requiredFeatures'] ?? []);
         $target            = isset($data['target']) ? ProtocolData::nonEmptyString($data['target']) : null;
         $terse             = $data['terse'] ?? false;
+        $reportCoverage    = $data['coverage'] ?? false;
 
-        if (!is_int($id) || $id < 0 || !is_bool($reportDrawnValues) || !is_bool($reportAllFeatures) || !is_bool($terse)) {
+        if (!is_int($id) || $id < 0 || !is_bool($reportDrawnValues) || !is_bool($reportAllFeatures) || !is_bool($terse) || !is_bool($reportCoverage)) {
             throw new ProtocolException('Invalid input');
         }
 
         if (isset($data['seed']) && is_int($data['seed'])) {
-            return new self($id, null, $data['seed'], $reportDrawnValues, $reportAllFeatures, $requiredFeatures, $target, $terse);
+            return new self($id, null, $data['seed'], $reportDrawnValues, $reportAllFeatures, $requiredFeatures, $target, $terse, $reportCoverage);
         }
 
-        return new self($id, ProtocolData::listOfNonNegativeIntegers($data['choices'] ?? null), null, $reportDrawnValues, $reportAllFeatures, $requiredFeatures, $target, $terse);
+        return new self($id, ProtocolData::listOfNonNegativeIntegers($data['choices'] ?? null), null, $reportDrawnValues, $reportAllFeatures, $requiredFeatures, $target, $terse, $reportCoverage);
     }
 
     /**
@@ -112,7 +119,7 @@ final readonly class Job
      * @param list<int>               $requiredFeatures
      * @param ?non-empty-string       $target
      */
-    private function __construct(int $id, ?array $choices, ?int $seed, bool $reportDrawnValues, bool $reportAllFeatures = false, array $requiredFeatures = [], ?string $target = null, bool $terse = false)
+    private function __construct(int $id, ?array $choices, ?int $seed, bool $reportDrawnValues, bool $reportAllFeatures = false, array $requiredFeatures = [], ?string $target = null, bool $terse = false, bool $reportCoverage = false)
     {
         $this->id                = $id;
         $this->choices           = $choices;
@@ -122,6 +129,7 @@ final readonly class Job
         $this->requiredFeatures  = $requiredFeatures;
         $this->target            = $target;
         $this->terse             = $terse;
+        $this->reportCoverage    = $reportCoverage;
     }
 
     /**
@@ -129,7 +137,7 @@ final readonly class Job
      */
     public function withAllFeatures(): self
     {
-        return new self($this->id, $this->choices, $this->seed, $this->reportDrawnValues, true, $this->requiredFeatures, $this->target, $this->terse);
+        return new self($this->id, $this->choices, $this->seed, $this->reportDrawnValues, true, $this->requiredFeatures, $this->target, $this->terse, $this->reportCoverage);
     }
 
     /**
@@ -140,7 +148,7 @@ final readonly class Job
      */
     public function withRequiredFeatures(array $features): self
     {
-        return new self($this->id, $this->choices, $this->seed, $this->reportDrawnValues, $this->reportAllFeatures, $features, $this->target, $this->terse);
+        return new self($this->id, $this->choices, $this->seed, $this->reportDrawnValues, $this->reportAllFeatures, $features, $this->target, $this->terse, $this->reportCoverage);
     }
 
     /**
@@ -150,7 +158,7 @@ final readonly class Job
      */
     public function withTarget(string $target): self
     {
-        return new self($this->id, $this->choices, $this->seed, $this->reportDrawnValues, $this->reportAllFeatures, $this->requiredFeatures, $target, $this->terse);
+        return new self($this->id, $this->choices, $this->seed, $this->reportDrawnValues, $this->reportAllFeatures, $this->requiredFeatures, $target, $this->terse, $this->reportCoverage);
     }
 
     /**
@@ -158,7 +166,17 @@ final readonly class Job
      */
     public function terse(): self
     {
-        return new self($this->id, $this->choices, $this->seed, $this->reportDrawnValues, $this->reportAllFeatures, $this->requiredFeatures, $this->target, true);
+        return new self($this->id, $this->choices, $this->seed, $this->reportDrawnValues, $this->reportAllFeatures, $this->requiredFeatures, $this->target, true, $this->reportCoverage);
+    }
+
+    /**
+     * The same input, whose result identifies the path that it took and has
+     * the blocks of the files that were instrumented since the previous
+     * result.
+     */
+    public function withCoverage(): self
+    {
+        return new self($this->id, $this->choices, $this->seed, $this->reportDrawnValues, $this->reportAllFeatures, $this->requiredFeatures, $this->target, $this->terse, true);
     }
 
     /**
@@ -225,6 +243,11 @@ final readonly class Job
         return $this->terse;
     }
 
+    public function reportCoverage(): bool
+    {
+        return $this->reportCoverage;
+    }
+
     /**
      * The choice sequence that is replayed, or an empty one for an input that
      * is generated.
@@ -247,7 +270,7 @@ final readonly class Job
     }
 
     /**
-     * @return array{id: non-negative-int, drawnValues: bool, target?: non-empty-string, allFeatures?: true, requiredFeatures?: non-empty-list<int>, terse?: true, choices?: list<non-negative-int>, seed?: int}
+     * @return array{id: non-negative-int, drawnValues: bool, target?: non-empty-string, allFeatures?: true, requiredFeatures?: non-empty-list<int>, terse?: true, coverage?: true, choices?: list<non-negative-int>, seed?: int}
      */
     public function asArray(): array
     {
@@ -267,6 +290,10 @@ final readonly class Job
 
         if ($this->terse) {
             $data['terse'] = true;
+        }
+
+        if ($this->reportCoverage) {
+            $data['coverage'] = true;
         }
 
         if ($this->choices !== null) {

@@ -38,6 +38,7 @@ final class JobTest extends TestCase
             'required feature that is not an integer' => [['id' => 1, 'drawnValues' => false, 'requiredFeatures' => ['a'], 'choices' => []]],
             'empty target'                            => [['id' => 1, 'drawnValues' => false, 'target' => '', 'choices' => []]],
             'terse that is not a bool'                => [['id' => 1, 'drawnValues' => false, 'terse' => 1, 'choices' => []]],
+            'coverage that is not a bool'             => [['id' => 1, 'drawnValues' => false, 'coverage' => 1, 'choices' => []]],
         ];
     }
 
@@ -114,6 +115,21 @@ final class JobTest extends TestCase
         $this->assertTrue($job->terse()->isTerse());
         $this->assertTrue($job->terse()->withAllFeatures()->withRequiredFeatures([6])->withTarget('Vendor\\ParserTest::testOther')->isTerse());
         $this->assertEquals($job->terse(), Job::fromArray($job->terse()->asArray()));
+    }
+
+    public function testCanAskForItsCoverage(): void
+    {
+        $job = Job::replay(3, [1, 2], true)->terse();
+
+        $this->assertFalse($job->reportCoverage());
+        $this->assertArrayNotHasKey('coverage', $job->asArray());
+        $this->assertTrue($job->withCoverage()->reportCoverage());
+        $this->assertTrue($job->withCoverage()->isTerse());
+        $this->assertTrue($job->withCoverage()->reportDrawnValues());
+        $this->assertSame([1, 2], $job->withCoverage()->choices());
+        $this->assertTrue($job->withCoverage()->withAllFeatures()->withRequiredFeatures([5])->withTarget('Vendor\\ParserTest::testRoundTrip')->terse()->reportCoverage());
+        $this->assertEquals($job->withCoverage(), Job::fromArray($job->withCoverage()->asArray()));
+        $this->assertEquals(Job::generate(4, 1234)->withCoverage(), Job::fromArray(Job::generate(4, 1234)->withCoverage()->asArray()));
     }
 
     public function testCanRequireFeatures(): void
