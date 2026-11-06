@@ -114,6 +114,22 @@ final class CandidateTest extends TestCase
         );
     }
 
+    public function testASpanThatIsFollowedByAnotherElementOfItsCollectionDoesNotEndIt(): void
+    {
+        $candidate = Candidate::from(Sequences::ofList([3]));
+        $end       = array_values($candidate->spans())[3] ?? null;
+
+        $this->assertNotNull($end);
+        $this->assertTrue($candidate->endsCollection($end));
+
+        $candidate->insert(3, [1, 5]);
+        $candidate->addSpan(3, 5, 'element', $end['parent'], SpanKind::Element);
+
+        $this->assertSame([1, 3, 0, 1, 5], $candidate->choices());
+        $this->assertSame([[0, 3], [0, 2], [1, 2], [2, 3], [3, 5]], $this->bounds($candidate));
+        $this->assertFalse($candidate->endsCollection($end));
+    }
+
     public function testSetsAChoice(): void
     {
         $candidate = Candidate::from(Sequences::ofBytes('ab'));
