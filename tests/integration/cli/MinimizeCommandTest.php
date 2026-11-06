@@ -108,6 +108,19 @@ final class MinimizeCommandTest extends TestCase
         $this->assertSame($this->encoded("\x01"), file_get_contents($this->input . '.minimized'));
     }
 
+    public function testKeepsAnInputWhoseMinimalInputDidNotFailInTheSameWayAgainWhenItWasReplayed(): void
+    {
+        // the target fails for the input twice, when it is executed and when
+        // it is replayed before it is minimized
+        $this->write("\x02");
+
+        [$exit, $output] = $this->minimize('flaky');
+
+        $this->assertSame(0, $exit);
+        $this->assertStringContainsString("The minimal input did not fail in the same way again when it was replayed, so the input is kept.\n", $output);
+        $this->assertSame($this->encoded("\x02"), file_get_contents($this->input . '.minimized'));
+    }
+
     public function testDoesNotMinimizeAnInputThatDoesNotMakeTheTargetFail(): void
     {
         $this->write("RATL\x01");
