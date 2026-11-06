@@ -12,7 +12,9 @@ namespace SebastianBergmann\Rattle\Instrumentation;
 use const LOCK_EX;
 use const LOCK_UN;
 use const SEEK_SET;
+use function chgrp;
 use function chmod;
+use function chown;
 use function clearstatcache;
 use function closedir;
 use function fclose;
@@ -21,7 +23,9 @@ use function fflush;
 use function file_exists;
 use function file_get_contents;
 use function file_put_contents;
+use function filegroup;
 use function filemtime;
+use function fileowner;
 use function fileperms;
 use function flock;
 use function fopen;
@@ -206,6 +210,24 @@ final class FileStreamWrapperTest extends TestCase
         $this->assertSame(0o600, fileperms($path) & 0o777);
         $this->assertTrue(symlink($path, $this->directory . '/link'));
         $this->assertTrue(is_link($this->directory . '/link'));
+    }
+
+    public function testChangesTheOwnerAndTheGroupOfFiles(): void
+    {
+        $path = $this->directory . '/file.txt';
+
+        touch($path);
+
+        $owner = fileowner($path);
+        $group = filegroup($path);
+
+        $this->assertIsInt($owner);
+        $this->assertIsInt($group);
+
+        // the owner of a file can give it to itself and to its own group
+        $this->assertTrue(chown($path, $owner));
+        $this->assertTrue(chgrp($path, $group));
+        $this->assertFalse((new FileStreamWrapper)->stream_metadata($path, 99, null));
     }
 
     public function testManagesFilesAndDirectories(): void
