@@ -329,6 +329,85 @@ final class TargetSchedulerTest extends TestCase
         $this->assertSame([], (new TargetScheduler($engines['executor'], $engines['engines'], 1))->activeEngines());
     }
 
+    public function testProcessesTheResultsOfTheInputsThatWereSubmittedBeforeFuzzingStopped(): void
+    {
+        $engines = $this->engines($this->twoTargets(), 4, false);
+
+        (new TargetScheduler($this->executorThatReturnsOneResultAtATime($engines['executor']), $engines['engines'], 1))->run();
+
+        foreach ($engines['engines'] as $engine) {
+            $this->assertSame(4, $engine->statistics()->executions);
+            $this->assertFalse($engine->hasPendingInputs());
+        }
+    }
+
+    /**
+     * Two targets that take one edge for every input.
+     *
+     * @return non-empty-array<non-empty-string, Closure(string): void>
+     */
+    private function twoTargets(): array
+    {
+        $target = static function (string $bytes): void
+        {
+            Edges::through(1, null);
+        };
+
+        return ['first' => $target, 'second' => $target];
+    }
+
+    /**
+     * An executor that accepts any number of inputs and returns the result
+     * of one of them each time its results are collected.
+     */
+    private function executorThatReturnsOneResultAtATime(Executor $executor): Executor
+    {
+        return new class($executor) implements Executor
+        {
+            /**
+             * @var list<Job>
+             */
+            private array $pending = [];
+
+            public function __construct(private readonly Executor $executor)
+            {
+            }
+
+            public function target(): TargetDescription
+            {
+                return $this->executor->target();
+            }
+
+            public function capacity(): int
+            {
+                return 1;
+            }
+
+            public function submit(array $jobs): void
+            {
+                foreach ($jobs as $job) {
+                    $this->pending[] = $job;
+                }
+            }
+
+            public function collect(): array
+            {
+                $job = array_shift($this->pending);
+
+                return $job === null ? [] : [$this->executor->execute($job)];
+            }
+
+            public function execute(Job $job): Result
+            {
+                return $this->executor->execute($job);
+            }
+
+            public function shutdown(): void
+            {
+            }
+        };
+    }
+
     /**
      * Engines for bytes targets that share an executor, which executes each
      * input with the runner of the target that the input names.
