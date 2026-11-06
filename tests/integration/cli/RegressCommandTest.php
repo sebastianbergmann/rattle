@@ -203,6 +203,14 @@ final class RegressCommandTest extends TestCase
         $this->assertStringStartsWith('The properties cannot be listed: PHPUnit cannot be booted: ', $output);
     }
 
+    public function testReportsThatThePropertiesOfAPhpunitTestSuiteCannotBeListedWhenTheWorkerEndsBeforeItListedThem(): void
+    {
+        [$exit, $output] = $this->regress(['--phpunit', '--configuration', self::PHPUNIT . '/exit.xml']);
+
+        $this->assertSame(2, $exit);
+        $this->assertSame("The worker process ended before it listed the properties\n\nThe test suite cannot be booted\n", $output);
+    }
+
     /**
      * @return list<string>
      */
