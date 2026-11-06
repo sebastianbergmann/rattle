@@ -52,6 +52,16 @@ final class SourceEditsTest extends TestCase
         $this->assertSame('a){}b', $edits->apply());
     }
 
+    public function testIgnoresInsertionsWithinTextThatWasReplaced(): void
+    {
+        $edits = new SourceEdits('abcd');
+
+        $edits->replace(1, 2, 'X');
+        $edits->insert(2, '-', 0);
+
+        $this->assertSame('aXd', $edits->apply());
+    }
+
     public function testLeavesTheSourceAsItIsWithoutEdits(): void
     {
         $this->assertSame('abc', (new SourceEdits('abc'))->apply());
