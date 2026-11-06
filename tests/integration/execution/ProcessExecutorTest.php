@@ -479,6 +479,15 @@ final class ProcessExecutorTest extends TestCase
         $this->misbehavingExecutor('unknown-result')->execute(Job::replay(1, []));
     }
 
+    public function testKillsAWorkerWhoseProcessDoesNotEndAfterItReportedTheLastResultOfAnInputDuringWhichTheTargetExited(): void
+    {
+        $result = $this->misbehavingExecutor('last-result-without-exit')->execute(Job::replay(1, []));
+
+        $this->assertSame(1, $result->id());
+        $this->assertSame(Outcome::Failed, $result->outcome());
+        $this->assertSame('Process terminated by signal 9', $result->failure()?->describe());
+    }
+
     /**
      * An executor whose worker misbehaves in the given way (see the fixture
      * php-misbehaving-worker).

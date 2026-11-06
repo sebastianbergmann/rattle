@@ -38,7 +38,7 @@ case "$behaviour" in
     exits)
         echo 'the worker cannot start' >&2
         exit 1 ;;
-    unexpected-message|unknown-result)
+    unexpected-message|unknown-result|last-result-without-exit)
         frame '{"type":"ready","protocol":1,"name":"misbehaving","maximumNumberOfChoices":8192}'
 
         # waits for the first message of the supervisor, and ends when the
@@ -55,6 +55,11 @@ case "$behaviour" in
                 frame '{"type":"other"}' ;;
             unknown-result)
                 frame '{"type":"result","result":{"id":99,"outcome":"passed","features":[]},"retire":false}' ;;
+            last-result-without-exit)
+                frame '{"type":"result","result":{"id":1,"outcome":"failed","features":[],"failure":{"kind":"exit","message":"","trace":""}},"last":true}'
+
+                # does not end until it is killed
+                exec sleep 60 ;;
         esac
 
         exit 0 ;;
