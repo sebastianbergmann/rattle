@@ -10,6 +10,7 @@
 namespace SebastianBergmann\Rattle;
 
 use const E_USER_DEPRECATED;
+use const E_USER_ERROR;
 use const E_USER_NOTICE;
 use const E_USER_WARNING;
 use function array_values;
@@ -324,6 +325,24 @@ final class RunnerTest extends TestCase
 
         $this->assertStringStartsWith('Deprecated at ', $this->runner($target)->run(Job::replay(1, []))->failure()?->describe() ?? '');
         $this->assertSame(Outcome::Passed, new Runner(Target::structured('target', $target), 100, 0, true)->run(Job::replay(1, []))->outcome());
+    }
+
+    public function testAUserErrorIsAFinding(): void
+    {
+        // passing E_USER_ERROR to trigger_error() is deprecated, which is ignored here
+        $result = new Runner(
+            Target::structured('target', static function (Input $input): void
+            {
+                trigger_error('an error', E_USER_ERROR);
+            }),
+            100,
+            0,
+            true,
+        )->run(Job::replay(1, []));
+
+        $this->assertSame(Outcome::Failed, $result->outcome());
+        $this->assertStringStartsWith('Error at ', $result->failure()?->describe() ?? '');
+        $this->assertSame('an error', $result->failure()?->message());
     }
 
     public function testASuppressedIssueIsNotAFinding(): void
