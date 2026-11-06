@@ -107,7 +107,14 @@ function describe(array $frame): string
         if (is_array($result['failure'] ?? null)) {
             $failure = $result['failure'];
 
-            $description .= sprintf(' (%s)', print_r($failure['description'] ?? (print_r($failure['class'] ?? null, true) . ' at ' . print_r($failure['location'] ?? null, true)), true));
+            $description .= sprintf(
+                ' (%s)',
+                match (true) {
+                    isset($failure['description']) => print_r($failure['description'], true),
+                    isset($failure['class'])       => print_r($failure['class'], true) . ' at ' . print_r($failure['location'] ?? null, true),
+                    default                        => print_r($failure['kind'] ?? null, true),
+                },
+            );
         }
 
         if (is_array($result['tokens'] ?? null) && $result['tokens'] !== []) {
