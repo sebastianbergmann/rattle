@@ -385,6 +385,27 @@ final class TargetSchedulerTest extends TestCase
         $this->assertGreaterThan(0, $executions);
     }
 
+    public function testReportsProgressWhenItHasProcessedResults(): void
+    {
+        $engines  = $this->engines($this->twoTargets(), 32, false);
+        $progress = 0;
+
+        (new TargetScheduler(
+            $engines['executor'],
+            $engines['engines'],
+            1,
+            null,
+            null,
+            static function () use (&$progress): void
+            {
+                $progress++;
+            },
+        ))->run();
+
+        // the batches of 16 inputs of both targets are processed one after the other
+        $this->assertSame(4, $progress);
+    }
+
     /**
      * Two targets that take one edge for every input.
      *
