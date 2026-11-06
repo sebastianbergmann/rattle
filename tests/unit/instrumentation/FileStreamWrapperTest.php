@@ -47,7 +47,9 @@ use function rewinddir;
 use function rmdir;
 use function scandir;
 use function sort;
+use function stream_select;
 use function stream_set_blocking;
+use function stream_set_timeout;
 use function stream_set_write_buffer;
 use function strlen;
 use function symlink;
@@ -228,6 +230,24 @@ final class FileStreamWrapperTest extends TestCase
         $this->assertTrue(chown($path, $owner));
         $this->assertTrue(chgrp($path, $group));
         $this->assertFalse((new FileStreamWrapper)->stream_metadata($path, 99, null));
+    }
+
+    public function testSetsTheOptionsOfStreamsAndCastsThemForSelect(): void
+    {
+        $stream = fopen($this->directory . '/file.txt', 'w+');
+
+        $this->assertIsResource($stream);
+
+        // plain files have no read timeout, as with PHP's own wrapper
+        $this->assertFalse(stream_set_timeout($stream, 1));
+
+        $read   = [$stream];
+        $write  = null;
+        $except = null;
+
+        $this->assertSame(1, stream_select($read, $write, $except, 0));
+
+        fclose($stream);
     }
 
     public function testManagesFilesAndDirectories(): void
