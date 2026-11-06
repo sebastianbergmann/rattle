@@ -86,6 +86,16 @@ final class PropertyExampleTest extends TestCase
         $this->assertSame(SpanKind::Characters, $span->kind());
     }
 
+    public function testHasTheSpansOfABinaryString(): void
+    {
+        $example = PropertyExample::fromArray(['spans' => [['start' => 0, 'end' => 3, 'label' => 'bytes', 'parent' => null, 'kind' => 'bytes'], ['start' => 0, 'end' => 2, 'label' => 'byte', 'parent' => 0, 'kind' => 'element']]] + self::passed());
+
+        $span = $example->sequence()->spans()[0] ?? null;
+
+        $this->assertNotNull($span);
+        $this->assertSame(SpanKind::Bytes, $span->kind());
+    }
+
     #[DataProvider('outcomesOfExamplesThatDidNotFalsifyTheProperty')]
     public function testMapsTheOutcomesOfExamplesThatDidNotFalsifyTheProperty(string $outcome, Outcome $expected): void
     {
