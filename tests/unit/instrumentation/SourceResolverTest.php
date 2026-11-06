@@ -63,6 +63,13 @@ final class SourceResolverTest extends TestCase
         $this->assertSame([$directory . '/src'], (new SourceResolver)->resolve([], $directory));
     }
 
+    public function testFallsBackToTheSrcDirectoryWhenThePhpUnitConfigurationIncludesNoSources(): void
+    {
+        $directory = self::FIXTURES . '/with-phpunit-xml-without-sources';
+
+        $this->assertSame([$directory . '/src'], (new SourceResolver)->resolve([], $directory));
+    }
+
     public function testFindsNoSourcesOtherwise(): void
     {
         $this->assertSame([], (new SourceResolver)->resolve([], self::FIXTURES . '/without-sources'));
