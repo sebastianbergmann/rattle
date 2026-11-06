@@ -195,6 +195,23 @@ final class FindingProcessorTest extends TestCase
         );
     }
 
+    public function testKeepsTheInputAsItWasFoundWhenTheMinimalInputDidNotFailInTheSameWayAgain(): void
+    {
+        $store     = new FindingStore($this->directory);
+        $directory = $store->store(
+            new Minimization(new ChoiceSequence([1, 2]), new ChoiceSequence([1]), Failure::timeout('', ''), [], true, null, false),
+            'target.php',
+            null,
+            1,
+        );
+
+        $this->assertSame($this->directory, $store->directory());
+        $this->assertStringContainsString(
+            'The minimal input did not fail in the same way again when it was replayed, so the input as it was found is kept.',
+            (string) file_get_contents($directory . '/README.txt'),
+        );
+    }
+
     private function executor(): InProcessExecutor
     {
         return new InProcessExecutor(
