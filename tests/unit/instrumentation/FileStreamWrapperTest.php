@@ -12,6 +12,8 @@ namespace SebastianBergmann\Rattle\Instrumentation;
 use const LOCK_EX;
 use const LOCK_UN;
 use const SEEK_SET;
+use const STREAM_REPORT_ERRORS;
+use const STREAM_USE_PATH;
 use function chgrp;
 use function chmod;
 use function chown;
@@ -248,6 +250,21 @@ final class FileStreamWrapperTest extends TestCase
         $this->assertSame(1, stream_select($read, $write, $except, 0));
 
         fclose($stream);
+    }
+
+    public function testOpensFilesOnTheIncludePathAndReportsErrorsWhenAskedTo(): void
+    {
+        $path       = $this->directory . '/untouched.php';
+        $wrapper    = new FileStreamWrapper;
+        $openedPath = null;
+
+        $this->assertTrue($wrapper->stream_open($path, 'rb', STREAM_USE_PATH | STREAM_REPORT_ERRORS, $openedPath));
+        $this->assertSame($path, $openedPath);
+
+        $wrapper->stream_close();
+
+        // PHP passes 0x80 when it opens a file for include or require
+        $this->assertFalse((new FileStreamWrapper)->stream_open('does-not-exist.php', 'rb', 0x80 | STREAM_USE_PATH, $openedPath));
     }
 
     public function testManagesFilesAndDirectories(): void
