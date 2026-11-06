@@ -340,7 +340,8 @@ final class Engine
                 $job = Job::generate($id, self::seedOf($this->configuration->seed(), $this->numberOfGeneratedInputs++));
             } else {
                 $entry   = $this->scheduler->choose($this->randomizer);
-                $choices = $this->mutator->mutate($entry, $this->randomizer);
+                $mutant  = $this->mutator->mutate($entry, $this->randomizer);
+                $choices = $mutant->choices();
                 $job     = Job::replay($id, $choices);
 
                 // a mutation with fewer choices than the entry it was mutated

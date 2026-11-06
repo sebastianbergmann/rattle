@@ -21,6 +21,7 @@ use Random\Randomizer;
 use SebastianBergmann\ChoiceSequence\ChoiceSequence;
 
 #[CoversClass(Mutator::class)]
+#[CoversClass(Mutant::class)]
 #[UsesClass(Candidate::class)]
 #[UsesClass(RandomElement::class)]
 #[UsesClass(Corpus::class)]
@@ -69,6 +70,37 @@ final class MutatorTest extends TestCase
         }
     }
 
+    public function testKeepsTheNamesOfTheMutationsThatWereApplied(): void
+    {
+        $corpus = new Corpus;
+        $entry  = $corpus->add(new ChoiceSequence(array_fill(0, 10, 1)), [1]);
+
+        $this->assertNotNull($entry);
+
+        $randomizer = new Randomizer(new Xoshiro256StarStar(1));
+
+        for ($i = 0; $i < 100; $i++) {
+            $mutations = (new Mutator([new InsertChoices], 8192))->mutate($entry, $randomizer)->mutations();
+
+            $this->assertGreaterThanOrEqual(1, count($mutations));
+            $this->assertLessThanOrEqual(5, count($mutations));
+            $this->assertSame(array_fill(0, count($mutations), 'InsertChoices'), $mutations);
+        }
+    }
+
+    public function testKeepsNoNameOfAMutationThatCouldNotBeApplied(): void
+    {
+        $corpus = new Corpus;
+        $entry  = $corpus->add(new ChoiceSequence([1, 2, 3]), [1]);
+
+        $this->assertNotNull($entry);
+
+        $mutant = (new Mutator([new DeleteSpan], 8192))->mutate($entry, new Randomizer(new Xoshiro256StarStar(1)));
+
+        $this->assertSame([], $mutant->mutations());
+        $this->assertSame([1, 2, 3], $mutant->choices());
+    }
+
     /**
      * @return list<list<non-negative-int>>
      */
@@ -78,7 +110,7 @@ final class MutatorTest extends TestCase
         $mutations  = [];
 
         for ($i = 0; $i < 100; $i++) {
-            $mutations[] = $mutator->mutate($entry, $randomizer);
+            $mutations[] = $mutator->mutate($entry, $randomizer)->choices();
         }
 
         return $mutations;

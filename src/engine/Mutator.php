@@ -10,12 +10,16 @@
 namespace SebastianBergmann\Rattle;
 
 use function array_slice;
+use function assert;
 use Random\Randomizer;
+use ReflectionClass;
 
 /**
  * Mutates the choices of a corpus entry with one to five mutations that are
  * chosen at random. A mutation that cannot be applied, because the candidate
- * has no spans, for instance, is replaced with another one.
+ * has no spans, for instance, is replaced with another one. The names of the
+ * mutations that were applied are kept with the choices, so that it can be
+ * shown how an input came about.
  *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
@@ -72,21 +76,37 @@ final readonly class Mutator
         $this->maximumNumberOfChoices = $maximumNumberOfChoices;
     }
 
-    /**
-     * @return list<non-negative-int>
-     */
-    public function mutate(CorpusEntry $entry, Randomizer $randomizer): array
+    public function mutate(CorpusEntry $entry, Randomizer $randomizer): Mutant
     {
         $candidate = $entry->candidate();
+        $applied   = [];
 
         for ($i = $randomizer->getInt(1, self::LARGEST_NUMBER_OF_MUTATIONS); $i > 0; $i--) {
             for ($attempt = 0; $attempt < self::ATTEMPTS_PER_MUTATION; $attempt++) {
-                if (RandomElement::of($randomizer, $this->mutations)->apply($candidate, $randomizer)) {
+                $mutation = RandomElement::of($randomizer, $this->mutations);
+
+                if ($mutation->apply($candidate, $randomizer)) {
+                    $applied[] = self::nameOf($mutation);
+
                     break;
                 }
             }
         }
 
-        return array_slice($candidate->choices(), 0, $this->maximumNumberOfChoices);
+        return new Mutant(array_slice($candidate->choices(), 0, $this->maximumNumberOfChoices), $applied);
+    }
+
+    /**
+     * The name of the class of the mutation, without its namespace.
+     *
+     * @return non-empty-string
+     */
+    private static function nameOf(Mutation $mutation): string
+    {
+        $name = (new ReflectionClass($mutation))->getShortName();
+
+        assert($name !== '');
+
+        return $name;
     }
 }
