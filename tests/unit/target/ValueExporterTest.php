@@ -13,6 +13,8 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Small;
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
+use RuntimeException;
 use stdClass;
 
 #[CoversClass(ValueExporter::class)]
@@ -63,5 +65,23 @@ final class ValueExporterTest extends TestCase
         $value->self = $value;
 
         $this->assertStringContainsString("'self' => NULL", (new ValueExporter)->export($value));
+    }
+
+    public function testExportsTheTypeOfAValueThatCannotBeExported(): void
+    {
+        // initializing the lazy object fails when var_export() reads its properties
+        $class = new class
+        {
+            public int $property = 0;
+        };
+
+        $value = (new ReflectionClass($class))->newLazyGhost(
+            static function (): never
+            {
+                throw new RuntimeException;
+            },
+        );
+
+        $this->assertSame('class@anonymous', (new ValueExporter)->export($value));
     }
 }
