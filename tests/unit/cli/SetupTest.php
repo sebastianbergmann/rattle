@@ -9,6 +9,8 @@
  */
 namespace SebastianBergmann\Rattle;
 
+use const PHP_BINARY;
+use function array_map;
 use function realpath;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Small;
@@ -22,6 +24,7 @@ use SebastianBergmann\Rattle\Instrumentation\SourceResolver;
 #[CoversClass(PhpunitTestSuite::class)]
 #[UsesClass(Arguments::class)]
 #[UsesClass(ArgumentsBuilder::class)]
+#[UsesClass(PhpBinary::class)]
 #[UsesClass(SourceResolver::class)]
 #[UsesClass(WorkerConfiguration::class)]
 #[Small]
@@ -140,6 +143,22 @@ final class SetupTest extends TestCase
         $this->expectExceptionMessageIsOrContains('The PHPUnit configuration file "/does/not/exist.xml" does not exist');
 
         (new Setup)->workerConfiguration((new ArgumentsBuilder)->build(['rattle', 'fuzz', '--phpunit', '--configuration', '/does/not/exist.xml']));
+    }
+
+    public function testChecksThePhpBinariesThatTheOutcomesAreComparedOn(): void
+    {
+        $this->assertSame([], (new Setup)->phpBinaries((new ArgumentsBuilder)->build(['rattle', 'fuzz', 'target.php'])));
+
+        $binaries = (new Setup)->phpBinaries((new ArgumentsBuilder)->build(['rattle', 'fuzz', 'target.php', '--php', PHP_BINARY]));
+
+        $this->assertSame([PHP_BINARY], array_map(static fn (PhpBinary $php): string => $php->path(), $binaries));
+    }
+
+    public function testRejectsAPhpBinaryThatCannotBeRun(): void
+    {
+        $this->expectException(ConfigurationException::class);
+
+        (new Setup)->phpBinaries((new ArgumentsBuilder)->build(['rattle', 'fuzz', 'target.php', '--php', '/does/not/exist']));
     }
 
     public function testForwardsTheStandardErrorStreamsOfTheWorkersOnlyWhenVerbose(): void
