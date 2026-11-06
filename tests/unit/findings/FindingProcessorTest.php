@@ -9,6 +9,7 @@
  */
 namespace SebastianBergmann\Rattle;
 
+use function chmod;
 use function dirname;
 use function file_get_contents;
 use function file_put_contents;
@@ -16,6 +17,7 @@ use function glob;
 use function hash;
 use function is_dir;
 use function is_file;
+use function is_writable;
 use function json_decode;
 use function mkdir;
 use function preg_quote;
@@ -210,6 +212,35 @@ final class FindingProcessorTest extends TestCase
             'The minimal input did not fail in the same way again when it was replayed, so the input as it was found is kept.',
             (string) file_get_contents($directory . '/README.txt'),
         );
+    }
+
+    public function testCannotStoreAFindingInADirectoryThatCannotBeWritten(): void
+    {
+        $directory = $this->directory . '/' . FindingStore::idOf(FailureSignature::forTimeout());
+
+        mkdir($directory, 0o777, true);
+        chmod($directory, 0o555);
+
+        if (is_writable($directory)) {
+            rmdir($directory);
+
+            $this->markTestSkipped('The permissions of a directory do not keep this process from writing to it');
+        }
+
+        try {
+            (new FindingStore($this->directory))->store(
+                new Minimization(new ChoiceSequence([1]), new ChoiceSequence([1]), Failure::timeout('', ''), [], false, null, false),
+                'target.php',
+                null,
+                1,
+            );
+
+            $this->fail('A finding was stored in a directory that cannot be written');
+        } catch (FindingException $e) {
+            $this->assertSame('Cannot write "' . $directory . '/input"', $e->getMessage());
+        } finally {
+            rmdir($directory);
+        }
     }
 
     private function executor(): InProcessExecutor
