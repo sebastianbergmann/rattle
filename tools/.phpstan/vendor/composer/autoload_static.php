@@ -31,6 +31,7 @@ class ComposerStaticInitdca1d9bc6875a500c3e750fa72a300eb
         'PHPStan\\' =>
         array (
             0 => __DIR__ . '/..' . '/phpstan/phpstan-strict-rules/src',
+            1 => __DIR__ . '/..' . '/phpstan/phpstan-deprecation-rules/src',
         ),
         'Ergebnis\\Version\\' =>
         array (
