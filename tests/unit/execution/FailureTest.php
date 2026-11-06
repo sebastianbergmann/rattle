@@ -43,6 +43,8 @@ final class FailureTest extends TestCase
         $this->assertSame(Failure::THROWABLE, $failure->kind());
         $this->assertSame('message', $failure->message());
         $this->assertSame('trace', $failure->trace());
+        $this->assertSame(RuntimeException::class, $failure->className());
+        $this->assertSame('/path/to/file.php:12', $failure->location());
         $this->assertSame('RuntimeException at /path/to/file.php:12', $failure->describe());
         $this->assertTrue(FailureSignature::forThrowable(RuntimeException::class, '/path/to/file.php:12')->isSameAs($failure->signature()));
         $this->assertFalse($failure->isTimeout());
@@ -63,6 +65,8 @@ final class FailureTest extends TestCase
         $failure = Failure::description('Warning at /path/to/file.php:3', 'message', 'trace');
 
         $this->assertTrue(FailureSignature::forDescription('Warning at /path/to/file.php:3')->isSameAs($failure->signature()));
+        $this->assertNull($failure->className());
+        $this->assertNull($failure->location());
     }
 
     public function testAProcessThatExitedIsDescribedByItsExitStatus(): void
@@ -70,6 +74,7 @@ final class FailureTest extends TestCase
         $failure = Failure::exit();
 
         $this->assertTrue($failure->isExit());
+        $this->assertTrue(FailureSignature::forDescription('Process exited')->isSameAs($failure->signature()));
         $this->assertSame('Process exited with status 3', $failure->exited(3)->describe());
     }
 
