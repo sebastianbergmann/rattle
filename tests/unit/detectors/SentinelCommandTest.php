@@ -160,4 +160,32 @@ final class SentinelCommandTest extends TestCase
             putenv('PATH=' . $path);
         }
     }
+
+    public function testSetsThePathInTheEnvironmentVariablesOfPhp(): void
+    {
+        SentinelCommand::uninstall();
+
+        $path         = (string) getenv('PATH');
+        $hadPath      = isset($_ENV['PATH']);
+        $_ENV['PATH'] = $path;
+
+        try {
+            SentinelCommand::install(static function (): void
+            {
+            });
+
+            $installed = $_ENV['PATH'] ?? null;
+
+            $this->assertSame(getenv('PATH'), $installed);
+            $this->assertNotSame($path, $installed);
+
+            SentinelCommand::uninstall();
+
+            $this->assertSame($path, $_ENV['PATH'] ?? null);
+        } finally {
+            if (!$hadPath) {
+                unset($_ENV['PATH']);
+            }
+        }
+    }
 }
