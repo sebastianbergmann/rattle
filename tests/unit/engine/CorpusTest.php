@@ -9,10 +9,12 @@
  */
 namespace SebastianBergmann\Rattle;
 
+use function chmod;
 use function file_get_contents;
 use function file_put_contents;
 use function hash;
 use function is_dir;
+use function is_writable;
 use function rmdir;
 use function scandir;
 use function sys_get_temp_dir;
@@ -36,6 +38,8 @@ final class CorpusTest extends TestCase
     protected function tearDown(): void
     {
         if ($this->directory !== null && is_dir($this->directory)) {
+            chmod($this->directory, 0o755);
+
             foreach ((array) scandir($this->directory) as $file) {
                 if ($file !== '.' && $file !== '..') {
                     unlink($this->directory . '/' . $file);
@@ -164,5 +168,42 @@ final class CorpusTest extends TestCase
         $this->expectException(CorpusException::class);
 
         (new Corpus('/dev/null/corpus'))->add(new ChoiceSequence([1]), [1]);
+    }
+
+    public function testCannotStoreEntriesInADirectoryThatCannotBeWritten(): void
+    {
+        $corpus = $this->corpusInADirectoryThatCannotBeWritten();
+
+        $this->expectException(CorpusException::class);
+        $this->expectExceptionMessageIsOrContains('Cannot write the corpus entry');
+
+        $corpus->add(new ChoiceSequence([3]), [30]);
+    }
+
+    public function testCannotRemoveInputsFromADirectoryThatCannotBeWritten(): void
+    {
+        $corpus = $this->corpusInADirectoryThatCannotBeWritten();
+
+        $this->expectException(CorpusException::class);
+        $this->expectExceptionMessageIsOrContains('Cannot remove the corpus entry');
+
+        $corpus->remove([1, 2]);
+    }
+
+    private function corpusInADirectoryThatCannotBeWritten(): Corpus
+    {
+        $this->directory = sys_get_temp_dir() . '/rattle-corpus-' . uniqid();
+
+        $corpus = new Corpus($this->directory);
+
+        $corpus->add(new ChoiceSequence([1, 2]), [10]);
+
+        chmod($this->directory, 0o555);
+
+        if (is_writable($this->directory)) {
+            $this->markTestSkipped('The permissions of a directory do not keep this process from writing to it');
+        }
+
+        return $corpus;
     }
 }
