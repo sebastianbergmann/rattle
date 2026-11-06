@@ -455,6 +455,36 @@ final class ProcessExecutorTest extends TestCase
     #[DataProvider('workersThatMisbehaveWhileTheyStart')]
     public function testCannotStartAWorkerThatMisbehavesWhileItStarts(string $behaviour, string $message): void
     {
+        $executor = $this->misbehavingExecutor($behaviour);
+
+        $this->expectException(WorkerException::class);
+        $this->expectExceptionMessageIsOrContains($message);
+
+        $executor->start();
+    }
+
+    public function testRejectsAMessageOfAWorkerThatIsNotAResult(): void
+    {
+        $this->expectException(ProtocolException::class);
+        $this->expectExceptionMessageIsOrContains('Unexpected message from a worker');
+
+        $this->misbehavingExecutor('unexpected-message')->execute(Job::replay(1, []));
+    }
+
+    public function testRejectsAResultOfAWorkerForAnInputThatItWasNotExecuting(): void
+    {
+        $this->expectException(ProtocolException::class);
+        $this->expectExceptionMessageIsOrContains('A worker reported a result for an input that it was not executing');
+
+        $this->misbehavingExecutor('unknown-result')->execute(Job::replay(1, []));
+    }
+
+    /**
+     * An executor whose worker misbehaves in the given way (see the fixture
+     * php-misbehaving-worker).
+     */
+    private function misbehavingExecutor(string $behaviour): ProcessExecutor
+    {
         $this->executor = new ProcessExecutor(
             new WorkerConfiguration($behaviour, null, [], 1, 100, null, false, 100),
             1,
@@ -462,10 +492,7 @@ final class ProcessExecutorTest extends TestCase
             PhpBinary::at(dirname(__DIR__, 2) . '/fixtures/php/php-misbehaving-worker'),
         );
 
-        $this->expectException(WorkerException::class);
-        $this->expectExceptionMessageIsOrContains($message);
-
-        $this->executor->start();
+        return $this->executor;
     }
 
     /**

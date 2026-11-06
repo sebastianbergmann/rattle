@@ -1,6 +1,7 @@
 #!/bin/sh
-# pretends to be PHP 8.5, and starts a worker that misbehaves while it starts
-# in the way that the name of its target file tells
+# pretends to be PHP 8.5, and starts a worker that misbehaves while it starts,
+# or after it received the first input, in the way that the name of its target
+# file tells
 if [ "$1" = "-r" ]; then
     echo "8 5 8.5.0"
     exit 0
@@ -37,7 +38,27 @@ case "$behaviour" in
     exits)
         echo 'the worker cannot start' >&2
         exit 1 ;;
+    unexpected-message|unknown-result)
+        frame '{"type":"ready","protocol":1,"name":"misbehaving","maximumNumberOfChoices":8192}'
+
+        # waits for the first message of the supervisor, and ends when the
+        # supervisor shuts it down
+        message=$(head -c 20 | tr -d '\000')
+
+        case "$message" in
+            *shutdow*)
+                exit 0 ;;
+        esac
+
+        case "$behaviour" in
+            unexpected-message)
+                frame '{"type":"other"}' ;;
+            unknown-result)
+                frame '{"type":"result","result":{"id":99,"outcome":"passed","features":[]},"retire":false}' ;;
+        esac
+
+        exit 0 ;;
 esac
 
 # waits until the supervisor closes the standard input stream
-cat > /dev/null
+exec cat > /dev/null
