@@ -11,6 +11,7 @@ namespace SebastianBergmann\Rattle;
 
 use function array_map;
 use function array_reverse;
+use function array_shift;
 use function array_slice;
 use function array_unique;
 use function array_values;
@@ -464,6 +465,22 @@ final class EngineTest extends TestCase
         $this->assertSame(0, $engine->run()->executions);
     }
 
+    public function testProcessesTheResultsOfTheInputsThatWereSubmittedBeforeFuzzingStopped(): void
+    {
+        $engine = $this->engine(
+            $this->magicHeader(),
+            $this->findings(),
+            new EngineConfiguration(1, 4, null, false, 2),
+            [],
+            null,
+            null,
+            $this->executorThatReturnsOneResultAtATime($this->executor($this->magicHeader())),
+        );
+
+        $this->assertSame(4, $engine->run()->executions);
+        $this->assertFalse($engine->hasPendingInputs());
+    }
+
     public function testStopsWhenTheTimeIsUp(): void
     {
         $engine = $this->engine($this->magicHeader(), $this->findings(), new EngineConfiguration(1, null, 0.05));
@@ -650,6 +667,58 @@ final class EngineTest extends TestCase
         }
 
         rmdir($directory);
+    }
+
+    /**
+     * An executor that accepts any number of inputs and returns the result
+     * of one of them each time its results are collected.
+     */
+    private function executorThatReturnsOneResultAtATime(Executor $executor): Executor
+    {
+        return new class($executor) implements Executor
+        {
+            /**
+             * @var list<Job>
+             */
+            private array $pending = [];
+
+            public function __construct(private readonly Executor $executor)
+            {
+            }
+
+            public function target(): TargetDescription
+            {
+                return $this->executor->target();
+            }
+
+            public function capacity(): int
+            {
+                return 1;
+            }
+
+            public function submit(array $jobs): void
+            {
+                foreach ($jobs as $job) {
+                    $this->pending[] = $job;
+                }
+            }
+
+            public function collect(): array
+            {
+                $job = array_shift($this->pending);
+
+                return $job === null ? [] : [$this->executor->execute($job)];
+            }
+
+            public function execute(Job $job): Result
+            {
+                return $this->executor->execute($job);
+            }
+
+            public function shutdown(): void
+            {
+            }
+        };
     }
 
     /**
