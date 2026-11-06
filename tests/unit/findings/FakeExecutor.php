@@ -22,6 +22,7 @@ final class FakeExecutor implements Executor
      * @var list<Job>
      */
     public array $executed = [];
+    public bool $shutDown  = false;
 
     /**
      * @var Closure(Job): Result
@@ -80,5 +81,6 @@ final class FakeExecutor implements Executor
 
     public function shutdown(): void
     {
+        $this->shutDown = true;
     }
 }

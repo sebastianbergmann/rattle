@@ -9,6 +9,7 @@
  */
 namespace SebastianBergmann\Rattle;
 
+use function array_keys;
 use function basename;
 use function dirname;
 use function sprintf;
@@ -160,6 +161,24 @@ final class DifferentialExecutorTest extends TestCase
         $this->assertNull($finder->check($this->resultFor('a'), Job::replay(1, [])));
         $this->assertTrue($finder->check($this->resultFor('b'), Job::replay(2, [])));
         $this->assertCount(1, $handler->handled);
+    }
+
+    public function testExecutesTheInputsOfAPropertyOnEveryVersionAndShutsTheExecutorsOfAllVersionsDown(): void
+    {
+        $passed = static fn (Job $job): Result => new Result($job->id(), Outcome::Passed, null, $job->sequence(), [], null);
+        $first  = new FakeExecutor($passed);
+        $second = new FakeExecutor($passed);
+
+        $executor = (new DifferentialExecutor(['PHP 8.5' => $first, 'PHP 8.6' => $second]))->forTarget('ParserTest::testRoundTrip');
+
+        $this->assertSame(['PHP 8.5', 'PHP 8.6'], array_keys($executor->executeOnEach(Job::replay(1, [1]))));
+        $this->assertSame('ParserTest::testRoundTrip', ($first->executed[0] ?? null)?->target());
+        $this->assertSame('ParserTest::testRoundTrip', ($second->executed[0] ?? null)?->target());
+
+        $executor->shutdown();
+
+        $this->assertTrue($first->shutDown);
+        $this->assertTrue($second->shutDown);
     }
 
     private function resultFor(string $bytes): Result
