@@ -22,6 +22,7 @@ use function str_replace;
 use function str_split;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Large;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -49,6 +50,22 @@ final class ProcessExecutorTest extends TestCase
     private const string FIXTURES             = __DIR__ . '/../../fixtures/worker';
     private ?ProcessExecutor $executor        = null;
     private ?ProcessExecutor $targetsExecutor = null;
+
+    /**
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function workersThatMisbehaveWhileTheyStart(): array
+    {
+        return [
+            'another version of the protocol' => ['other-protocol', 'The worker speaks another version of the protocol'],
+            'invalid maximum of choices'      => ['invalid-handshake', 'The worker sent an invalid handshake'],
+            'no name'                         => ['no-name', 'The worker sent an invalid handshake: Expected a non-empty string'],
+            'invalid description of a target' => ['invalid-target-description', 'The worker sent an invalid handshake: Invalid description of a target'],
+            'no targets'                      => ['no-targets', 'The worker sent an invalid handshake: it describes no target'],
+            'invalid frame'                   => ['invalid-frame', 'The worker could not be started: Invalid frame: '],
+            'process that ends'               => ['exits', "The worker process ended before it was ready\n\nthe worker cannot start"],
+        ];
+    }
 
     protected function tearDown(): void
     {
@@ -433,6 +450,22 @@ final class ProcessExecutorTest extends TestCase
         $this->expectExceptionMessageIsOrContains(sprintf('The target files "%s" and "%s" both return a target named "worker"', self::FIXTURES . '/target.php', self::FIXTURES . '/duplicate-target.php'));
 
         $this->targetsExecutor([self::FIXTURES . '/target.php', self::FIXTURES . '/duplicate-target.php'])->start();
+    }
+
+    #[DataProvider('workersThatMisbehaveWhileTheyStart')]
+    public function testCannotStartAWorkerThatMisbehavesWhileItStarts(string $behaviour, string $message): void
+    {
+        $this->executor = new ProcessExecutor(
+            new WorkerConfiguration($behaviour, null, [], 1, 100, null, false, 100),
+            1,
+            null,
+            PhpBinary::at(dirname(__DIR__, 2) . '/fixtures/php/php-misbehaving-worker'),
+        );
+
+        $this->expectException(WorkerException::class);
+        $this->expectExceptionMessageIsOrContains($message);
+
+        $this->executor->start();
     }
 
     /**
