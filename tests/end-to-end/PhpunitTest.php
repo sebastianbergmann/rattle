@@ -68,7 +68,7 @@ final class PhpunitTest extends TestCase
 
         $this->assertSame(1, $exit, $output);
         $this->assertStringContainsString('Target:   PHPUnit test suite (2 properties)', $output);
-        $this->assertStringContainsString('Finding: LogicException at ' . self::FIXTURE . '/src/Classifier.php:38' . "\n         " . self::PROPERTY . "\n", $output);
+        $this->assertStringContainsString('Finding: LogicException at src/Classifier.php:38' . "\n         " . self::PROPERTY . "\n", $output);
 
         // the table at the end has a row for every property
         $this->assertMatchesRegularExpression('/^' . preg_quote(self::PROPERTY, '/') . ' +[0-9,]+ +[0-9,]+ +[0-9,]+ +1 +[0-9,]+ +[0-9hms]+ ago$/m', $output);
@@ -88,7 +88,7 @@ final class PhpunitTest extends TestCase
         [$exit, $output] = $this->reproduce($finding);
 
         $this->assertSame(1, $exit, $output);
-        $this->assertStringContainsString('Failure: LogicException at ' . self::FIXTURE . '/src/Classifier.php:38', $output);
+        $this->assertStringContainsString('Failure: LogicException at src/Classifier.php:38', $output);
         $this->assertStringContainsString('Message: cannot classify', $output);
         $this->assertStringContainsString("Values:\n  \$values = [7, 3, 9];\n", $output);
         $this->assertStringContainsString('"drawnValues": [' . "\n" . '        "$values = [7, 3, 9];"', (string) file_get_contents($finding . '/finding.json'));
@@ -206,7 +206,7 @@ final class PhpunitTest extends TestCase
         [$exit, $output] = $this->rattle(['regress', ...$options]);
 
         $this->assertSame(1, $exit, $output);
-        $this->assertStringContainsString('LogicException at ' . realpath($project) . '/src/Classifier.php:38', $output);
+        $this->assertStringContainsString('LogicException at src/Classifier.php:38', $output);
         $this->assertMatchesRegularExpression('/Replayed [0-9]+ inputs? of 2 properties, 1 failed\./', $output);
 
         // the defect is fixed: the list 7, 3, 9 is classified
@@ -231,7 +231,7 @@ final class PhpunitTest extends TestCase
         [$exit, $output] = $this->rattle(['minimize', '--phpunit', '--configuration', self::FIXTURE . '/phpunit.xml', self::PROPERTY, $input]);
 
         $this->assertSame(0, $exit, $output);
-        $this->assertStringContainsString('Failure: LogicException at ' . self::FIXTURE . '/src/Classifier.php:38', $output);
+        $this->assertStringContainsString('Failure: LogicException at src/Classifier.php:38', $output);
         $this->assertStringContainsString('Minimized from 11 to 7 choices.', $output);
         $this->assertStringEqualsFile($input . '.minimized', "choice-sequence v1\n1\n7\n1\n3\n1\n9\n0\n");
     }
@@ -241,7 +241,7 @@ final class PhpunitTest extends TestCase
         [$exit, $output] = $this->rattle(['fuzz', '--phpunit', '--configuration', self::FIXTURE . '/aborted.xml', '--source', self::FIXTURE . '/src', '--jobs', '1', '--max-executions', '10', '--cache-directory', $this->directory . '/cache', '--findings-directory', $this->directory . '/findings']);
 
         $this->assertSame(2, $exit, $output);
-        $this->assertStringContainsString('PHPUnit aborted an example of the property without checking it: RuntimeException at ' . self::FIXTURE . '/aborted/AbortedTest.php:20: cannot be set up', $output);
+        $this->assertStringContainsString('PHPUnit aborted an example of the property without checking it: RuntimeException at aborted/AbortedTest.php:20: cannot be set up', $output);
         $this->assertFalse(is_dir($this->directory . '/findings'), $output);
     }
 
@@ -250,7 +250,7 @@ final class PhpunitTest extends TestCase
         [$exit, $output] = $this->rattle(['fuzz', '--phpunit', '--configuration', self::FIXTURE . '/characters.xml', '--filter', 'testParsesEveryCommand', '--jobs', '1', '--seed', '1', '--max-executions', '2000', '--stop-on-finding', '--cache-directory', $this->directory . '/cache', '--findings-directory', $this->directory . '/findings']);
 
         $this->assertSame(1, $exit, $output);
-        $this->assertStringContainsString('Finding: LogicException at ' . self::FIXTURE . '/src/CommandParser.php:23', $output);
+        $this->assertStringContainsString('Finding: LogicException at src/CommandParser.php:23', $output);
 
         $findings = glob($this->directory . '/findings/commandparsertest-testparseseverycommand-*/*', GLOB_ONLYDIR);
 
@@ -264,7 +264,7 @@ final class PhpunitTest extends TestCase
         [$exit, $output] = $this->rattle(['fuzz', '--phpunit', '--configuration', self::FIXTURE . '/characters.xml', '--filter', 'NonEmpty', '--jobs', '1', '--seed', '1', '--max-executions', '2000', '--stop-on-finding', '--cache-directory', $this->directory . '/cache', '--findings-directory', $this->directory . '/findings']);
 
         $this->assertSame(1, $exit, $output);
-        $this->assertStringContainsString('Finding: LogicException at ' . self::FIXTURE . '/src/CommandParser.php:23', $output);
+        $this->assertStringContainsString('Finding: LogicException at src/CommandParser.php:23', $output);
     }
 
     public function testFindsAnExampleThatControlsADangerousSinkAndReplaysItWithRegress(): void
@@ -301,12 +301,12 @@ final class PhpunitTest extends TestCase
 
         $this->assertSame(1, $exit, $output);
         $this->assertStringContainsString(sprintf('Versions: %s, %s (php-precision-5), which the corpus and the findings are compared on', $first, $first), $output);
-        $this->assertStringContainsString(sprintf('Finding: Difference between PHP versions: %s: passes; %s (php-precision-5): LengthException at %s/src/Ratio.php:31', $first, $first, self::FIXTURE), $output);
+        $this->assertStringContainsString(sprintf('Finding: Difference between PHP versions: %s: passes; %s (php-precision-5): LengthException at src/Ratio.php:31', $first, $first), $output);
 
         [$exit, $output] = $this->rattle(['regress', '--phpunit', '--configuration', self::FIXTURE . '/versions.xml', '--php', self::FIXTURE . '/../php/php-precision-5', '--cache-directory', $this->directory . '/cache', '--findings-directory', $this->directory . '/findings']);
 
         $this->assertSame(1, $exit, $output);
-        $this->assertStringContainsString(sprintf('Difference between PHP versions: %s: passes; %s (php-precision-5): LengthException at %s/src/Ratio.php:31', $first, $first, self::FIXTURE), $output);
+        $this->assertStringContainsString(sprintf('Difference between PHP versions: %s: passes; %s (php-precision-5): LengthException at src/Ratio.php:31', $first, $first), $output);
     }
 
     public function testReportsATestSuiteWithoutProperties(): void

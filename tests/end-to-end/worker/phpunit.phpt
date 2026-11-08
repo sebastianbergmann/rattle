@@ -35,7 +35,7 @@ SebastianBergmann\Rattle\EndToEnd\Worker\serve(
 --EXPECTF--
 Exit: 2
 properties, maximumNumberOfChoices: 8192, properties: SebastianBergmann\Rattle\Fixture\Phpunit\ClassifierTest::testClassifiesEveryList, SebastianBergmann\Rattle\Fixture\Phpunit\ClassifierTest::testCountsAreNotNegative
-result 1: failed (LogicException at tests/fixtures/phpunit/src/Classifier.php:38)%A
+result 1: failed (LogicException at src/Classifier.php:38)%A
 result 2: passed%A
 result 3: passed%A
 error: An input does not name a property of the test suite

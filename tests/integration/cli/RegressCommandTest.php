@@ -183,7 +183,7 @@ final class RegressCommandTest extends TestCase
         [$exit, $output] = $this->regress(['--phpunit', '--configuration', self::PHPUNIT . '/phpunit.xml']);
 
         $this->assertSame(1, $exit);
-        $this->assertStringContainsString('LogicException at ' . self::PHPUNIT . '/src/Classifier.php:38', $output);
+        $this->assertStringContainsString('LogicException at src/Classifier.php:38', $output);
         $this->assertStringEndsWith("\n\nReplayed 1 input of 2 properties, 1 failed.\n", $output);
     }
 

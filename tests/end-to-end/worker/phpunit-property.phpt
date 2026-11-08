@@ -19,5 +19,5 @@ SebastianBergmann\Rattle\EndToEnd\Worker\serve(
 --EXPECTF--
 Exit: 0
 ready, name: SebastianBergmann\Rattle\Fixture\Phpunit\ClassifierTest::testClassifiesEveryList, maximumNumberOfChoices: 8192
-result 1: failed (LogicException at tests/fixtures/phpunit/src/Classifier.php:38)%A
+result 1: failed (LogicException at src/Classifier.php:38)%A
 result 2: passed%A

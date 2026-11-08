@@ -37,7 +37,7 @@ Sources:  %s/tests/fixtures/phpunit/src
 Corpus:   %s/rattle-phpt-fuzz-phpunit/cache (0 stored inputs)
 Findings: %s/rattle-phpt-fuzz-phpunit/findings (0 known)
 %A
-Finding: LogicException at tests/fixtures/phpunit/src/Classifier.php:38
+Finding: LogicException at src/Classifier.php:38
          SebastianBergmann\Rattle\Fixture\Phpunit\ClassifierTest::testClassifiesEveryList
          %s/rattle-phpt-fuzz-phpunit/findings/classifiertest-testclassifieseverylist-%x/%x
 %A

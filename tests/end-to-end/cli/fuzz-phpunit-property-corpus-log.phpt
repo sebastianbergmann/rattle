@@ -44,7 +44,7 @@ Findings: %s/rattle-phpt-fuzz-phpunit-property-corpus-log/findings (0 known)
 
 Warning: tests/fixtures/engine/corpus/invalid is not a valid choice sequence: %s
 %A
-Finding: LogicException at tests/fixtures/phpunit/src/CommandParser.php:23
+Finding: LogicException at src/CommandParser.php:23
          SebastianBergmann\Rattle\Fixture\Phpunit\CommandParserTest::testParsesEveryCommand
 %A
 1 token that was found in comparisons was written to the dictionary.txt of every property.
