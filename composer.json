@@ -32,7 +32,7 @@
         "nikic/php-parser": "^5.9.0",
         "sebastian/choice-sequence": "^1.0@dev",
         "sebastian/cli-parser": "^5.0.1",
-        "sebastian/version": "^7.0.1"
+        "sebastian/version": "^7.1.0"
     },
     "require-dev": {
         "phpunit/phpunit": "dev-feature/property-based-testing"
