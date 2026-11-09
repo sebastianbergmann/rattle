@@ -197,17 +197,21 @@ jobs:
           git branch "$BRANCH" HEAD
           git checkout "$BRANCH"
 
-      - name: Install PHP 8.7 with extensions
+      # PHP 8.5, which runs rattle, is installed first: on a runner that ships
+      # it, setup-php configures the most recently installed PHP instead of it
+      # when it is switched to after other versions of PHP have been installed
+      - name: Install PHP 8.5 with extensions
         uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
-          php-version: 8.7
+          php-version: 8.5
           extensions: mbstring, pcntl
+          ini-values: memory_limit=-1, zend.assertions=1, error_reporting=-1, display_errors=On, display_startup_errors=On
           coverage: none
           tools: none
 
-      - name: Remember the binary of PHP 8.7
+      - name: Remember the binary of PHP 8.5
         shell: bash
-        run: echo "PHP_8_7=$(readlink -f "$(command -v php)")" >> "$GITHUB_ENV"
+        run: echo "PHP_8_5=$(readlink -f "$(command -v php)")" >> "$GITHUB_ENV"
 
       - name: Install PHP 8.6 with extensions
         uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
@@ -221,20 +225,22 @@ jobs:
         shell: bash
         run: echo "PHP_8_6=$(readlink -f "$(command -v php)")" >> "$GITHUB_ENV"
 
-      # the PHP that is installed last runs rattle
-      - name: Install PHP 8.5 with extensions
+      - name: Install PHP 8.7 with extensions
         uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
-          php-version: 8.5
+          php-version: 8.7
           extensions: mbstring, pcntl
-          ini-values: memory_limit=-1, zend.assertions=1, error_reporting=-1, display_errors=On, display_startup_errors=On
           coverage: none
           tools: none
+
+      - name: Remember the binary of PHP 8.7
+        shell: bash
+        run: echo "PHP_8_7=$(readlink -f "$(command -v php)")" >> "$GITHUB_ENV"
 
       - name: Show the versions of PHP
         shell: bash
         run: |
-          php --version
+          "$PHP_8_5" --version
           "$PHP_8_6" --version
           "$PHP_8_7" --version
 
@@ -252,11 +258,12 @@ jobs:
           restore-keys: ${{ runner.os }}-composer-
 
       - name: Install dependencies with Composer
-        run: ./tools/composer install --no-ansi --no-interaction --no-progress
+        shell: bash
+        run: '"$PHP_8_5" ./tools/composer install --no-ansi --no-interaction --no-progress'
 
       - name: Compare the outcomes of inputs on PHP 8.5, 8.6, and 8.7
         shell: bash
-        run: RATTLE_PHP_BINARIES="$PHP_8_6:$PHP_8_7" vendor/bin/phpunit tests/end-to-end/VersionsTest.php
+        run: RATTLE_PHP_BINARIES="$PHP_8_6:$PHP_8_7" "$PHP_8_5" vendor/bin/phpunit tests/end-to-end/VersionsTest.php
 
   build-phar:
     name: Build PHAR
