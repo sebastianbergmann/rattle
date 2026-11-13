@@ -152,7 +152,7 @@ final class TargetHistoryTest extends TestCase
 
         $this->assertLessThanOrEqual(TargetHistory::LARGEST_NUMBER_OF_POINTS, count($series));
         $this->assertGreaterThan(TargetHistory::LARGEST_NUMBER_OF_POINTS / 2, count($series));
-        $this->assertSame([0.0, 0, 0], $series[0] ?? null);
+        $this->assertSame([0.0, 0, 0], $series[0]);
         $this->assertSame([2500.0, 2500, 2500], $series[count($series) - 1] ?? null);
     }
 }
