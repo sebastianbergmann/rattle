@@ -287,6 +287,7 @@ final readonly class PropertyExample
                     'bytes'              => SpanKind::Bytes,
                     'characters'         => SpanKind::Characters,
                     'element'            => SpanKind::Element,
+                    'requiredelement'    => SpanKind::RequiredElement,
                     'referable'          => SpanKind::Referable,
                     'reference'          => SpanKind::Reference,
                     'consumingreference' => SpanKind::ConsumingReference,

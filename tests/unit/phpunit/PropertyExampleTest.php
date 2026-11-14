@@ -96,6 +96,30 @@ final class PropertyExampleTest extends TestCase
         $this->assertSame(SpanKind::Bytes, $span->kind());
     }
 
+    public function testHasTheSpansOfTheElementsThatTheMinimumSizeOfACollectionRequires(): void
+    {
+        $example = PropertyExample::fromArray(
+            [
+                'choices' => [1, 1, 0, 0],
+                'maxima'  => [1, 1, 1, 1],
+                'spans'   => [
+                    ['start' => 0, 'end' => 4, 'label' => 'list', 'parent' => null, 'kind' => null],
+                    ['start' => 0, 'end' => 1, 'label' => 'element', 'parent' => 0, 'kind' => 'requiredelement'],
+                    ['start' => 1, 'end' => 3, 'label' => 'element', 'parent' => 0, 'kind' => 'element'],
+                    ['start' => 3, 'end' => 4, 'label' => 'element', 'parent' => 0, 'kind' => 'element'],
+                ],
+            ] + self::passed(),
+        );
+
+        $kinds = [];
+
+        foreach ($example->sequence()->spans() as $span) {
+            $kinds[] = $span->kind();
+        }
+
+        $this->assertSame([null, SpanKind::RequiredElement, SpanKind::Element, SpanKind::Element], $kinds);
+    }
+
     public function testHasTheSpansOfAValueThatAStepOfAStateMachineProducesForAPoolAndOfTheReferencesToIt(): void
     {
         $example = PropertyExample::fromArray(
