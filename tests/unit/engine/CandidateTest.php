@@ -15,8 +15,10 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Small;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use SebastianBergmann\ChoiceSequence\Bytes;
 use SebastianBergmann\ChoiceSequence\ChoiceSequence;
 use SebastianBergmann\ChoiceSequence\CodePoints;
+use SebastianBergmann\ChoiceSequence\Label;
 use SebastianBergmann\ChoiceSequence\Span;
 use SebastianBergmann\ChoiceSequence\SpanKind;
 
@@ -170,7 +172,7 @@ final class CandidateTest extends TestCase
     {
         $candidate = Candidate::from(Sequences::ofBytes('ab'));
 
-        $candidate->insert(2, [1, 0x7A], [1, 0xFF], BytesEncoding::labelOfByte(100), 0, SpanKind::Element);
+        $candidate->insert(2, [1, 0x7A], [1, 0xFF], Label::of('element', new Bytes(0, 100)->label()), 0, SpanKind::Element);
 
         $this->assertSame([1, 0x61, 1, 0x7A, 1, 0x62, 0], $candidate->choices());
         $this->assertSame([[0, 7], [0, 2], [4, 6], [6, 7], [2, 4]], $this->bounds($candidate));

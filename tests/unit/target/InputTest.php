@@ -19,6 +19,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Random\Engine\Xoshiro256StarStar;
 use Random\Randomizer;
+use SebastianBergmann\ChoiceSequence\Bytes;
 use SebastianBergmann\ChoiceSequence\ChoiceSequence;
 use SebastianBergmann\ChoiceSequence\ChoiceSource;
 use SebastianBergmann\ChoiceSequence\Label;
@@ -97,10 +98,10 @@ final class InputTest extends TestCase
 
         $this->assertEquals(
             [
-                new Span(0, 5, BytesEncoding::labelOfBytes(10), null, SpanKind::Bytes),
-                new Span(0, 2, BytesEncoding::labelOfByte(10), 0, SpanKind::Element),
-                new Span(2, 4, BytesEncoding::labelOfByte(10), 0, SpanKind::Element),
-                new Span(4, 5, BytesEncoding::labelOfByte(10), 0, SpanKind::Element),
+                new Span(0, 5, new Bytes(0, 10)->label(), null, SpanKind::Bytes),
+                new Span(0, 2, Label::of('element', new Bytes(0, 10)->label()), 0, SpanKind::Element),
+                new Span(2, 4, Label::of('element', new Bytes(0, 10)->label()), 0, SpanKind::Element),
+                new Span(4, 5, Label::of('element', new Bytes(0, 10)->label()), 0, SpanKind::Element),
             ],
             $sequence->spans(),
         );

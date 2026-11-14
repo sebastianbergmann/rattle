@@ -12,11 +12,11 @@ namespace SebastianBergmann\Rattle;
 use function array_is_list;
 use function array_values;
 use function assert;
-use function chr;
 use function count;
 use function sprintf;
 use SebastianBergmann\ChoiceSequence\BernoulliDistribution;
 use SebastianBergmann\ChoiceSequence\BoundaryDistribution;
+use SebastianBergmann\ChoiceSequence\Bytes;
 use SebastianBergmann\ChoiceSequence\ChoiceSource;
 use SebastianBergmann\ChoiceSequence\Label;
 use SebastianBergmann\ChoiceSequence\SpanKind;
@@ -68,35 +68,14 @@ final class Input
             );
         }
 
-        $byteLabel   = BytesEncoding::labelOfByte($maxLength);
-        $anotherByte = BytesEncoding::anotherByte();
-        $byte        = BytesEncoding::byte();
-        $bytes       = '';
-        $length      = 0;
+        $encoding = new Bytes(0, $maxLength);
+        $bytes    = '';
 
         $this->draw(
-            BytesEncoding::labelOfBytes($maxLength),
-            function () use ($maxLength, $byteLabel, $anotherByte, $byte, &$bytes, &$length): void
+            $encoding->label(),
+            function () use ($encoding, &$bytes): void
             {
-                while ($length < $maxLength) {
-                    $this->source->startSpan($byteLabel, SpanKind::Element);
-
-                    if ($this->source->draw(1, $anotherByte) === 0) {
-                        $this->source->endSpan();
-
-                        return;
-                    }
-
-                    $value = $this->source->draw(0xFF, $byte);
-
-                    assert($value <= 0xFF);
-
-                    $bytes .= chr($value);
-
-                    $this->source->endSpan();
-
-                    $length++;
-                }
+                $bytes = $encoding->draw($this->source);
             },
             SpanKind::Bytes,
         );

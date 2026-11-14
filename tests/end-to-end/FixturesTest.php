@@ -112,7 +112,7 @@ final class FixturesTest extends TestCase
             ],
             'the error for the call stack limit for unbounded recursion' => [
                 'recursion',
-                1,
+                7,
                 10000,
                 'Error at %s/recursion/src/TemplateExpander.php:54',
                 'a=$a',

@@ -11,7 +11,10 @@ namespace SebastianBergmann\Rattle;
 
 use function array_filter;
 use function array_values;
+use function ord;
 use Random\Randomizer;
+use SebastianBergmann\ChoiceSequence\Bytes;
+use SebastianBergmann\ChoiceSequence\ChoiceSource;
 use SebastianBergmann\ChoiceSequence\SpanKind;
 
 /**
@@ -51,15 +54,13 @@ final readonly class InsertChoices implements Mutation
 
         // at the boundary between bytes of a string, bytes are inserted
         if ($candidate->isByteOfString($span) && $candidate->isDecided($span)) {
-            $byte = BytesEncoding::byte();
-
             // bytes after the span that ends the string would not be drawn
             if ($candidate->endsCollection($span)) {
                 $position = $span['start'];
             }
 
             for ($i = $randomizer->getInt(1, self::LARGEST_NUMBER_OF_BYTES); $i > 0; $i--) {
-                $candidate->insert($position, [1, $byte->sample($randomizer, 0xFF)], [1, 0xFF], $span['label'], $span['parent'], SpanKind::Element);
+                $candidate->insert($position, [1, $this->randomByte($randomizer)], [1, 0xFF], $span['label'], $span['parent'], SpanKind::Element);
             }
 
             return true;
@@ -88,6 +89,18 @@ final readonly class InsertChoices implements Mutation
         $candidate->insert($position, $this->randomChoices($randomizer));
 
         return true;
+    }
+
+    /**
+     * The value of a byte, drawn as the Bytes of sebastian/choice-sequence
+     * draws the bytes of a binary string, so that the bytes that are inserted
+     * are distributed like the ones of the strings that are generated.
+     *
+     * @return int<0, 255>
+     */
+    private function randomByte(Randomizer $randomizer): int
+    {
+        return ord(new Bytes(1, 1)->draw(ChoiceSource::random($randomizer)));
     }
 
     /**

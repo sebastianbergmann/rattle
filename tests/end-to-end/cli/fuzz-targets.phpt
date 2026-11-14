@@ -20,7 +20,7 @@ var_dump(
             '--bootstrap', $fixtures . '/bootstrap.php',
             '--source', $fixtures . '/magic/src',
             '--source', $fixtures . '/exit/src',
-            '--seed', '1',
+            '--seed', '11',
             '--jobs', '1',
             '--max-executions', '3000',
             '--stop-on-finding',
@@ -36,7 +36,7 @@ exec('rm -rf ' . escapeshellarg($directory));
 rattle %s by Sebastian Bergmann.
 
 Target:   2 fuzz targets (magic-header, exit)
-Seed:     1
+Seed:     11
 Jobs:     1
 Sources:  %s/tests/fixtures/targets/magic/src, %s/tests/fixtures/targets/exit/src
 Corpus:   %s/rattle-phpt-fuzz-targets/cache (0 stored inputs)
