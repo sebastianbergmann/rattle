@@ -70,12 +70,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/sebastianbergmann/choice-sequence.git",
-                "reference": "72af4571d075029b7d5dc13d84fd0ddcdd2eddf7"
+                "reference": "4be13d9aa3c67ef09398061feca474ca13836545"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sebastianbergmann/choice-sequence/zipball/72af4571d075029b7d5dc13d84fd0ddcdd2eddf7",
-                "reference": "72af4571d075029b7d5dc13d84fd0ddcdd2eddf7",
+                "url": "https://api.github.com/repos/sebastianbergmann/choice-sequence/zipball/4be13d9aa3c67ef09398061feca474ca13836545",
+                "reference": "4be13d9aa3c67ef09398061feca474ca13836545",
                 "shasum": ""
             },
             "require": {
@@ -132,8 +132,8 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-11-14T10:54:53+00:00",
-            "published-time": "2026-11-14T11:20:15+00:00"
+            "time": "2026-11-14T13:42:04+00:00",
+            "published-time": "2026-11-14T13:59:07+00:00"
         },
         {
             "name": "sebastian/cli-parser",
@@ -729,12 +729,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/sebastianbergmann/phpunit.git",
-                "reference": "073d74c27179ef249b4906004cb8b47ffc86f25e"
+                "reference": "a2a002ec1d96a587a84f5940c48f0b2d9b22a544"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/073d74c27179ef249b4906004cb8b47ffc86f25e",
-                "reference": "073d74c27179ef249b4906004cb8b47ffc86f25e",
+                "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/a2a002ec1d96a587a84f5940c48f0b2d9b22a544",
+                "reference": "a2a002ec1d96a587a84f5940c48f0b2d9b22a544",
                 "shasum": ""
             },
             "require": {
@@ -814,8 +814,8 @@
                     "type": "other"
                 }
             ],
-            "time": "2026-11-14T11:20:26+00:00",
-            "published-time": "2026-11-14T11:33:05+00:00"
+            "time": "2026-11-14T14:00:48+00:00",
+            "published-time": "2026-11-14T14:03:33+00:00"
         },
         {
             "name": "sebastian/comparator",
