@@ -1,6 +1,7 @@
 <?php
 
 // Start of filter v.0.11.0
+use JetBrains\PhpStorm\Internal\LanguageLevelTypeAware;
 use JetBrains\PhpStorm\Pure;
 
 /**
@@ -149,7 +150,8 @@ function filter_input_array(int $type, array|int $options = FILTER_DEFAULT, bool
  * the variable is not set.
  */
 #[Pure]
-function filter_var_array(array $array, array|int $options = FILTER_DEFAULT, bool $add_empty = true): array|false|null {}
+#[LanguageLevelTypeAware(['8.6' => 'array|false'], default: 'array|false|null')]
+function filter_var_array(array $array, array|int $options = FILTER_DEFAULT, bool $add_empty = true) {}
 
 /**
  * Returns a list of all supported filters
@@ -278,7 +280,7 @@ define('FILTER_VALIDATE_BOOLEAN', 258);
 /**
  * ID of "boolean" filter.
  * @link https://php.net/manual/en/filter.constants.php
- * @link https://php.net/manual/en/filter.filters.validate.php
+ * @link https://php.net/manual/en/filter.constants.php
  * @since 8.0 Using `FILTER_VALIDATE_BOOL` is preferred.
  */
 define('FILTER_VALIDATE_BOOL', 258);

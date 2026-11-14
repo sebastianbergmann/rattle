@@ -2,6 +2,7 @@
 
 use JetBrains\PhpStorm\ArrayShape;
 use JetBrains\PhpStorm\Deprecated;
+use JetBrains\PhpStorm\FileReference;
 use JetBrains\PhpStorm\Internal\LanguageLevelTypeAware;
 use JetBrains\PhpStorm\Internal\PhpStormStubsElementAvailable;
 use JetBrains\PhpStorm\Pure;
@@ -84,7 +85,8 @@ function stream_select(
     ?array &$write,
     ?array &$except,
     ?int $seconds,
-    #[LanguageLevelTypeAware(['8.1' => 'int|null'], default: 'int')] $microseconds = null
+    #[LanguageLevelTypeAware(['8.1' => 'int|null'], default: 'int')] $microseconds = null,
+    #[PhpStormStubsElementAvailable(from: '8.6')] $context = null
 ): int|false {}
 
 /**
@@ -162,6 +164,8 @@ function stream_context_set_option($context, string $wrapper_or_options, string 
 function stream_context_set_option($stream_or_context, array $options) {}
 
 /**
+ * Sets options on the specified context
+ * @link https://php.net/manual/en/function.stream-context-set-options.php
  * @since 8.3
  */
 #[LanguageLevelTypeAware(['8.4' => 'true'], default: 'bool')]
@@ -380,7 +384,7 @@ function stream_socket_server(string $address, &$error_code = null, &$error_mess
 /**
  * Accept a connection on a socket created by {@see stream_socket_server}
  * @link https://php.net/manual/en/function.stream-socket-accept.php
- * @param resource $socket
+ * @param resource $socket The server socket to accept a connection from.
  * @param float|null $timeout [optional] <p>
  * Override the default socket accept timeout. Time should be given in
  * seconds.
@@ -550,7 +554,7 @@ function stream_socket_shutdown($stream, int $mode): bool {}
  * @return array|false an array with the two socket resources on success, or
  * false on failure.
  */
-function stream_socket_pair(int $domain, int $type, int $protocol): array|false {}
+function stream_socket_pair(int $domain, int $type, int $protocol, #[PhpStormStubsElementAvailable(from: '8.6')] $context = null): array|false {}
 
 /**
  * Copies data from one stream to another
@@ -569,7 +573,7 @@ function stream_socket_pair(int $domain, int $type, int $protocol): array|false 
  * </p>
  * @return int|false the total count of bytes copied, or false on failure.
  */
-function stream_copy_to_stream($from, $to, ?int $length = null, int $offset = 0): int|false {}
+function stream_copy_to_stream($from, $to, ?int $length = null, int $offset = 0, #[PhpStormStubsElementAvailable(from: '8.6')] $context = null): int|false {}
 
 /**
  * Reads remainder of a stream into a string
@@ -633,6 +637,8 @@ function stream_supports_lock($stream): bool {}
  * handle is supplied or false on other errors,
  * including end of file.
  * </p>
+ * @throws \ValueError Throws a ValueError if separator or enclosure is not one byte long. Throws a
+ * ValueError if escape is not one byte long or the empty string.
  */
 #[LanguageLevelTypeAware(['8.0' => 'array|false'], default: 'array|false|null')]
 function fgetcsv($stream, ?int $length = null, string $separator = ',', string $enclosure = '"', string $escape = '\\') {}
@@ -655,6 +661,7 @@ function fgetcsv($stream, ?int $length = null, string $separator = ',', string $
  * @param string $escape [optional] <p>
  * The optional escape_char parameter sets the escape character (one character only).
  * </p>
+ * @param string $eol The optional eol parameter sets a custom End of Line sequence.
  * @return int|false the length of the written string or false on failure.
  */
 function fputcsv(
@@ -779,7 +786,7 @@ function set_file_buffer($stream, int $size): int {}
  * <p>Sets blocking or non-blocking mode on a stream.
  * This function works for any stream that supports non-blocking mode (currently, regular files and socket streams)
  * </p>
- * @link https://php.net/manual/en/function.set-socket-blocking.php
+ * @link https://php-legacy-docs.zend.com/manual/php5/en/function.set-socket-blocking
  * @param resource $socket
  * @param bool $mode If mode is FALSE, the given stream will be switched to non-blocking mode, and if TRUE, it will be switched to blocking mode.
  * This affects calls like fgets() and fread() that read from the stream.
@@ -1017,7 +1024,7 @@ function stream_get_transports(): array {}
  * @since 5.2
  */
 #[Pure]
-function stream_is_local($stream): bool {}
+function stream_is_local($stream, #[PhpStormStubsElementAvailable(from: '8.6')] $context = null): bool {}
 
 /**
  * Fetches all the headers sent by the server in response to an HTTP request
@@ -1166,7 +1173,7 @@ function socket_get_status($stream): array {}
  * </p>
  */
 #[Pure(true)]
-function realpath(string $path): string|false {}
+function realpath(#[FileReference] string $path): string|false {}
 
 /**
  * Match filename against a pattern

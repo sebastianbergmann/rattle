@@ -52,6 +52,8 @@ function strtolower(string $string): string {}
  * <p>
  * Returns <b>FALSE</b> if the needle was not found.
  * </p>
+ * @throws \ValueError If offset is greater than the length of haystack, a ValueError will be
+ * thrown.
  */
 #[Pure]
 function strpos(string $haystack, string $needle, int $offset = 0): int|false {}
@@ -78,6 +80,8 @@ function strpos(string $haystack, string $needle, int $offset = 0): int|false {}
  * </p>
  * @return int|false If needle is not found,
  * stripos will return boolean false.
+ * @throws \ValueError If offset is greater than the length of haystack, a ValueError will be
+ * thrown.
  */
 #[Pure]
 function stripos(string $haystack, string $needle, int $offset = 0): int|false {}
@@ -103,6 +107,8 @@ function stripos(string $haystack, string $needle, int $offset = 0): int|false {
  * <p>
  * Returns <b>FALSE</b> if the needle was not found.
  * </p>
+ * @throws \ValueError If offset is greater than the length of haystack, a ValueError will be
+ * thrown.
  */
 #[Pure]
 function strrpos(string $haystack, string $needle, int $offset = 0): int|false {}
@@ -132,6 +138,8 @@ function strrpos(string $haystack, string $needle, int $offset = 0): int|false {
  * </p>
  * <p>
  * If needle is not found, false is returned.
+ * @throws \ValueError If offset is greater than the length of haystack, a ValueError will be
+ * thrown.
  */
 #[Pure]
 function strripos(string $haystack, string $needle, int $offset = 0): int|false {}
@@ -409,6 +417,7 @@ function str_word_count(string $string, int $format = 0, ?string $characters = n
  * string, the entire string is returned as the first
  * (and only) array element.
  * </p>
+ * @throws \ValueError If length is less than 1, a ValueError will be thrown.
  */
 #[Pure]
 #[LanguageLevelTypeAware(["8.0" => "array"], default: "array|false")]
@@ -458,8 +467,8 @@ function strpbrk(
  * 0 if it is greater than str, and 0 if they are equal.
  * If offset is equal to or greater than the length of
  * main_str or length is set and
- * is less than 1, substr_compare prints a warning and returns
- * false.
+ * is less than 1, a ValueError is thrown. Prior to PHP 8.0, a warning was raised and false was
+ * returned instead.
  */
 #[Pure]
 function substr_compare(string $haystack, string $needle, int $offset, ?int $length = null, bool $case_insensitive = false): int {}
@@ -479,6 +488,7 @@ function substr_compare(string $haystack, string $needle, int $offset, ?int $len
  * str2, and 0 if they are equal.
  */
 #[Pure]
+#[Deprecated(since: '8.6')]
 function strcoll(string $string1, string $string2): int {}
 
 /**
@@ -782,7 +792,7 @@ function addcslashes(string $string, string $characters): string {}
  * @return string the modified string.
  */
 #[Pure]
-function rtrim(string $string, string $characters = " \n\r\t\v\0"): string {}
+function rtrim(string $string, #[PhpStormStubsElementAvailable(to: '8.5')] string $characters = " \n\r\t\v\0", #[PhpStormStubsElementAvailable(from: '8.6')] string $characters = " \f\n\r\t\v\0"): string {}
 
 /**
  * Replace all occurrences of the search string with the replacement string
@@ -910,7 +920,7 @@ function chunk_split(string $string, int $length = 76, string $separator = "\r\n
  * @return string The trimmed string.
  */
 #[Pure]
-function trim(string $string, string $characters = " \n\r\t\v\0"): string {}
+function trim(string $string, #[PhpStormStubsElementAvailable(to: '8.5')] string $characters = " \n\r\t\v\0", #[PhpStormStubsElementAvailable(from: '8.6')] string $characters = " \f\n\r\t\v\0"): string {}
 
 /**
  * Strip whitespace (or other characters) from the beginning of a string
@@ -942,7 +952,7 @@ function trim(string $string, string $characters = " \n\r\t\v\0"): string {}
  * (0x0B)), a vertical tab.
  */
 #[Pure]
-function ltrim(string $string, string $characters = " \n\r\t\v\0"): string {}
+function ltrim(string $string, #[PhpStormStubsElementAvailable(to: '8.5')] string $characters = " \n\r\t\v\0", #[PhpStormStubsElementAvailable(from: '8.6')] string $characters = " \f\n\r\t\v\0"): string {}
 
 /**
  * Strip HTML and PHP tags from a string
@@ -1102,7 +1112,8 @@ function join(array|string $separator = "", ?array $array = null): string {}
  * different names on different systems or for providing a fallback
  * for a possibly not available locale.
  * </p>
- * @param string|string[] ...$rest
+ * @param string|string[] ...$rest Optional string parameters to try as locale settings until
+ * success.
  * @return string|false <p>the new current locale, or false if the locale functionality is
  * not implemented on your platform, the specified locale does not exist or
  * the category name is invalid.

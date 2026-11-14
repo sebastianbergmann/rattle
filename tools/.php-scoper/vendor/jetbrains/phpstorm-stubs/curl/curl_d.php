@@ -215,7 +215,7 @@ define('CURLOPT_NETRC', 51);
 /**
  * A bitmask of 1 (301 Moved Permanently), 2 (302 Found) and 4 (303 See Other) if the HTTP POST method should be maintained
  * when <b>CURLOPT_FOLLOWLOCATION</b> is set and a specific type of redirect occurs.
- * @link https://secure.php.net/manual/en/function.curl-setopt.php
+ * @link https://php.net/manual/en/function.curl-setopt.php
  * @since 5.3
  */
 define('CURLOPT_POSTREDIR', 161);
@@ -848,14 +848,14 @@ define('CURLAUTH_NTLM', 8);
  * @link https://www.php.net/manual/en/curl.constants.php
  * @link https://curl.haxx.se/libcurl/c/CURLOPT_HTTPAUTH.html
  */
-define('CURLAUTH_ANY', 4294967279);
+define('CURLAUTH_ANY', 4294967023);
 /**
  * Value for the <b>CURLOPT_HTTPAUTH</b> option.
  * Is an alias for <b>CURLAUTH_DIGEST</b> | <b>CURLAUTH_GSSNEGOTIATE</b> | <b>CURLAUTH_NTLM</b>.
  * @link https://www.php.net/manual/en/curl.constants.php
  * @link https://curl.haxx.se/libcurl/c/CURLOPT_HTTPAUTH.html
  */
-define('CURLAUTH_ANYSAFE', 4294967278);
+define('CURLAUTH_ANYSAFE', 4294967022);
 /**
  * The HTTP authentication method(s) to use for the proxy connection.
  * Use the same bitmasks as described in <b>CURLOPT_HTTPAUTH</b>.
@@ -3168,6 +3168,12 @@ define("CURLPAUSE_SEND_CONT", 0);
  */
 define("CURL_READFUNC_PAUSE", 268435457);
 /**
+ * Read callback for data uploads: return to abort the transfer.
+ * @link https://curl.se/libcurl/c/CURLOPT_READFUNCTION.html
+ * @since 8.6
+ */
+define("CURL_READFUNC_ABORT", 268435456);
+/**
  * Set callback for writing received data.
  * @link https://curl.haxx.se/libcurl/c/CURLOPT_WRITEFUNCTION.html
  */
@@ -4426,3 +4432,20 @@ define('CURLINFO_QUEUE_TIME_T', 6291521);
 define('CURLINFO_USED_PROXY', 2097218);
 define('CURLINFO_CONN_ID', 6291520);
 define('CURLOPT_SSL_SIGNATURE_ALGORITHMS', 10328);
+
+/**
+ * @since 8.6
+ */
+define('CURLOPT_SEEKFUNCTION', 20167);
+/**
+ * @since 8.6
+ */
+define('CURL_SEEKFUNC_OK', 0);
+/**
+ * @since 8.6
+ */
+define('CURL_SEEKFUNC_FAIL', 1);
+/**
+ * @since 8.6
+ */
+define('CURL_SEEKFUNC_CANTSEEK', 2);
