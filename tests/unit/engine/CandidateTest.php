@@ -83,8 +83,102 @@ final class CandidateTest extends TestCase
             array_map(static fn (array $span): bool => $candidate->isDecided($span), $spans),
         );
         $this->assertSame(
+            [false, true, false, false],
+            array_map(static fn (array $span): bool => $candidate->isRequired($span), $spans),
+        );
+        $this->assertSame(
             [false, true, true, true],
             array_map(static fn (array $span): bool => $candidate->isByteOfString($span), $spans),
+        );
+        $this->assertSame(
+            [false, false, false, false],
+            array_map(static fn (array $span): bool => $candidate->isCharacterOfString($span), $spans),
+        );
+    }
+
+    public function testKnowsTheSpansOfTheCharactersThatTheMinimumLengthOfAStringOfUnicodeCharactersRequires(): void
+    {
+        $candidate = Candidate::from(Sequences::ofCharacters('a€', 1));
+        $spans     = array_values($candidate->spans());
+
+        $this->assertSame([CodePoints::index(0x61), 1, CodePoints::index(0x20AC), 0], $candidate->choices());
+        // the string, the character that the minimum length requires, the
+        // character that a choice added, and the span that ends the string
+        $this->assertSame(
+            [false, true, true, true],
+            array_map(static fn (array $span): bool => $candidate->isCharacterOfString($span), $spans),
+        );
+        $this->assertSame(
+            [false, true, false, false],
+            array_map(static fn (array $span): bool => $candidate->isRequired($span), $spans),
+        );
+        $this->assertSame(
+            [false, false, true, true],
+            array_map(static fn (array $span): bool => $candidate->isDecided($span), $spans),
+        );
+        $this->assertSame(
+            [false, false, false, false],
+            array_map(static fn (array $span): bool => $candidate->isByteOfString($span), $spans),
+        );
+    }
+
+    public function testAnElementThatTheMinimumSizeOfACollectionRequiresIsNotDecidedByAChoiceEvenWhenItsFirstChoiceIsAOneWhoseMaximumIsOne(): void
+    {
+        $candidate = Candidate::from(Sequences::ofBooleans([true, true], 1));
+        $spans     = array_values($candidate->spans());
+
+        $this->assertSame([1, 1, 1, 0], $candidate->choices());
+        $this->assertSame([1, 1, 1, 1], array_map($candidate->maximumAt(...), [0, 1, 2, 3]));
+        // the list, the element that the minimum size requires and its
+        // boolean, the element that a choice added and its boolean, and the
+        // span that ends the list
+        $this->assertSame([[0, 4], [0, 1], [0, 1], [1, 3], [2, 3], [3, 4]], $this->bounds($candidate));
+        $this->assertSame(
+            [false, true, false, false, false, false],
+            array_map(static fn (array $span): bool => $candidate->isRequired($span), $spans),
+        );
+        $this->assertSame(
+            [false, false, false, true, false, true],
+            array_map(static fn (array $span): bool => $candidate->isDecided($span), $spans),
+        );
+        $this->assertSame(
+            [false, true, false, true, false, false],
+            array_map(static fn (array $span): bool => $candidate->isElement($span), $spans),
+        );
+        $this->assertSame(
+            [false, false, false, false, false, true],
+            array_map(static fn (array $span): bool => $candidate->endsCollection($span), $spans),
+        );
+        $end = $spans[5] ?? null;
+
+        $this->assertNotNull($end);
+        $this->assertSame(
+            [[0, 1], [1, 3]],
+            array_map(static fn (array $span): array => [$span['start'], $span['end']], $candidate->elementsBesides($end)),
+        );
+    }
+
+    public function testAnElementThatTheMinimumSizeOfACollectionRequiresDoesNotEndItEvenWhenItConsistsOfAZeroWhoseMaximumIsOne(): void
+    {
+        $candidate = Candidate::from(Sequences::ofBooleans([true, false], 2, 2));
+        $spans     = array_values($candidate->spans());
+
+        $this->assertSame([1, 0], $candidate->choices());
+        // the list, and the two elements that the minimum size requires with
+        // their booleans: a list that has its maximum size has no span that
+        // ends it
+        $this->assertSame([[0, 2], [0, 1], [0, 1], [1, 2], [1, 2]], $this->bounds($candidate));
+        $this->assertSame(
+            [false, false, false, false, false],
+            array_map(static fn (array $span): bool => $candidate->endsCollection($span), $spans),
+        );
+        $this->assertSame(
+            [false, true, false, true, false],
+            array_map(static fn (array $span): bool => $candidate->isElement($span), $spans),
+        );
+        $this->assertSame(
+            [false, false, false, false, false],
+            array_map(static fn (array $span): bool => $candidate->isDecided($span), $spans),
         );
     }
 

@@ -20,6 +20,7 @@ use Closure;
 use SebastianBergmann\ChoiceSequence\ChoiceSequence;
 use SebastianBergmann\ChoiceSequence\ChoiceSource;
 use SebastianBergmann\ChoiceSequence\CodePoints;
+use SebastianBergmann\ChoiceSequence\Repetition;
 use SebastianBergmann\ChoiceSequence\SpanKind;
 use SebastianBergmann\ChoiceSequence\UniformDistribution;
 
@@ -87,10 +88,10 @@ final readonly class Sequences
      * Creates the choice sequence of a binary string with a minimum length as
      * PHPUnit's generators draw it: the string is a span of the kind Bytes,
      * the bytes that the minimum length requires are spans of the kind
-     * Element that hold only their value, every other byte is a span of the
-     * kind Element that consists of the choice 1 followed by its value, and
-     * the choice 0 that ends the string is a span of the kind Element as
-     * well, unless the string has the maximum length.
+     * RequiredElement that hold only their value, every other byte is a span
+     * of the kind Element that consists of the choice 1 followed by its
+     * value, and the choice 0 that ends the string is a span of the kind
+     * Element as well, unless the string has the maximum length.
      *
      * @param non-negative-int  $minimumLength
      * @param ?non-negative-int $maximumLength
@@ -116,7 +117,11 @@ final readonly class Sequences
         $source->startSpan('bytes', SpanKind::Bytes);
 
         for ($size = 0; $maximumLength === null || $size < $maximumLength; $size++) {
-            $source->startSpan('byte', SpanKind::Element);
+            if ($size < $minimumLength) {
+                $source->startSpan('byte', SpanKind::RequiredElement);
+            } else {
+                $source->startSpan('byte', SpanKind::Element);
+            }
 
             if ($size >= $minimumLength && $source->draw(1, new UniformDistribution) === 0) {
                 $source->endSpan();
@@ -136,21 +141,28 @@ final readonly class Sequences
     /**
      * Creates the choice sequence of a string of Unicode characters as
      * PHPUnit's generators draw it: the string is a span of the kind
-     * Characters, each character is a span of the kind Element that consists
-     * of the choice 1 followed by the index of its code point in the order of
-     * CodePoints, and the choice 0 that ends the string is a span of the kind
-     * Element as well.
+     * Characters, the characters that the minimum length requires are spans
+     * of the kind RequiredElement that hold only the index of their code
+     * point in the order of CodePoints, every other character is a span of
+     * the kind Element that consists of the choice 1 followed by that index,
+     * and the choice 0 that ends the string is a span of the kind Element as
+     * well.
+     *
+     * @param non-negative-int $minimumLength
      */
-    public static function ofCharacters(string $string): ChoiceSequence
+    public static function ofCharacters(string $string, int $minimumLength = 0): ChoiceSequence
     {
         $choices = [];
 
-        foreach (mb_str_split($string, 1, 'UTF-8') as $character) {
+        foreach (mb_str_split($string, 1, 'UTF-8') as $index => $character) {
             $codePoint = mb_ord($character, 'UTF-8');
 
             assert($codePoint !== false && $codePoint >= 0 && $codePoint <= 0x10FFFF);
 
-            $choices[] = 1;
+            if ($index >= $minimumLength) {
+                $choices[] = 1;
+            }
+
             $choices[] = CodePoints::index($codePoint);
         }
 
@@ -160,17 +172,71 @@ final readonly class Sequences
 
         $source->startSpan('string', SpanKind::Characters);
 
-        do {
-            $source->startSpan('character', SpanKind::Element);
-
-            $another = $source->draw(1, new UniformDistribution) === 1;
-
-            if ($another) {
+        new Repetition('character', $minimumLength, null)->repeat(
+            $source,
+            static function () use ($source): bool
+            {
                 $source->draw(CodePoints::LARGEST_INDEX, new UniformDistribution);
+
+                return true;
+            },
+        );
+
+        $source->endSpan();
+
+        return $source->sequence();
+    }
+
+    /**
+     * Creates the choice sequence of a list of booleans with a minimum size
+     * as PHPUnit's generators draw it: each element that the minimum size
+     * requires is a span of the kind RequiredElement that consists of the
+     * span of the boolean, every other element is a span of the kind Element
+     * that consists of the choice 1 followed by the span of the boolean, and
+     * the choice 0 that ends the list is a span of the kind Element as well,
+     * unless the list has the maximum size. The choice of a boolean has the
+     * maximum 1, as the choice that decides whether there is another element
+     * has.
+     *
+     * @param list<bool>        $values
+     * @param non-negative-int  $minimumSize
+     * @param ?non-negative-int $maximumSize
+     */
+    public static function ofBooleans(array $values, int $minimumSize, ?int $maximumSize = null): ChoiceSequence
+    {
+        $choices = [];
+
+        foreach ($values as $index => $value) {
+            if ($index >= $minimumSize) {
+                $choices[] = 1;
             }
 
-            $source->endSpan();
-        } while ($another);
+            if ($value) {
+                $choices[] = 1;
+            } else {
+                $choices[] = 0;
+            }
+        }
+
+        if ($maximumSize === null || count($values) < $maximumSize) {
+            $choices[] = 0;
+        }
+
+        $source = ChoiceSource::replay(new ChoiceSequence($choices));
+
+        $source->startSpan('list');
+
+        new Repetition('element', $minimumSize, $maximumSize)->repeat(
+            $source,
+            static function () use ($source): bool
+            {
+                $source->startSpan('boolean');
+                $source->draw(1, new UniformDistribution);
+                $source->endSpan();
+
+                return true;
+            },
+        );
 
         $source->endSpan();
 
@@ -194,6 +260,33 @@ final readonly class Sequences
             $values[] = min($choices[$index + 1] ?? 0, 9);
             $index += 2;
         }
+
+        return $values;
+    }
+
+    /**
+     * Returns the list of booleans that the choices are replayed as (see
+     * ofBooleans()).
+     *
+     * @param list<non-negative-int> $choices
+     * @param non-negative-int       $minimumSize
+     *
+     * @return list<bool>
+     */
+    public static function booleansFor(array $choices, int $minimumSize): array
+    {
+        $values = [];
+        $source = ChoiceSource::replay(new ChoiceSequence($choices));
+
+        new Repetition('element', $minimumSize, null)->repeat(
+            $source,
+            static function () use ($source, &$values): bool
+            {
+                $values[] = $source->draw(1, new UniformDistribution) === 1;
+
+                return true;
+            },
+        );
 
         return $values;
     }

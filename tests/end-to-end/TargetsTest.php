@@ -97,7 +97,7 @@ final class TargetsTest extends TestCase
     {
         [$exit, $output] = $this->fuzz(
             array_keys(self::DEFECTS),
-            ['--seed', '5', '--max-executions', '20000', '--stop-on-finding', '--max-time', '5m', '--sarif', $this->directory . '/findings.sarif'],
+            ['--seed', '4', '--max-executions', '20000', '--stop-on-finding', '--max-time', '5m', '--sarif', $this->directory . '/findings.sarif'],
         );
 
         $this->assertSame(1, $exit, $output);

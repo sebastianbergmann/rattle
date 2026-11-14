@@ -186,7 +186,7 @@ final readonly class AddToken implements Mutation
         $elements = [];
 
         foreach ($candidate->spans() as $span) {
-            if ($span['kind'] === SpanKind::Element && $span['parent'] === $element['parent'] && $span['start'] >= $element['start']) {
+            if (($candidate->isDecided($span) || $candidate->isRequired($span)) && $span['parent'] === $element['parent'] && $span['start'] >= $element['start']) {
                 $elements[] = $span;
             }
         }

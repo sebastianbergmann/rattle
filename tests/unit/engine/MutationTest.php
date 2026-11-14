@@ -436,6 +436,38 @@ final class MutationTest extends TestCase
         );
     }
 
+    public function testAddsATokenToAStringOfUnicodeCharactersWithAMinimumLengthByInsertingItAfterTheCharactersThatItRequiresOrByOverwritingThem(): void
+    {
+        $randomizer = $this->randomizer();
+        $seen       = [];
+
+        for ($i = 0; $i < self::ROUNDS; $i++) {
+            $candidate = Candidate::from(Sequences::ofCharacters('ab', 1));
+
+            $this->assertTrue((new AddToken(new Dictionary(['XY'])))->apply($candidate, $randomizer));
+
+            $seen[implode(',', $candidate->choices())] = true;
+        }
+
+        $a = CodePoints::index(0x61);
+        $b = CodePoints::index(0x62);
+        $x = CodePoints::index(0x58);
+        $y = CodePoints::index(0x59);
+
+        // inserted before the character that a choice added or before the
+        // span that ends the string, but never before the character that the
+        // minimum length requires, which is overwritten instead
+        $this->assertEqualsCanonicalizing(
+            [
+                implode(',', [$a, 1, $x, 1, $y, 1, $b, 0]),
+                implode(',', [$a, 1, $b, 1, $x, 1, $y, 0]),
+                implode(',', [$x, 1, $y, 0]),
+                implode(',', [$a, 1, $x, 1, $y, 0]),
+            ],
+            array_keys($seen),
+        );
+    }
+
     public function testInsertsNoBytesBetweenTheBytesThatTheMinimumLengthOfAStringRequires(): void
     {
         $randomizer = $this->randomizer();

@@ -150,76 +150,84 @@ final class Candidate
     }
 
     /**
-     * Whether the span holds one byte of a binary string, [1, b], or ends it,
-     * [0]: a span of the kind SpanKind::Element that is part of a span of the
-     * kind SpanKind::Bytes.
+     * Whether the span holds one byte of a binary string or ends it: a span
+     * that is part of a span of the kind SpanKind::Bytes and is of the kind
+     * SpanKind::RequiredElement, [b], for a byte that the minimum length of
+     * the string requires, or of the kind SpanKind::Element, [1, b] for any
+     * other byte and [0] for the end of the string.
      *
      * @param array{start: non-negative-int, end: non-negative-int, label: non-empty-string, parent: ?non-negative-int, kind: ?SpanKind} $span
      */
     public function isByteOfString(array $span): bool
     {
-        if ($span['kind'] !== SpanKind::Element || $span['parent'] === null) {
-            return false;
-        }
-
-        return ($this->spans[$span['parent']]['kind'] ?? null) === SpanKind::Bytes;
+        return $this->isPartOf($span, SpanKind::Bytes);
     }
 
     /**
-     * Whether the span holds one character of a string of Unicode characters,
-     * [1, c] where c is the index of its code point in the order of
-     * CodePoints, or ends it, [0]: a span of the kind SpanKind::Element that
-     * is part of a span of the kind SpanKind::Characters.
+     * Whether the span holds one character of a string of Unicode characters
+     * or ends it: a span that is part of a span of the kind
+     * SpanKind::Characters and is of the kind SpanKind::RequiredElement, [c],
+     * for a character that the minimum length of the string requires, or of
+     * the kind SpanKind::Element, [1, c] for any other character and [0] for
+     * the end of the string, where c is the index of the code point of the
+     * character in the order of CodePoints.
      *
      * @param array{start: non-negative-int, end: non-negative-int, label: non-empty-string, parent: ?non-negative-int, kind: ?SpanKind} $span
      */
     public function isCharacterOfString(array $span): bool
     {
-        if ($span['kind'] !== SpanKind::Element || $span['parent'] === null) {
-            return false;
-        }
-
-        return ($this->spans[$span['parent']]['kind'] ?? null) === SpanKind::Characters;
+        return $this->isPartOf($span, SpanKind::Characters);
     }
 
     /**
-     * Whether the span is an element of a collection whose first choice
-     * decided whether there is another element: the choice 1 that adds the
-     * element, or the choice 0 that ends the collection, whose maximum is 1.
-     * The elements that the minimum size of a collection requires come first
-     * and are not decided by a choice, and no element can be inserted before
-     * them. For the bytes and characters of a string, this is exact; for an
-     * element of another collection whose first choice has the maximum 1
-     * itself, a boolean, for instance, an element that the minimum size
-     * requires is taken to be decided by a choice.
+     * Whether a choice decided that the collection has the element that the
+     * span holds, or that it has no other element: a span of the kind
+     * SpanKind::Element, which starts with the choice 1 that adds the
+     * element, or consists of the choice 0 that ends the collection. An
+     * element can be inserted before such a span.
      *
      * @param array{start: non-negative-int, end: non-negative-int, label: non-empty-string, parent: ?non-negative-int, kind: ?SpanKind} $span
      */
     public function isDecided(array $span): bool
     {
-        return $span['kind'] === SpanKind::Element &&
-               $span['end'] > $span['start'] &&
-               $this->choiceAt($span['start']) <= 1 &&
-               $this->maximumAt($span['start']) === 1;
+        return $span['kind'] === SpanKind::Element;
     }
 
     /**
-     * Whether the span holds an element of a collection, a span of the kind
-     * SpanKind::Element that does not end the collection. The generators of
-     * PHPUnit mark the elements of lists, arrays, strings, and binary strings
-     * this way, and Input marks the bytes of binary strings.
+     * Whether the span holds an element that the minimum size of its
+     * collection requires: a span of the kind SpanKind::RequiredElement,
+     * which consists of the choices of the element. These elements come
+     * first. No choice decided that the collection has one of them, so that
+     * no element can be inserted before them, even when the first choice of
+     * the element is a 1 whose maximum is 1, as that of a boolean.
+     *
+     * @param array{start: non-negative-int, end: non-negative-int, label: non-empty-string, parent: ?non-negative-int, kind: ?SpanKind} $span
+     */
+    public function isRequired(array $span): bool
+    {
+        return $span['kind'] === SpanKind::RequiredElement;
+    }
+
+    /**
+     * Whether the span holds an element of a collection: a span of the kind
+     * SpanKind::RequiredElement, or a span of the kind SpanKind::Element that
+     * does not end the collection. The generators of PHPUnit mark the
+     * elements of lists, arrays, strings, and binary strings this way, and
+     * Input marks the bytes of binary strings.
      *
      * @param array{start: non-negative-int, end: non-negative-int, label: non-empty-string, parent: ?non-negative-int, kind: ?SpanKind} $span
      */
     public function isElement(array $span): bool
     {
-        return $span['kind'] === SpanKind::Element && !$this->endsCollection($span);
+        return $this->isRequired($span) || ($this->isDecided($span) && !$this->endsCollection($span));
     }
 
     /**
      * Whether the span ends a collection: the last span of the kind
      * SpanKind::Element of its parent that consists of the choice 0 that
-     * decided that there is no other element.
+     * decided that there is no other element. An element that the minimum
+     * size of the collection requires does not end it, even when it consists
+     * of a 0 whose maximum is 1.
      *
      * @param array{start: non-negative-int, end: non-negative-int, label: non-empty-string, parent: ?non-negative-int, kind: ?SpanKind} $span
      */
@@ -432,5 +440,20 @@ final class Candidate
         if ($length > 0) {
             $this->delete($position, $length);
         }
+    }
+
+    /**
+     * Whether the span is one of the spans that a collection of the given
+     * kind consists of.
+     *
+     * @param array{start: non-negative-int, end: non-negative-int, label: non-empty-string, parent: ?non-negative-int, kind: ?SpanKind} $span
+     */
+    private function isPartOf(array $span, SpanKind $collection): bool
+    {
+        if ((!$this->isDecided($span) && !$this->isRequired($span)) || $span['parent'] === null) {
+            return false;
+        }
+
+        return ($this->spans[$span['parent']]['kind'] ?? null) === $collection;
     }
 }
