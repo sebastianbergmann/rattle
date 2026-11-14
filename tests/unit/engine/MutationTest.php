@@ -17,6 +17,7 @@ use function array_slice;
 use function array_values;
 use function count;
 use function implode;
+use function in_array;
 use function str_contains;
 use function strlen;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -28,6 +29,7 @@ use Random\Randomizer;
 use SebastianBergmann\ChoiceSequence\ChoiceSequence;
 use SebastianBergmann\ChoiceSequence\CodePoints;
 use SebastianBergmann\ChoiceSequence\Span;
+use SebastianBergmann\ChoiceSequence\SpanKind;
 
 #[CoversClass(RandomChoice::class)]
 #[CoversClass(BoundaryChoice::class)]
@@ -228,6 +230,118 @@ final class MutationTest extends TestCase
             ['list', 'element', 'list'],
             array_map(static fn (array $span): string => $span['label'], array_values($candidate->spans())),
         );
+    }
+
+    public function testDuplicatesTheBytesThatTheMinimumLengthOfAStringRequiresAsBytesThatAChoiceAddedBehindTheLastOfThem(): void
+    {
+        $randomizer = $this->randomizer();
+        $seen       = [];
+
+        for ($i = 0; $i < self::ROUNDS; $i++) {
+            $candidate = Candidate::from(Sequences::ofBytesWithMinimumLength('abc', 2));
+
+            $this->assertSame([0x61, 0x62, 1, 0x63, 0], $candidate->choices());
+            $this->assertTrue((new DuplicateSpan)->apply($candidate, $randomizer));
+
+            $seen[implode(',', $candidate->choices())] = true;
+        }
+
+        $this->assertEqualsCanonicalizing(
+            [
+                // the first byte that the minimum length requires
+                '97,98,1,97,1,99,0',
+                // both bytes that the minimum length requires
+                '97,98,1,97,1,98,1,99,0',
+                // both bytes that the minimum length requires and the byte
+                // that a choice added
+                '97,98,1,99,1,97,1,98,1,99,0',
+                // the second byte that the minimum length requires
+                '97,98,1,98,1,99,0',
+                // the second byte that the minimum length requires and the
+                // byte that a choice added
+                '97,98,1,99,1,98,1,99,0',
+                // the byte that a choice added
+                '97,98,1,99,1,99,0',
+                // the whole string
+                '97,98,1,99,0,97,98,1,99,0',
+            ],
+            array_keys($seen),
+        );
+    }
+
+    public function testDuplicatesTheElementsThatTheMinimumSizeOfACollectionRequiresAsElementsThatAChoiceAddedBehindTheLastOfThem(): void
+    {
+        $randomizer = $this->randomizer();
+        $seen       = [];
+
+        for ($i = 0; $i < self::ROUNDS; $i++) {
+            // the first choice of the first element that the minimum size
+            // requires is the 1 of its boolean, whose maximum is 1, as that
+            // of the choice that adds an element, and the second element
+            // consists of the 0 of its boolean, as the span that ends a
+            // collection consists of a 0
+            $candidate = Candidate::from(Sequences::ofBooleans([true, false], 2));
+
+            $this->assertSame([1, 0, 0], $candidate->choices());
+            $this->assertTrue((new DuplicateSpan)->apply($candidate, $randomizer));
+
+            $choices = implode(',', $candidate->choices());
+            $spans   = $candidate->spans();
+            $copy    = array_pop($spans);
+
+            $this->assertNotNull($copy);
+
+            $seen[$choices] = true;
+
+            // the copy of an element is an element that a choice added
+            $this->assertSame(in_array($choices, ['1,0,1,1,0', '1,0,1,1,1,0,0', '1,0,1,0,0'], true), $candidate->isDecided($copy));
+            $this->assertFalse($candidate->isRequired($copy));
+        }
+
+        $this->assertEqualsCanonicalizing(
+            [
+                // the first element
+                '1,0,1,1,0',
+                // both elements
+                '1,0,1,1,1,0,0',
+                // the second element
+                '1,0,1,0,0',
+                // the whole list
+                '1,0,0,1,0,0',
+                // the boolean of the first element, which the choices of the
+                // second element are read as
+                '1,1,0,0',
+                // the boolean of the second element
+                '1,0,0,0',
+            ],
+            array_keys($seen),
+        );
+    }
+
+    public function testDoesNotDuplicateTheElementsOfACollectionThatHasItsMaximumSizeAndWhoseMinimumSizeRequiresAllOfItsElements(): void
+    {
+        $randomizer = $this->randomizer();
+
+        for ($i = 0; $i < self::ROUNDS; $i++) {
+            $candidate = Candidate::from(Sequences::ofBytesWithMinimumLength('ab', 2, 2));
+
+            // only the whole string is duplicated
+            $this->assertTrue((new DuplicateSpan)->apply($candidate, $randomizer));
+            $this->assertSame([0x61, 0x62, 0x61, 0x62], $candidate->choices());
+            $this->assertSame([[0, 2], [0, 1], [1, 2], [2, 4]], $this->bounds($candidate));
+        }
+
+        // without the span of the string, there is nothing to duplicate
+        $candidate = Candidate::from(
+            new ChoiceSequence(
+                [0x61, 0x62],
+                [new Span(0, 1, 'byte', null, SpanKind::RequiredElement), new Span(1, 2, 'byte', null, SpanKind::RequiredElement)],
+                [0xFF, 0xFF],
+            ),
+        );
+
+        $this->assertFalse((new DuplicateSpan)->apply($candidate, $randomizer));
+        $this->assertSame([0x61, 0x62], $candidate->choices());
     }
 
     public function testInsertsACopyOfAnElementAtTheBoundaryBetweenElementsOfACollection(): void
