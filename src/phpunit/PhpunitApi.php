@@ -14,6 +14,7 @@ use function class_exists;
 use function is_array;
 use function sprintf;
 use Closure;
+use PHPUnit\Runner\PropertyBased\AfterLastTestMethodFailedException;
 use PHPUnit\Runner\PropertyBased\PropertyRunner;
 use Throwable;
 
@@ -29,9 +30,17 @@ use Throwable;
  *
  * @internal This class is not covered by the backward compatibility promise for sebastian/rattle
  */
-final readonly class PhpunitApi
+final class PhpunitApi
 {
-    private PropertyRunner $runner;
+    private readonly PropertyRunner $runner;
+
+    /**
+     * What the hook methods that are called after the last test of a test
+     * class raised, and that was not taken yet.
+     *
+     * @var list<string>
+     */
+    private array $failuresOfHookMethods = [];
 
     /**
      * Loads the configuration file of PHPUnit and its bootstrap script, and
@@ -101,7 +110,7 @@ final readonly class PhpunitApi
      */
     public function replay(string $id, array $choices, int $timeLimit, bool $exportValues): PropertyExample
     {
-        return PropertyExample::fromArray($this->call(fn (): mixed => $this->runner->replay($id, $choices, $timeLimit, $exportValues)));
+        return PropertyExample::fromArray($this->example(fn (): mixed => $this->runner->replay($id, $choices, $timeLimit, $exportValues)));
     }
 
     /**
@@ -114,7 +123,68 @@ final readonly class PhpunitApi
      */
     public function generate(string $id, int $seed, int $timeLimit, bool $exportValues): PropertyExample
     {
-        return PropertyExample::fromArray($this->call(fn (): mixed => $this->runner->generate($id, $seed, $timeLimit, $exportValues)));
+        return PropertyExample::fromArray($this->example(fn (): mixed => $this->runner->generate($id, $seed, $timeLimit, $exportValues)));
+    }
+
+    /**
+     * Lets PHPUnit call the hook methods of the test class of the example
+     * that was run last that are called after its last test, which it
+     * otherwise calls before it runs an example of a property of another test
+     * class, or when the process ends.
+     *
+     * @throws WorkerException
+     */
+    public function finish(): void
+    {
+        try {
+            $this->runner->finish();
+        } catch (AfterLastTestMethodFailedException $e) {
+            $this->failuresOfHookMethods[] = $e->getMessage();
+        } catch (Throwable $t) {
+            throw new WorkerException(sprintf('PHPUnit cannot finish the test class: %s', $t->getMessage()), 0, $t);
+        }
+    }
+
+    /**
+     * What the hook methods that are called after the last test of a test
+     * class, tearDownAfterClass(), for instance, raised since this method was
+     * called last. Such a failure does not belong to an example: PHPUnit
+     * calls these methods after the last example of a test class, when an
+     * example of a property of another test class is to be run or when the
+     * test class is finished.
+     *
+     * @return list<string>
+     */
+    public function takeFailuresOfHookMethods(): array
+    {
+        $failures = $this->failuresOfHookMethods;
+
+        $this->failuresOfHookMethods = [];
+
+        return $failures;
+    }
+
+    /**
+     * PHPUnit raises an exception rather than running the example when a
+     * hook method of the test class of the example that was run before
+     * raised an exception after its last test. That test class is finished
+     * then, so the example is run when it is asked for again.
+     *
+     * @param Closure(): mixed $example
+     *
+     * @throws WorkerException
+     */
+    private function example(Closure $example): mixed
+    {
+        try {
+            return $example();
+        } catch (AfterLastTestMethodFailedException $e) {
+            $this->failuresOfHookMethods[] = $e->getMessage();
+        } catch (Throwable $t) {
+            throw new WorkerException(sprintf('PHPUnit cannot run the example: %s', $t->getMessage()), 0, $t);
+        }
+
+        return $this->call($example);
     }
 
     /**

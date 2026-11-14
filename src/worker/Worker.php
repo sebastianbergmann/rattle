@@ -78,6 +78,7 @@ final class Worker
     private readonly BlockMaps $blockMaps;
     private ?InputRunner $runner = null;
     private ?Location $location  = null;
+    private ?PhpunitApi $phpunit = null;
 
     /**
      * Whether the input that is executed asks for its coverage.
@@ -134,7 +135,9 @@ final class Worker
             if ($phpunit !== null) {
                 $api        = PhpunitApi::boot($phpunit->configurationFile(), $phpunit->filter());
                 $properties = $api->properties();
-                $name       = $this->configuration->target();
+
+                $this->phpunit = $api;
+                $name          = $this->configuration->target();
 
                 // a worker without a target lists the properties and then
                 // runs the examples of all of them, with a runner for each
@@ -377,6 +380,8 @@ final class Worker
                 $message = $this->stream->read();
 
                 if ($message === null || ($message['type'] ?? null) === 'shutdown') {
+                    $this->finishTestClass();
+
                     return 0;
                 }
 
@@ -437,6 +442,8 @@ final class Worker
                     $this->stream->write(['type' => 'result', 'result' => $result, 'retire' => $retire]);
                 }
             } catch (ProtocolException|WorkerException $e) {
+                $this->reportFailuresOfHookMethods();
+
                 $this->stream->write(['type' => 'error', 'message' => $e->getMessage()]);
 
                 return 2;
@@ -451,8 +458,54 @@ final class Worker
             }
 
             if ($retire) {
+                try {
+                    $this->finishTestClass();
+                } catch (WorkerException $e) {
+                    $this->stream->write(['type' => 'error', 'message' => $e->getMessage()]);
+
+                    return 2;
+                }
+
                 return 0;
             }
+
+            $this->reportFailuresOfHookMethods();
+        }
+    }
+
+    /**
+     * The hook methods of the test class of the example of a property that
+     * was run last that are called after its last test are called before
+     * the worker exits, rather than when its process ends, so that what
+     * they raise is reported like what the ones of the other test classes
+     * raised.
+     *
+     * @throws WorkerException
+     */
+    private function finishTestClass(): void
+    {
+        if ($this->phpunit === null) {
+            return;
+        }
+
+        $this->phpunit->finish();
+
+        $this->reportFailuresOfHookMethods();
+    }
+
+    /**
+     * What a hook method that is called after the last test of a test class
+     * raised does not belong to an input, so it is written to the standard
+     * error stream, like the files that could not be instrumented.
+     */
+    private function reportFailuresOfHookMethods(): void
+    {
+        if ($this->phpunit === null) {
+            return;
+        }
+
+        foreach ($this->phpunit->takeFailuresOfHookMethods() as $failure) {
+            fwrite(STDERR, $failure . "\n");
         }
     }
 
