@@ -17,6 +17,11 @@ use Random\Randomizer;
  * and the same parent, for instance two elements of a collection. The span
  * that ends a collection is not swapped.
  *
+ * When an element that the minimum size of a collection requires (see
+ * SpanKind::RequiredElement) is swapped with an element that a choice added
+ * (see SpanKind::Element), the choice 1 that added the latter stays where it
+ * is, and the choices of the two elements are swapped.
+ *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
  * @internal This class is not covered by the backward compatibility promise for sebastian/rattle
@@ -53,6 +58,13 @@ final readonly class SwapSpans implements Mutation
         }
 
         [$first, $second] = RandomElement::of($randomizer, $pairs);
+
+        // the elements that the minimum size of a collection requires come
+        // first, and no choice added them: the choice that added the element
+        // that such an element is swapped with is not swapped
+        if ($candidate->isRequired($first) && $candidate->isDecided($second)) {
+            $second['start']++;
+        }
 
         $firstSlice  = $candidate->slice($first['start'], $first['end']);
         $secondSlice = $candidate->slice($second['start'], $second['end']);

@@ -202,6 +202,77 @@ final class MutationTest extends TestCase
         }
     }
 
+    public function testSwapsAByteThatTheMinimumLengthOfAStringRequiresWithAByteThatAChoiceAddedWithoutTheChoiceThatAddedIt(): void
+    {
+        $randomizer = $this->randomizer();
+        $seen       = [];
+
+        for ($i = 0; $i < self::ROUNDS; $i++) {
+            $candidate = Candidate::from(Sequences::ofBytesWithMinimumLength('abc', 1));
+
+            $this->assertSame([0x61, 1, 0x62, 1, 0x63, 0], $candidate->choices());
+            $this->assertTrue((new SwapSpans)->apply($candidate, $randomizer));
+            $this->assertSame([[0, 6], [0, 1], [1, 3], [3, 5], [5, 6]], $this->bounds($candidate));
+
+            $seen[implode(',', $candidate->choices())] = true;
+        }
+
+        $this->assertEqualsCanonicalizing(
+            [
+                // the byte that the minimum length requires and the first
+                // byte that a choice added
+                '98,1,97,1,99,0',
+                // the byte that the minimum length requires and the second
+                // byte that a choice added
+                '99,1,98,1,97,0',
+                // the two bytes that a choice added
+                '97,1,99,1,98,0',
+            ],
+            array_keys($seen),
+        );
+    }
+
+    public function testSwapsAnElementThatTheMinimumSizeOfACollectionRequiresWithAnElementThatAChoiceAddedWithoutTheChoiceThatAddedIt(): void
+    {
+        $randomizer = $this->randomizer();
+        $seen       = [];
+
+        for ($i = 0; $i < self::ROUNDS; $i++) {
+            // the first choice of the first element that the minimum size
+            // requires is the 1 of its boolean, whose maximum is 1, as that
+            // of the choice that adds an element
+            $candidate = Candidate::from(Sequences::ofBooleans([true, false, false, true], 2));
+
+            $this->assertSame([1, 0, 1, 0, 1, 1, 0], $candidate->choices());
+            $this->assertTrue((new SwapSpans)->apply($candidate, $randomizer));
+
+            // the choices that added the third and the fourth element, and
+            // the choice that ends the list, stay where they are
+            $this->assertSame(7, $candidate->length());
+            $this->assertSame([1, 1, 0], [$candidate->choiceAt(2), $candidate->choiceAt(4), $candidate->choiceAt(6)]);
+
+            $seen[implode(',', array_map(static fn (bool $value): string => $value ? 'true' : 'false', Sequences::booleansFor($candidate->choices(), 2)))] = true;
+        }
+
+        $this->assertEqualsCanonicalizing(
+            [
+                // the two elements that the minimum size requires
+                'false,true,false,true',
+                // the first element and the third one
+                'false,false,true,true',
+                // the first element and the fourth one, which have the same
+                // value, and the second element and the third one, which have
+                // the same value
+                'true,false,false,true',
+                // the second element and the fourth one
+                'true,true,false,false',
+                // the two elements that a choice added
+                'true,false,true,false',
+            ],
+            array_keys($seen),
+        );
+    }
+
     public function testDuplicatesTheElementsOfACollectionButNotTheSpanThatEndsIt(): void
     {
         $randomizer = $this->randomizer();
