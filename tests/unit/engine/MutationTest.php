@@ -147,6 +147,102 @@ final class MutationTest extends TestCase
         }
     }
 
+    public function testDeletesAByteThatTheMinimumLengthOfAStringRequiresTogetherWithTheChoiceThatAddedTheFirstOtherByte(): void
+    {
+        $randomizer = $this->randomizer();
+        $seen       = [];
+
+        for ($i = 0; $i < self::ROUNDS; $i++) {
+            $candidate = Candidate::from(Sequences::ofBytesWithMinimumLength('abc', 2));
+
+            $this->assertSame([0x61, 0x62, 1, 0x63, 0], $candidate->choices());
+            $this->assertTrue((new DeleteSpan)->apply($candidate, $randomizer));
+
+            $seen[implode(',', $candidate->choices())] = true;
+        }
+
+        $this->assertEqualsCanonicalizing(
+            [
+                // the first byte that the minimum length requires: the byte
+                // that a choice added takes the place of the second one
+                '98,99,0',
+                // the second byte that the minimum length requires
+                '97,99,0',
+                // the byte that a choice added
+                '97,98,0',
+                // the span that ends the string
+                '97,98,1,99',
+                // the whole string
+                '',
+            ],
+            array_keys($seen),
+        );
+    }
+
+    public function testDeletesAnElementThatTheMinimumSizeOfACollectionRequiresTogetherWithTheChoiceThatAddedTheFirstOtherElement(): void
+    {
+        $randomizer = $this->randomizer();
+        $seen       = [];
+
+        for ($i = 0; $i < self::ROUNDS; $i++) {
+            // the first choice of the first element that the minimum size
+            // requires is the 1 of its boolean, whose maximum is 1, as that
+            // of the choice that adds an element
+            $candidate = Candidate::from(Sequences::ofBooleans([true, false, true], 2));
+
+            $this->assertSame([1, 0, 1, 1, 0], $candidate->choices());
+            $this->assertTrue((new DeleteSpan)->apply($candidate, $randomizer));
+
+            $seen[implode(',', $candidate->choices())] = true;
+        }
+
+        $this->assertEqualsCanonicalizing(
+            [
+                // the first element that the minimum size requires: the
+                // element that a choice added takes the place of the second
+                // one
+                '0,1,0',
+                // the second element that the minimum size requires
+                '1,1,0',
+                // the element that a choice added
+                '1,0,0',
+                // the span that ends the list
+                '1,0,1,1',
+                // the whole list
+                '',
+                // the boolean of the first element, of the second element,
+                // and of the element that a choice added
+                '0,1,1,0',
+                '1,1,1,0',
+                '1,0,1,0',
+            ],
+            array_keys($seen),
+        );
+    }
+
+    public function testDoesNotDeleteAnElementThatTheMinimumSizeOfACollectionRequiresWhenNoChoiceAddedAnElementToTheCollection(): void
+    {
+        $randomizer = $this->randomizer();
+        $seen       = [];
+
+        for ($i = 0; $i < self::ROUNDS; $i++) {
+            $candidate = Candidate::from(Sequences::ofBytesWithMinimumLength('ab', 2));
+
+            $this->assertSame([0x61, 0x62, 0], $candidate->choices());
+
+            if ((new DeleteSpan)->apply($candidate, $randomizer)) {
+                $seen[implode(',', $candidate->choices())] = true;
+            } else {
+                $this->assertSame([0x61, 0x62, 0], $candidate->choices());
+
+                $seen['not applied'] = true;
+            }
+        }
+
+        // the span that ends the string, or the whole string, is deleted
+        $this->assertEqualsCanonicalizing(['97,98', '', 'not applied'], array_keys($seen));
+    }
+
     public function testDuplicatesASpan(): void
     {
         $randomizer = $this->randomizer();

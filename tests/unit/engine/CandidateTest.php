@@ -302,6 +302,65 @@ final class CandidateTest extends TestCase
         $this->assertSame([[1, 2]], $this->bounds($candidate));
     }
 
+    public function testDeletesAnElementThatTheMinimumSizeOfACollectionRequiresTogetherWithTheChoiceThatAddedTheFirstOtherElement(): void
+    {
+        $candidate = Candidate::from(Sequences::ofBooleans([true, false, true, false], 2));
+        $spans     = array_values($candidate->spans());
+        $first     = $spans[1] ?? null;
+
+        // the list, the two elements that the minimum size requires and
+        // their booleans, the two elements that a choice added and their
+        // booleans, and the span that ends the list
+        $this->assertSame([1, 0, 1, 1, 1, 0, 0], $candidate->choices());
+        $this->assertSame([[0, 7], [0, 1], [0, 1], [1, 2], [1, 2], [2, 4], [3, 4], [4, 6], [5, 6], [6, 7]], $this->bounds($candidate));
+        $this->assertNotNull($first);
+        $this->assertTrue($candidate->deleteRequiredElement($first));
+
+        // the first element that a choice added is the second of the two
+        // elements that the minimum size requires
+        $this->assertSame([0, 1, 1, 0, 0], $candidate->choices());
+        $this->assertSame([[0, 5], [0, 1], [0, 1], [1, 2], [1, 2], [2, 4], [3, 4], [4, 5]], $this->bounds($candidate));
+        $this->assertSame(
+            [false, true, false, true, false, false, false, false],
+            array_map(static fn (array $span): bool => $candidate->isRequired($span), array_values($candidate->spans())),
+        );
+        $this->assertSame(
+            [false, false, false, false, false, true, false, true],
+            array_map(static fn (array $span): bool => $candidate->isDecided($span), array_values($candidate->spans())),
+        );
+    }
+
+    public function testDoesNotDeleteAnElementThatTheMinimumSizeOfACollectionRequiresWhenNoChoiceAddedAnElementToTheCollection(): void
+    {
+        // a list that ends after the elements that its minimum size requires
+        $candidate = Candidate::from(Sequences::ofBooleans([true, false], 2));
+        $first     = array_values($candidate->spans())[1] ?? null;
+
+        $this->assertNotNull($first);
+        $this->assertFalse($candidate->deleteRequiredElement($first));
+        $this->assertSame([1, 0, 0], $candidate->choices());
+
+        // a list that has its maximum size
+        $candidate = Candidate::from(Sequences::ofBooleans([true, false], 2, 2));
+        $first     = array_values($candidate->spans())[1] ?? null;
+
+        $this->assertNotNull($first);
+        $this->assertFalse($candidate->deleteRequiredElement($first));
+        $this->assertSame([1, 0], $candidate->choices());
+
+        // a list whose choice that added the second element was set to 0
+        $candidate = Candidate::from(Sequences::ofBooleans([true, true, true], 1));
+        $first     = array_values($candidate->spans())[1] ?? null;
+
+        $this->assertNotNull($first);
+        $this->assertSame([1, 1, 1, 1, 1, 0], $candidate->choices());
+
+        $candidate->set(1, 0);
+
+        $this->assertFalse($candidate->deleteRequiredElement($first));
+        $this->assertSame([1, 0, 1, 1, 1, 0], $candidate->choices());
+    }
+
     public function testInsertingChoicesMovesSpansThatStartAtThePositionAndExtendsSpansThatContainIt(): void
     {
         $candidate = Candidate::from(Sequences::ofBytes('ab'));

@@ -345,6 +345,56 @@ final class Candidate
     }
 
     /**
+     * Deletes an element that the minimum size of its collection requires
+     * (see SpanKind::RequiredElement). No choice added such an element, so
+     * that deleting the choices of its span alone does not delete it: the
+     * choices after the span are read as the element instead. The choices of
+     * the span are deleted together with the choice 1 that added the first
+     * element after the ones that the minimum size requires, which takes the
+     * place of the last of them and whose span is of the kind
+     * SpanKind::RequiredElement from then on.
+     *
+     * Returns false, and deletes nothing, when no choice added an element to
+     * the collection: it has as many elements as its minimum size requires.
+     * This is also the case when a mutation that was applied before has set
+     * the choice that added the first of these elements to 0.
+     *
+     * @param array{start: non-negative-int, end: non-negative-int, label: non-empty-string, parent: ?non-negative-int, kind: ?SpanKind} $span
+     */
+    public function deleteRequiredElement(array $span): bool
+    {
+        $first        = null;
+        $indexOfFirst = null;
+
+        foreach ($this->spans() as $index => $other) {
+            if ($other['parent'] === $span['parent'] &&
+                $this->isDecided($other) &&
+                ($first === null || $other['start'] < $first['start'])) {
+                $first        = $other;
+                $indexOfFirst = $index;
+            }
+        }
+
+        // the first choice of the span that ends the collection is a 0
+        if ($first === null || $indexOfFirst === null || $this->choiceAt($first['start']) !== 1) {
+            return false;
+        }
+
+        $this->spans[$indexOfFirst]['kind'] = SpanKind::RequiredElement;
+
+        $length = $span['end'] - $span['start'];
+
+        assert($length >= 0);
+
+        // the choice that added the element comes after the span, and is
+        // deleted first, so that the span stays where it is
+        $this->delete($first['start'], 1);
+        $this->delete($span['start'], $length);
+
+        return true;
+    }
+
+    /**
      * Inserts choices before the choice at the position. Spans that start at
      * the position are moved behind the inserted choices, spans that end at
      * the position are not extended. When a label is given, the inserted
