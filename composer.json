@@ -20,6 +20,7 @@
         "issues": "https://github.com/sebastianbergmann/rattle/issues",
         "security": "https://github.com/sebastianbergmann/rattle/security/policy"
     },
+    "minimum-stability": "dev",
     "prefer-stable": true,
     "require": {
         "php": ">=8.5",
