@@ -70,19 +70,19 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/sebastianbergmann/choice-sequence.git",
-                "reference": "627fffc1fbfa1f071cab8cd30a3b797900a2dab6"
+                "reference": "b208f85c3864d1f5ff0c3247b51386001d83d51a"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sebastianbergmann/choice-sequence/zipball/627fffc1fbfa1f071cab8cd30a3b797900a2dab6",
-                "reference": "627fffc1fbfa1f071cab8cd30a3b797900a2dab6",
+                "url": "https://api.github.com/repos/sebastianbergmann/choice-sequence/zipball/b208f85c3864d1f5ff0c3247b51386001d83d51a",
+                "reference": "b208f85c3864d1f5ff0c3247b51386001d83d51a",
                 "shasum": ""
             },
             "require": {
                 "php": ">=8.5"
             },
             "require-dev": {
-                "phpunit/phpunit": "^13.4.6"
+                "phpunit/phpunit": "^13.4.7"
             },
             "default-branch": true,
             "type": "library",
@@ -132,8 +132,8 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-11-06T23:48:54+00:00",
-            "published-time": "2026-11-06T23:48:59+00:00"
+            "time": "2026-11-14T09:40:37+00:00",
+            "published-time": "2026-11-14T10:11:11+00:00"
         },
         {
             "name": "sebastian/cli-parser",
