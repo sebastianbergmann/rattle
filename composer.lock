@@ -729,12 +729,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/sebastianbergmann/phpunit.git",
-                "reference": "e9a155a7a14998f5945cd076f38246217719d45f"
+                "reference": "073d74c27179ef249b4906004cb8b47ffc86f25e"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/e9a155a7a14998f5945cd076f38246217719d45f",
-                "reference": "e9a155a7a14998f5945cd076f38246217719d45f",
+                "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/073d74c27179ef249b4906004cb8b47ffc86f25e",
+                "reference": "073d74c27179ef249b4906004cb8b47ffc86f25e",
                 "shasum": ""
             },
             "require": {
@@ -814,8 +814,8 @@
                     "type": "other"
                 }
             ],
-            "time": "2026-11-14T06:52:13+00:00",
-            "published-time": "2026-11-14T06:52:56+00:00"
+            "time": "2026-11-14T11:20:26+00:00",
+            "published-time": "2026-11-14T11:33:05+00:00"
         },
         {
             "name": "sebastian/comparator",
