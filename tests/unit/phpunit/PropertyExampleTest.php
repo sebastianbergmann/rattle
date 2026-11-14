@@ -96,6 +96,32 @@ final class PropertyExampleTest extends TestCase
         $this->assertSame(SpanKind::Bytes, $span->kind());
     }
 
+    public function testHasTheSpansOfAValueThatAStepOfAStateMachineProducesForAPoolAndOfTheReferencesToIt(): void
+    {
+        $example = PropertyExample::fromArray(
+            [
+                'choices' => [1, 0, 0, 1, 1, 0, 1, 2, 0],
+                'maxima'  => [1, 2, 0, 1, 2, 0, 1, 2, 0],
+                'spans'   => [
+                    ['start' => 0, 'end' => 3, 'label' => 'step', 'parent' => null, 'kind' => null],
+                    ['start' => 2, 'end' => 3, 'label' => 'pool', 'parent' => 0, 'kind' => 'referable'],
+                    ['start' => 3, 'end' => 6, 'label' => 'step', 'parent' => null, 'kind' => null],
+                    ['start' => 5, 'end' => 6, 'label' => 'pool', 'parent' => 2, 'kind' => 'reference'],
+                    ['start' => 6, 'end' => 9, 'label' => 'step', 'parent' => null, 'kind' => null],
+                    ['start' => 8, 'end' => 9, 'label' => 'pool', 'parent' => 4, 'kind' => 'consumingreference'],
+                ],
+            ] + self::passed(),
+        );
+
+        $kinds = [];
+
+        foreach ($example->sequence()->spans() as $span) {
+            $kinds[] = $span->kind();
+        }
+
+        $this->assertSame([null, SpanKind::Referable, null, SpanKind::Reference, null, SpanKind::ConsumingReference], $kinds);
+    }
+
     #[DataProvider('outcomesOfExamplesThatDidNotFalsifyTheProperty')]
     public function testMapsTheOutcomesOfExamplesThatDidNotFalsifyTheProperty(string $outcome, Outcome $expected): void
     {

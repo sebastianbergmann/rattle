@@ -284,11 +284,14 @@ final readonly class PropertyExample
                 ProtocolData::nonEmptyString($span['label'] ?? null),
                 $parent,
                 match ($span['kind'] ?? null) {
-                    'bytes'      => SpanKind::Bytes,
-                    'characters' => SpanKind::Characters,
-                    'element'    => SpanKind::Element,
-                    null         => null,
-                    default      => throw new ProtocolException('Invalid kind of span'),
+                    'bytes'              => SpanKind::Bytes,
+                    'characters'         => SpanKind::Characters,
+                    'element'            => SpanKind::Element,
+                    'referable'          => SpanKind::Referable,
+                    'reference'          => SpanKind::Reference,
+                    'consumingreference' => SpanKind::ConsumingReference,
+                    null                 => null,
+                    default              => throw new ProtocolException('Invalid kind of span'),
                 },
             );
         }
