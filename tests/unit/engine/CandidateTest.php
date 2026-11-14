@@ -210,6 +210,46 @@ final class CandidateTest extends TestCase
         );
     }
 
+    public function testKnowsThePositionBehindTheElementsThatTheMinimumSizeOfACollectionRequires(): void
+    {
+        $candidate = Candidate::from(Sequences::ofBooleans([true, true, false], 2));
+
+        // the list, the two elements that the minimum size requires and
+        // their booleans, the element that a choice added and its boolean,
+        // and the span that ends the list
+        $this->assertSame([[0, 5], [0, 1], [0, 1], [1, 2], [1, 2], [2, 4], [3, 4], [4, 5]], $this->bounds($candidate));
+
+        foreach ([1, 3, 5, 7] as $index) {
+            $span = array_values($candidate->spans())[$index] ?? null;
+
+            $this->assertNotNull($span);
+            $this->assertSame(2, $candidate->positionBehindRequiredElements($span));
+        }
+
+        // the span that ends the list
+        $candidate = Candidate::from(Sequences::ofBooleans([true], 1));
+        $span      = array_values($candidate->spans())[1] ?? null;
+
+        $this->assertNotNull($span);
+        $this->assertSame(1, $candidate->positionBehindRequiredElements($span));
+
+        // a list without elements that the minimum size requires
+        $candidate = Candidate::from(Sequences::ofList([3]));
+        $span      = array_values($candidate->spans())[1] ?? null;
+
+        $this->assertNotNull($span);
+        $this->assertSame(0, $candidate->positionBehindRequiredElements($span));
+    }
+
+    public function testACollectionThatHasItsMaximumSizeAndWhoseMinimumSizeRequiresAllOfItsElementsHasNoPositionBehindThem(): void
+    {
+        $candidate = Candidate::from(Sequences::ofBooleans([true, false], 2, 2));
+        $span      = array_values($candidate->spans())[1] ?? null;
+
+        $this->assertNotNull($span);
+        $this->assertNull($candidate->positionBehindRequiredElements($span));
+    }
+
     public function testASpanThatIsFollowedByAnotherElementOfItsCollectionDoesNotEndIt(): void
     {
         $candidate = Candidate::from(Sequences::ofList([3]));

@@ -9,8 +9,6 @@
  */
 namespace SebastianBergmann\Rattle;
 
-use function array_filter;
-use function array_values;
 use function ord;
 use Random\Randomizer;
 use SebastianBergmann\ChoiceSequence\Bytes;
@@ -24,11 +22,17 @@ use SebastianBergmann\ChoiceSequence\SpanKind;
  * At the start or the end of a span that holds one byte of a binary string,
  * a few bytes are inserted as spans of the same kind, [1, b]. At the start or
  * the end of an element of another collection (see SpanKind::Element), a copy
- * of one of its elements is inserted. Bytes and elements are only inserted
- * where a choice decides whether there is another element, not between the
- * elements that the minimum size of a collection requires (see
- * Candidate::isDecided()), and only elements that were decided by a choice
- * are copied.
+ * of one of its elements is inserted.
+ *
+ * Bytes and elements are only inserted where a choice decides whether there
+ * is another element. For a span that holds an element that the minimum size
+ * of its collection requires (see SpanKind::RequiredElement), nothing is
+ * inserted at its start or its end: the bytes, or the copy of an element, are
+ * inserted behind the last of the elements that the minimum size requires,
+ * and nothing is inserted when the collection cannot have another element.
+ * The copy of an element that the minimum size requires is inserted as an
+ * element that a choice added, the choice 1 followed by the choices of the
+ * element.
  *
  * @no-named-arguments Parameter names are not covered by the backward compatibility promise for sebastian/rattle
  *
@@ -52,8 +56,21 @@ final readonly class InsertChoices implements Mutation
         $span     = RandomElement::of($randomizer, $spans);
         $position = $randomizer->getInt(0, 1) === 0 ? $span['start'] : $span['end'];
 
+        // nothing is inserted before or between the elements that the minimum
+        // size of a collection requires, an element is inserted behind the
+        // last of them instead
+        if ($candidate->isRequired($span)) {
+            $position = $candidate->positionBehindRequiredElements($span);
+
+            // a collection that has its maximum size and whose elements are
+            // all required by its minimum size cannot have another element
+            if ($position === null) {
+                return false;
+            }
+        }
+
         // at the boundary between bytes of a string, bytes are inserted
-        if ($candidate->isByteOfString($span) && $candidate->isDecided($span)) {
+        if ($candidate->isByteOfString($span)) {
             // bytes after the span that ends the string would not be drawn
             if ($candidate->endsCollection($span)) {
                 $position = $span['start'];
@@ -69,8 +86,8 @@ final readonly class InsertChoices implements Mutation
         // at the boundary between elements of another collection, a copy of
         // one of its elements is inserted, which makes the collection grow
         // by an element that its generator can generate
-        if ($candidate->isDecided($span)) {
-            $elements = array_values(array_filter($candidate->elementsBesides($span), $candidate->isDecided(...)));
+        if ($candidate->isDecided($span) || $candidate->isRequired($span)) {
+            $elements = $candidate->elementsBesides($span);
 
             if ($elements !== []) {
                 if ($candidate->endsCollection($span)) {
@@ -79,6 +96,13 @@ final readonly class InsertChoices implements Mutation
 
                 $element = RandomElement::of($randomizer, $elements);
                 $slice   = $candidate->slice($element['start'], $element['end']);
+
+                // no choice added an element that the minimum size requires,
+                // its copy is added by the choice 1
+                if ($candidate->isRequired($element)) {
+                    $slice['choices'] = [1, ...$slice['choices']];
+                    $slice['maxima']  = [1, ...$slice['maxima']];
+                }
 
                 $candidate->insert($position, $slice['choices'], $slice['maxima'], $element['label'], $element['parent'], SpanKind::Element);
 

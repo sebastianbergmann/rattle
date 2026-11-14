@@ -275,6 +275,34 @@ final class Candidate
     }
 
     /**
+     * The position behind the elements that the minimum size of the
+     * collection that the span is part of requires: where the first span of
+     * the kind SpanKind::Element of the collection starts, which holds the
+     * first element that a choice added, or ends the collection. This is the
+     * first position at which an element can be inserted into the
+     * collection. Null when the collection has no such span: it has its
+     * maximum size, and its minimum size requires all of its elements.
+     *
+     * @param array{start: non-negative-int, end: non-negative-int, label: non-empty-string, parent: ?non-negative-int, kind: ?SpanKind} $span
+     *
+     * @return ?non-negative-int
+     */
+    public function positionBehindRequiredElements(array $span): ?int
+    {
+        $position = null;
+
+        foreach ($this->spans() as $other) {
+            if ($other['parent'] === $span['parent'] &&
+                $this->isDecided($other) &&
+                ($position === null || $other['start'] < $position)) {
+                $position = $other['start'];
+            }
+        }
+
+        return $position;
+    }
+
+    /**
      * @param non-negative-int $start
      * @param non-negative-int $end
      *

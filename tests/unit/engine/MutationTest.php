@@ -12,6 +12,8 @@ namespace SebastianBergmann\Rattle;
 use const PHP_INT_MAX;
 use function array_keys;
 use function array_map;
+use function array_pop;
+use function array_slice;
 use function array_values;
 use function count;
 use function implode;
@@ -468,20 +470,149 @@ final class MutationTest extends TestCase
         );
     }
 
-    public function testInsertsNoBytesBetweenTheBytesThatTheMinimumLengthOfAStringRequires(): void
+    public function testInsertsBytesBehindTheBytesThatTheMinimumLengthOfAStringRequires(): void
+    {
+        $randomizer    = $this->randomizer();
+        $seen          = [];
+        $insertedBytes = 0;
+
+        for ($i = 0; $i < self::ROUNDS; $i++) {
+            $candidate = Candidate::from(Sequences::ofBytesWithMinimumLength('abc', 2));
+
+            $this->assertTrue((new InsertChoices)->apply($candidate, $randomizer));
+
+            $bounds = $this->bounds($candidate);
+
+            // random choices are inserted at the boundaries of the span of
+            // the whole string
+            if (count($bounds) === 5) {
+                continue;
+            }
+
+            // the bytes that the minimum length requires stay where they are,
+            // and bytes are inserted before or after the byte that a choice
+            // added, also when the span of a byte that the minimum length
+            // requires was chosen
+            $choices = $candidate->choices();
+
+            $this->assertSame([0x61, 0x62], array_slice($choices, 0, 2));
+            $this->assertSame([[0, 1], [1, 2]], array_slice($bounds, 1, 2));
+            $this->assertSame(0, array_pop($choices));
+
+            for ($position = 2; $position < count($choices); $position += 2) {
+                $this->assertSame(1, $candidate->choiceAt($position));
+                $this->assertSame(1, $candidate->maximumAt($position));
+                $this->assertSame(0xFF, $candidate->maximumAt($position + 1));
+            }
+
+            // the byte that a choice added
+            if (array_slice($bounds, 3, 1) === [[2, 4]]) {
+                $seen['after'] = true;
+            } else {
+                $seen['before'] = true;
+            }
+
+            $insertedBytes++;
+        }
+
+        $this->assertEqualsCanonicalizing(['after', 'before'], array_keys($seen));
+        $this->assertGreaterThan(self::ROUNDS / 2, $insertedBytes);
+    }
+
+    public function testInsertsNothingAtTheBytesOfAStringThatHasItsMaximumLengthAndWhoseMinimumLengthRequiresAllOfItsBytes(): void
     {
         $randomizer = $this->randomizer();
+        $applied    = [];
 
         for ($i = 0; $i < self::ROUNDS; $i++) {
             $candidate = Candidate::from(Sequences::ofBytesWithMinimumLength('ab', 2, 2));
 
-            (new InsertChoices)->apply($candidate, $randomizer);
+            if ((new InsertChoices)->apply($candidate, $randomizer)) {
+                // random choices are inserted at the boundaries of the span
+                // of the whole string
+                $this->assertGreaterThan(2, $candidate->length());
+
+                $applied['applied'] = true;
+            } else {
+                $this->assertSame([0x61, 0x62], $candidate->choices());
+
+                $applied['not applied'] = true;
+            }
 
             // bytes that are inserted begin with the choice 1, whose maximum is 1
             for ($position = 0; $position < $candidate->length(); $position++) {
                 $this->assertNotSame(1, $candidate->maximumAt($position));
             }
         }
+
+        $this->assertEqualsCanonicalizing(['applied', 'not applied'], array_keys($applied));
+    }
+
+    public function testInsertsACopyOfAnElementBehindTheElementsThatTheMinimumSizeOfACollectionRequires(): void
+    {
+        $randomizer = $this->randomizer();
+        $seen       = [];
+
+        for ($i = 0; $i < self::ROUNDS; $i++) {
+            // the first choice of an element that the minimum size requires
+            // is the 1 of its boolean, whose maximum is 1, as that of the
+            // choice that adds an element
+            $candidate = Candidate::from(Sequences::ofBooleans([true, true, false], 2));
+
+            $this->assertSame([1, 1, 1, 0, 0], $candidate->choices());
+            $this->assertTrue((new InsertChoices)->apply($candidate, $randomizer));
+
+            $bounds = $this->bounds($candidate);
+
+            // random choices are inserted at the boundaries of the spans of
+            // the list and of the booleans
+            if (count($bounds) === 8) {
+                continue;
+            }
+
+            // the elements that the minimum size requires and their booleans
+            // stay where they are, and the copy of an element is inserted
+            // before or after the element that a choice added, as an element
+            // that a choice added
+            $this->assertCount(9, $bounds);
+            $this->assertSame([[0, 1], [0, 1], [1, 2], [1, 2]], array_slice($bounds, 1, 4));
+            $this->assertSame(7, $candidate->length());
+            $this->assertSame([1, 1, 1, 1, 1, 1, 1], array_map($candidate->maximumAt(...), [0, 1, 2, 3, 4, 5, 6]));
+
+            $seen[implode(',', array_map(static fn (bool $value): string => $value ? 'true' : 'false', Sequences::booleansFor($candidate->choices(), 2)))] = true;
+        }
+
+        $this->assertEqualsCanonicalizing(
+            ['true,true,true,false', 'true,true,false,false', 'true,true,false,true'],
+            array_keys($seen),
+        );
+    }
+
+    public function testInsertsNothingAtTheElementsOfACollectionThatHasItsMaximumSizeAndWhoseMinimumSizeRequiresAllOfItsElements(): void
+    {
+        $randomizer = $this->randomizer();
+        $applied    = [];
+
+        for ($i = 0; $i < self::ROUNDS; $i++) {
+            $candidate = Candidate::from(Sequences::ofBooleans([true, false], 2, 2));
+
+            if ((new InsertChoices)->apply($candidate, $randomizer)) {
+                // random choices are inserted at the boundaries of the spans
+                // of the list and of the booleans
+                $this->assertGreaterThan(2, $candidate->length());
+
+                $applied['applied'] = true;
+            } else {
+                $this->assertSame([1, 0], $candidate->choices());
+
+                $applied['not applied'] = true;
+            }
+
+            // no element is inserted
+            $this->assertCount(5, $candidate->spans());
+        }
+
+        $this->assertEqualsCanonicalizing(['applied', 'not applied'], array_keys($applied));
     }
 
     public function testInsertsNoTokenWhileTheDictionaryIsEmpty(): void
@@ -517,6 +648,20 @@ final class MutationTest extends TestCase
         }
 
         $this->assertEqualsCanonicalizing(['applied', 'not applied'], array_keys($applied));
+    }
+
+    /**
+     * @return list<array{0: non-negative-int, 1: non-negative-int}>
+     */
+    private function bounds(Candidate $candidate): array
+    {
+        $bounds = [];
+
+        foreach ($candidate->spans() as $span) {
+            $bounds[] = [$span['start'], $span['end']];
+        }
+
+        return $bounds;
     }
 
     private function randomizer(): Randomizer
