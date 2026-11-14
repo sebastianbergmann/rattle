@@ -558,6 +558,65 @@ final class MutationTest extends TestCase
         $this->assertSame('XYZ', BytesEncoding::bytesFor($candidate->choices(), 100));
     }
 
+    public function testReplacesTheChoicesOfAnElementThatTheMinimumSizeOfACollectionRequiresAndOfAnElementThatAChoiceAddedWithEachOther(): void
+    {
+        $corpus = new Corpus;
+
+        $corpus->add(Sequences::ofBytesWithMinimumLength('XYZ', 1), [1]);
+
+        $randomizer = $this->randomizer();
+        $seen       = [];
+
+        for ($i = 0; $i < 2 * self::ROUNDS; $i++) {
+            $candidate = Candidate::from(Sequences::ofBytesWithMinimumLength('ab', 1));
+
+            $this->assertSame([0x61, 1, 0x62, 0], $candidate->choices());
+            $this->assertTrue((new CrossOver($corpus))->apply($candidate, $randomizer));
+
+            $seen[implode(',', $candidate->choices())] = true;
+        }
+
+        $this->assertEqualsCanonicalizing(
+            [
+                // the whole string
+                '88,1,89,1,90,0',
+                // the byte that the minimum length requires is replaced with
+                // the byte that the minimum length requires, or with a byte
+                // that a choice added, without that choice, but not with the
+                // span that ends the string
+                '88,1,98,0',
+                '89,1,98,0',
+                '90,1,98,0',
+                // the byte that a choice added is replaced with the byte that
+                // the minimum length requires, after the choice that adds it,
+                // with a byte that a choice added, or with the span that ends
+                // the string
+                '97,1,88,0',
+                '97,1,89,0',
+                '97,1,90,0',
+                '97,0,0',
+                // the span that ends the string is replaced in the same ways
+                '97,1,98,1,88',
+                '97,1,98,1,89',
+                '97,1,98,1,90',
+                '97,1,98,0',
+            ],
+            array_keys($seen),
+        );
+    }
+
+    public function testReplacesNoElementThatTheMinimumSizeOfACollectionRequiresWithTheSpanThatEndsACollection(): void
+    {
+        $corpus = new Corpus;
+
+        $corpus->add(new ChoiceSequence([0], [new Span(0, 1, 'byte', null, SpanKind::Element)], [1]), [1]);
+
+        $candidate = Candidate::from(new ChoiceSequence([0x61], [new Span(0, 1, 'byte', null, SpanKind::RequiredElement)], [0xFF]));
+
+        $this->assertFalse((new CrossOver($corpus))->apply($candidate, $this->randomizer()));
+        $this->assertSame([0x61], $candidate->choices());
+    }
+
     public function testReplacesNoSpanWhenNoOtherCorpusEntryHasASpanWithTheSameLabel(): void
     {
         $corpus = new Corpus;
