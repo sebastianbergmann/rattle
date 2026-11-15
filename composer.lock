@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "431970dfab60560cda9bccf22a6b986d",
+    "content-hash": "29e662f9051211b7b3686ad10633cb45",
     "packages": [
         {
             "name": "nikic/php-parser",
@@ -274,6 +274,69 @@
         }
     ],
     "packages-dev": [
+        {
+            "name": "fidry/cpu-core-counter",
+            "version": "1.4.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/theofidry/cpu-core-counter.git",
+                "reference": "d384a7d0d6e67aa497327260ca95023e92dc2032"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/theofidry/cpu-core-counter/zipball/d384a7d0d6e67aa497327260ca95023e92dc2032",
+                "reference": "d384a7d0d6e67aa497327260ca95023e92dc2032",
+                "shasum": ""
+            },
+            "require": {
+                "php": "^7.2 || ^8.0"
+            },
+            "require-dev": {
+                "fidry/makefile": "^0.2.0 || ^1.1.2",
+                "fidry/php-cs-fixer-config": "^1.1.2",
+                "phpstan/extension-installer": "^1.2.0",
+                "phpstan/phpstan": "^2.0",
+                "phpstan/phpstan-deprecation-rules": "^2.0.0",
+                "phpstan/phpstan-phpunit": "^2.0",
+                "phpstan/phpstan-strict-rules": "^2.0",
+                "phpunit/phpunit": "^8.5.31 || ^9.5.26",
+                "symfony/polyfill-mbstring": "^1.33",
+                "webmozarts/strict-phpunit": "^7.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Fidry\\CpuCoreCounter\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Théo FIDRY",
+                    "email": "theo.fidry@gmail.com"
+                }
+            ],
+            "description": "Tiny utility to get the number of CPU cores.",
+            "keywords": [
+                "CPU",
+                "core"
+            ],
+            "support": {
+                "issues": "https://github.com/theofidry/cpu-core-counter/issues",
+                "source": "https://github.com/theofidry/cpu-core-counter/tree/1.4.1"
+            },
+            "funding": [
+                {
+                    "url": "https://github.com/theofidry",
+                    "type": "github"
+                }
+            ],
+            "time": "2026-09-29T22:11:39+00:00",
+            "published-time": "2026-09-29T22:12:43+00:00"
+        },
         {
             "name": "myclabs/deep-copy",
             "version": "1.14.0",
@@ -725,16 +788,16 @@
         },
         {
             "name": "phpunit/phpunit",
-            "version": "dev-feature/property-based-testing",
+            "version": "dev-main",
             "source": {
                 "type": "git",
                 "url": "https://github.com/sebastianbergmann/phpunit.git",
-                "reference": "a2a002ec1d96a587a84f5940c48f0b2d9b22a544"
+                "reference": "c2f49b192da7bee98013fa5a7833aa74c6fbf7a9"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/a2a002ec1d96a587a84f5940c48f0b2d9b22a544",
-                "reference": "a2a002ec1d96a587a84f5940c48f0b2d9b22a544",
+                "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/c2f49b192da7bee98013fa5a7833aa74c6fbf7a9",
+                "reference": "c2f49b192da7bee98013fa5a7833aa74c6fbf7a9",
                 "shasum": ""
             },
             "require": {
@@ -744,6 +807,7 @@
                 "ext-libxml": "*",
                 "ext-mbstring": "*",
                 "ext-xmlwriter": "*",
+                "fidry/cpu-core-counter": "^1.4.1",
                 "myclabs/deep-copy": "^1.14.0",
                 "nikic/php-parser": "^5.9.0",
                 "php": ">=8.5.12",
@@ -768,6 +832,7 @@
                 "sebastian/version-requirement": "^1.0.0",
                 "staabm/side-effects-detector": "^1.0.5"
             },
+            "default-branch": true,
             "bin": [
                 "phpunit"
             ],
@@ -806,7 +871,7 @@
             "support": {
                 "issues": "https://github.com/sebastianbergmann/phpunit/issues",
                 "security": "https://github.com/sebastianbergmann/phpunit/security/policy",
-                "source": "https://github.com/sebastianbergmann/phpunit/tree/feature/property-based-testing"
+                "source": "https://github.com/sebastianbergmann/phpunit/tree/main"
             },
             "funding": [
                 {
@@ -814,8 +879,8 @@
                     "type": "other"
                 }
             ],
-            "time": "2026-11-14T14:00:48+00:00",
-            "published-time": "2026-11-14T14:03:33+00:00"
+            "time": "2026-11-15T18:01:42+00:00",
+            "published-time": "2026-11-15T18:01:58+00:00"
         },
         {
             "name": "sebastian/comparator",
@@ -1928,7 +1993,6 @@
     "aliases": [],
     "minimum-stability": "dev",
     "stability-flags": {
-        "phpunit/phpunit": 20,
         "sebastian/choice-sequence": 20
     },
     "prefer-stable": true,

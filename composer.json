@@ -36,7 +36,7 @@
         "sebastian/version": "^7.1.0"
     },
     "require-dev": {
-        "phpunit/phpunit": "dev-feature/property-based-testing"
+        "phpunit/phpunit": "^14.0"
     },
     "config": {
         "platform": {
