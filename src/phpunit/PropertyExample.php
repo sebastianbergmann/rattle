@@ -223,7 +223,7 @@ final readonly class PropertyExample
         $message   = ProtocolData::string($data['message'] ?? null);
 
         $failure = match ($kind) {
-            Failure::THROWABLE   => Failure::throwable(self::className($data['class'] ?? null), ProtocolData::nonEmptyString($data['location'] ?? null), $message, ''),
+            Failure::THROWABLE   => Failure::throwable(ProtocolData::nonEmptyString($data['class'] ?? null), ProtocolData::nonEmptyString($data['location'] ?? null), $message, ''),
             Failure::TIMEOUT     => Failure::timeout($message, ''),
             Failure::DESCRIPTION => Failure::description($signature, $message, ''),
             default              => throw new ProtocolException('Invalid kind of failure'),
@@ -240,17 +240,6 @@ final readonly class PropertyExample
         }
 
         return $failure;
-    }
-
-    /**
-     * @throws ProtocolException
-     *
-     * @return class-string
-     */
-    private static function className(mixed $value): string
-    {
-        /** @var class-string */
-        return ProtocolData::nonEmptyString($value);
     }
 
     /**

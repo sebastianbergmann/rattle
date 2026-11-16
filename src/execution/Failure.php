@@ -40,7 +40,7 @@ final readonly class Failure
     private string $kind;
 
     /**
-     * @var ?class-string
+     * @var ?non-empty-string
      */
     private ?string $class;
 
@@ -57,7 +57,7 @@ final readonly class Failure
     private string $trace;
 
     /**
-     * @param class-string     $class
+     * @param non-empty-string $class    the class of the throwable, which does not have to be loaded
      * @param non-empty-string $location
      */
     public static function throwable(string $class, string $location, string $message, string $trace): self
@@ -107,11 +107,7 @@ final readonly class Failure
         $trace   = ProtocolData::string($data['trace'] ?? null);
 
         if (($data['kind'] ?? null) === self::THROWABLE) {
-            $class = ProtocolData::nonEmptyString($data['class'] ?? null);
-
-            self::assertClassName($class);
-
-            return self::throwable($class, ProtocolData::nonEmptyString($data['location'] ?? null), $message, $trace);
+            return self::throwable(ProtocolData::nonEmptyString($data['class'] ?? null), ProtocolData::nonEmptyString($data['location'] ?? null), $message, $trace);
         }
 
         return match ($data['kind'] ?? null) {
@@ -124,7 +120,7 @@ final readonly class Failure
 
     /**
      * @param self::DESCRIPTION|self::EXIT|self::THROWABLE|self::TIMEOUT $kind
-     * @param ?class-string                                              $class
+     * @param ?non-empty-string                                          $class
      * @param ?non-empty-string                                          $location
      * @param ?non-empty-string                                          $description
      */
@@ -149,7 +145,7 @@ final readonly class Failure
     /**
      * The class of a throwable, null for the other kinds of failures.
      *
-     * @return ?class-string
+     * @return ?non-empty-string
      */
     public function className(): ?string
     {
@@ -249,16 +245,5 @@ final readonly class Failure
         $data['trace']   = $this->trace;
 
         return $data;
-    }
-
-    /**
-     * The class of a throwable is not loaded in the supervisor, where the
-     * failure is read from the data that a worker sent, and cannot be checked
-     * there.
-     *
-     * @phpstan-assert class-string $class
-     */
-    private static function assertClassName(string $class): void
-    {
     }
 }
