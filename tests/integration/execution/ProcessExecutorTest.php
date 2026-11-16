@@ -14,19 +14,17 @@ use function array_map;
 use function count;
 use function dirname;
 use function getcwd;
-use function ord;
 use function realpath;
 use function sprintf;
 use function str_repeat;
 use function str_replace;
-use function str_split;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Large;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
-use SebastianBergmann\ChoiceSequence\CodePoints;
+use SebastianBergmann\ChoiceSequence\Characters;
 use SebastianBergmann\Rattle\Fixture\Worker\Behaviour;
 
 #[CoversClass(ProcessExecutor::class)]
@@ -282,18 +280,12 @@ final class ProcessExecutorTest extends TestCase
     {
         $executor   = $this->testSuiteExecutor('detectors.xml');
         $properties = $executor->properties() ?? [];
-        $choices    = [];
 
         $this->assertCount(1, $properties);
 
-        // the characters of a string, each preceded by the choice that
-        // there is another one
-        foreach (str_split(str_repeat('../', 16) . 'rattle-sentinel') as $character) {
-            $choices[] = 1;
-            $choices[] = CodePoints::index(ord($character));
-        }
-
-        $choices[] = 0;
+        // the choices from which the string that the property generates is
+        // drawn
+        $choices = new Characters(0, null)->choicesFor(str_repeat('../', 16) . 'rattle-sentinel');
 
         $result = $executor->execute(Job::replay(0, $choices)->withTarget($properties[0]));
         $source = str_replace(realpath((string) getcwd()) . '/', '', (string) realpath(dirname(__DIR__, 2) . '/fixtures/phpunit/src/Templates.php'));
