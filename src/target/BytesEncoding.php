@@ -9,10 +9,9 @@
  */
 namespace SebastianBergmann\Rattle;
 
-use function chr;
-use function min;
-use function ord;
-use function strlen;
+use SebastianBergmann\ChoiceSequence\Bytes;
+use SebastianBergmann\ChoiceSequence\ChoiceSequence;
+use SebastianBergmann\ChoiceSequence\ChoiceSource;
 
 /**
  * Converts between a binary string and the choices from which the Bytes of
@@ -38,19 +37,7 @@ final readonly class BytesEncoding
      */
     public static function choicesFor(string $bytes, int $maximumLength): array
     {
-        $length  = min(strlen($bytes), $maximumLength);
-        $choices = [];
-
-        for ($i = 0; $i < $length; $i++) {
-            $choices[] = 1;
-            $choices[] = ord($bytes[$i]);
-        }
-
-        if ($length < $maximumLength) {
-            $choices[] = 0;
-        }
-
-        return $choices;
+        return new Bytes(0, $maximumLength)->choicesFor($bytes);
     }
 
     /**
@@ -63,17 +50,8 @@ final readonly class BytesEncoding
      */
     public static function bytesFor(array $choices, int $maximumLength): string
     {
-        $bytes = '';
-        $index = 0;
-
-        while (strlen($bytes) < $maximumLength) {
-            if (($choices[$index++] ?? 0) === 0) {
-                break;
-            }
-
-            $bytes .= chr(min($choices[$index++] ?? 0, 0xFF));
-        }
-
-        return $bytes;
+        // each byte is drawn from two choices, and the choice that ends the
+        // string is another one
+        return new Bytes(0, $maximumLength)->draw(ChoiceSource::replay(new ChoiceSequence($choices), 2 * $maximumLength + 1));
     }
 }
