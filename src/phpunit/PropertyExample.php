@@ -15,6 +15,7 @@ use function count;
 use function in_array;
 use function is_array;
 use function is_int;
+use function is_string;
 use function sprintf;
 use SebastianBergmann\ChoiceSequence\ChoiceSequence;
 use SebastianBergmann\ChoiceSequence\FailureSignature;
@@ -283,21 +284,36 @@ final readonly class PropertyExample
                 $end,
                 ProtocolData::nonEmptyString($span['label'] ?? null),
                 $parent,
-                match ($span['kind'] ?? null) {
-                    'bytes'              => SpanKind::Bytes,
-                    'characters'         => SpanKind::Characters,
-                    'element'            => SpanKind::Element,
-                    'requiredelement'    => SpanKind::RequiredElement,
-                    'referable'          => SpanKind::Referable,
-                    'reference'          => SpanKind::Reference,
-                    'consumingreference' => SpanKind::ConsumingReference,
-                    null                 => null,
-                    default              => throw new ProtocolException('Invalid kind of span'),
-                },
+                self::kindFrom($span['kind'] ?? null),
             );
         }
 
         return $spans;
+    }
+
+    /**
+     * PHPUnit reports the kind of a span as the value of the case of
+     * SpanKind of sebastian/choice-sequence.
+     *
+     * @throws ProtocolException
+     */
+    private static function kindFrom(mixed $value): ?SpanKind
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $kind = null;
+
+        if (is_string($value)) {
+            $kind = SpanKind::tryFrom($value);
+        }
+
+        if ($kind === null) {
+            throw new ProtocolException('Invalid kind of span');
+        }
+
+        return $kind;
     }
 
     /**

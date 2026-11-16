@@ -388,7 +388,7 @@ final readonly class Result
             $maxima = [];
 
             foreach ($this->sequence->spans() as $span) {
-                $spans[] = [$span->start(), $span->end(), $span->label(), $span->parent(), $span->kind()?->name];
+                $spans[] = [$span->start(), $span->end(), $span->label(), $span->parent(), $span->kind()?->value];
             }
 
             foreach ($this->sequence->choices() as $index => $choice) {
@@ -475,19 +475,23 @@ final readonly class Result
     /**
      * @throws ProtocolException
      */
-    private static function kindOf(mixed $name): ?SpanKind
+    private static function kindOf(mixed $value): ?SpanKind
     {
-        if ($name === null) {
+        if ($value === null) {
             return null;
         }
 
-        foreach (SpanKind::cases() as $kind) {
-            if ($kind->name === $name) {
-                return $kind;
-            }
+        $kind = null;
+
+        if (is_string($value)) {
+            $kind = SpanKind::tryFrom($value);
         }
 
-        throw new ProtocolException('Invalid kind of span');
+        if ($kind === null) {
+            throw new ProtocolException('Invalid kind of span');
+        }
+
+        return $kind;
     }
 
     /**
