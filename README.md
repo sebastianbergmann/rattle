@@ -434,6 +434,67 @@ return Target::bytes(
 
 What fails is up to the target. HTML Purifier promises output that is standards compliant, so purifying its output again must not change it, and this target throws when it does. Fuzzing version 4.19.1, rattle found an input that HTML Purifier does not purify in one pass and minimized it to 8 bytes: `<ol><col`. HTML Purifier turns it into `<ol><li><col /></li></ol>`, which is not valid HTML, because `col` is only allowed in `table` and `colgroup`, and purifying that again removes the `col` element. The defect was reported, with a fix, as [ezyang/htmlpurifier#496](https://github.com/ezyang/htmlpurifier/issues/496).
 
+### Inline HTML that ends with `<?php` in PHP-Parser
+
+#### `fuzz/php-parser.php`
+```php
+<?php declare(strict_types=1);
+use PhpParser\Error;
+use PhpParser\Node\Stmt\InlineHTML;
+use PhpParser\ParserFactory;
+use PhpParser\PrettyPrinter\Standard;
+use SebastianBergmann\Rattle\Target;
+
+// the parser and the printer are created once per worker process, when the
+// target file is loaded
+$parser  = (new ParserFactory)->createForNewestSupportedVersion();
+$printer = new Standard;
+
+$inlineHtml = static function (array $statements): string {
+    $html = '';
+
+    foreach ($statements as $statement) {
+        if ($statement instanceof InlineHTML) {
+            $html .= $statement->value;
+        }
+    }
+
+    return $html;
+};
+
+return Target::bytes(
+    'php-parser',
+    static function (string $bytes) use ($parser, $printer, $inlineHtml): void {
+        $statements = $parser->parse($bytes);
+        $printed    = $parser->parse($printer->prettyPrintFile($statements));
+
+        if ($inlineHtml($printed) !== $inlineHtml($statements)) {
+            throw new UnexpectedValueException('Printing the file changed its inline HTML');
+        }
+    },
+    256,
+)->expect(Error::class);
+```
+
+#### `fuzz/php-dictionary.txt`
+```
+"<?php"
+"<?php "
+"<?="
+"?>"
+"echo"
+"function"
+"class"
+"namespace"
+"return"
+```
+
+The code that the pretty printer of PHP-Parser prints for a file must mean what the file means, so the inline HTML of the file must be the same after it was parsed, printed, and parsed again, and this target throws when it is not. The parser rejects code that is not valid with a `PhpParser\Error`, so the target expects it.
+
+Two things are different for this library. rattle uses PHP-Parser itself to instrument code, so the PHAR of rattle was used, which bundles a copy of PHP-Parser that is prefixed: the copy in `vendor/` is then the one that is loaded, instrumented, and fuzzed. And PHP-Parser leaves it to PHP to split code into tokens, so there is no comparison with `<?php` in its code from which rattle could learn that token: in 30 minutes and 5.2 million executions without a dictionary file, rattle did not find the defect. With `--dictionary fuzz/php-dictionary.txt`, it found it in the first second, after about 2,300 executions.
+
+Fuzzing version 5.9.0, rattle found the input `<?php<?php `, with a space at its end, and minimized it to 10 bytes: `<?PHP<?PHP`. An opening tag must be followed by whitespace or by the end of the file, so the first `<?PHP` is inline HTML, which is what PHP-Parser parses it to, and only the second one is an opening tag. `prettyPrintFile()` prints this file as `<?PHP`, which is an opening tag at the end of a file: the inline HTML is gone. The defect was reported as [nikic/PHP-Parser#1187](https://github.com/nikic/PHP-Parser/issues/1187) and fixed with [nikic/PHP-Parser#1190](https://github.com/nikic/PHP-Parser/pull/1190).
+
 ## Backward compatibility
 
 rattle follows [Semantic Versioning](https://semver.org/). Within a major version, these do not change in a way that breaks what uses them:
