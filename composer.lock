@@ -4,20 +4,20 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "29e662f9051211b7b3686ad10633cb45",
+    "content-hash": "70ae7b038b2c553d45e97a6bf87c4e21",
     "packages": [
         {
             "name": "nikic/php-parser",
-            "version": "v5.9.0",
+            "version": "v5.10.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/nikic/PHP-Parser.git",
-                "reference": "9e33da9553fe7786f0962b35f4e4ecf01be89def"
+                "reference": "95d3450d7b8421795182fb4e310aa3c949423fa7"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/nikic/PHP-Parser/zipball/9e33da9553fe7786f0962b35f4e4ecf01be89def",
-                "reference": "9e33da9553fe7786f0962b35f4e4ecf01be89def",
+                "url": "https://api.github.com/repos/nikic/PHP-Parser/zipball/95d3450d7b8421795182fb4e310aa3c949423fa7",
+                "reference": "95d3450d7b8421795182fb4e310aa3c949423fa7",
                 "shasum": ""
             },
             "require": {
@@ -59,10 +59,10 @@
             ],
             "support": {
                 "issues": "https://github.com/nikic/PHP-Parser/issues",
-                "source": "https://github.com/nikic/PHP-Parser/tree/v5.9.0"
+                "source": "https://github.com/nikic/PHP-Parser/tree/v5.10.0"
             },
-            "time": "2026-09-13T18:51:52+00:00",
-            "published-time": "2026-09-13T18:53:16+00:00"
+            "time": "2026-11-28T17:47:43+00:00",
+            "published-time": "2026-11-28T17:48:41+00:00"
         },
         {
             "name": "sebastian/choice-sequence",
